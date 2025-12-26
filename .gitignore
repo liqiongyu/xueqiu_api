@@ -1,0 +1,31 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.coverage
+coverage.xml
+htmlcov/
+
+# uv / venv
+.venv/
+.uv-cache/
+.python-version
+
+# Tools
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Editors
+.idea/
+.vscode/
+
+# Reference repo (kept for reading only)
+pysnowball/
+
+# Local real HTTP fixtures (do not commit)
+tests/fixtures/f10/*.json
