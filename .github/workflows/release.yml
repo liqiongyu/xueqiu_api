@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
+      - name: Prepare release notes
+        run: uv run --frozen python scripts/release_notes.py --tag "${{ github.ref_name }}"
+
       - name: Lint
         run: uv run --frozen ruff check .
 
@@ -37,5 +40,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
-
+          body_path: release_notes.md
+          fail_on_unmatched_files: true
