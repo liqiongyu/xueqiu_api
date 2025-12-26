@@ -26,16 +26,17 @@ uv run pytest
 
 ## Create a GitHub release (automated)
 
-The `Release` workflow runs on tag pushes that match `v*` and will:
+The `Release` workflow runs on tag pushes that match `v*.*.*` and will:
 
 1. Run lint + tests
 2. Build `dist/*` via `uv build`
-3. Create a GitHub release with the artifacts attached
+3. Verify the tag version matches `pyproject.toml` and extract release notes from `CHANGELOG.md`
+4. Create a GitHub release with the artifacts attached
 
 To cut a new release:
 
 1. Update `pyproject.toml` version
-2. Update `CHANGELOG.md`
+2. Add a `CHANGELOG.md` entry for that version
 3. Commit the changes
 4. Create and push a tag, e.g.:
 
@@ -58,4 +59,3 @@ Notes:
 
 - Consider switching to Trusted Publishing later (so CI can publish without storing long-lived tokens).
 - Ensure the PyPI project name matches `xueqiu_api` (PyPI normalizes underscores/hyphens).
-
