@@ -16,10 +16,12 @@ class XueqiuAuthError(XueqiuError):
 class XueqiuHTTPError(XueqiuError):
     status_code: int
     url: str
+    method: str | None = None
     response_text: str | None = None
 
     def __str__(self) -> str:
-        msg = f"HTTP {self.status_code} for {self.url}"
+        method = f"{self.method} " if self.method else ""
+        msg = f"HTTP {self.status_code} for {method}{self.url}"
         if self.response_text:
             return f"{msg}: {self.response_text}"
         return msg
@@ -29,9 +31,15 @@ class XueqiuHTTPError(XueqiuError):
 class XueqiuDecodeError(XueqiuError):
     url: str
     message: str
+    method: str | None = None
+    response_text: str | None = None
 
     def __str__(self) -> str:
-        return f"Failed to decode JSON for {self.url}: {self.message}"
+        method = f"{self.method} " if self.method else ""
+        msg = f"Failed to decode JSON for {method}{self.url}: {self.message}"
+        if self.response_text:
+            return f"{msg}: {self.response_text}"
+        return msg
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,9 +48,10 @@ class XueqiuAPIError(XueqiuError):
     error_description: str | None
     url: str
     payload: Any | None = None
+    method: str | None = None
 
     def __str__(self) -> str:
+        method = f"{self.method} " if self.method else ""
         desc = self.error_description or ""
-        return f"Xueqiu API error {self.error_code} for {self.url}: {desc}".rstrip()
-
+        return f"Xueqiu API error {self.error_code} for {method}{self.url}: {desc}".rstrip()
 

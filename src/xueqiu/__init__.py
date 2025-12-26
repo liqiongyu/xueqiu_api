@@ -12,7 +12,15 @@ __all__ = [
     "XueqiuResponse",
 ]
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:  # pragma: no cover
+    __version__ = "0.0.0"
+else:
+    try:
+        __version__ = version("xueqiu_api")
+    except PackageNotFoundError:  # pragma: no cover
+        __version__ = "0.0.0"
 
 from xueqiu.client import AsyncXueqiuClient, XueqiuClient  # noqa: E402
 from xueqiu.errors import (  # noqa: E402
