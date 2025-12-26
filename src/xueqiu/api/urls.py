@@ -47,3 +47,9 @@ CUBE_REBALANCING_CURRENT_URL = "https://xueqiu.com/cubes/rebalancing/current.jso
 CUBE_QUOTE_URL = "https://xueqiu.com/cubes/quote.json"
 
 SUGGEST_STOCK_URL = "https://xueqiu.com/query/v1/suggest_stock.json"
+
+# csindex (extra; does not require Xueqiu auth)
+CSINDEX_INDEX_BASIC_INFO_URL = "https://www.csindex.com.cn/csindex-home/indexInfo/index-basic-info"
+CSINDEX_INDEX_DETAILS_DATA_URL = "https://www.csindex.com.cn/csindex-home/indexInfo/index-details-data"
+CSINDEX_INDEX_WEIGHT_TOP10_URL = "https://www.csindex.com.cn/csindex-home/index/weight/top10"
+CSINDEX_INDEX_PERF_URL = "https://www.csindex.com.cn/csindex-home/perf/index-perf"
