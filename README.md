@@ -67,6 +67,18 @@ You can provide auth in a few ways:
 - env var: `XUEQIU_TOKEN` (recommended)
 - env var: `XUEQIU_COOKIE` (fallback)
 
+The client will automatically read `XUEQIU_TOKEN` / `XUEQIU_COOKIE` when no cookie is provided.
+
+Other optional env vars:
+
+- `XUEQIU_BASE_URL` (default: `https://stock.xueqiu.com`)
+- `XUEQIU_TIMEOUT` (seconds, default: `10`)
+- `XUEQIU_MAX_RETRIES` (default: `2`)
+- `XUEQIU_USER_AGENT` (override UA)
+- `XUEQIU_DEBUG=1` (enable debug logs)
+
+If you prefer an explicit entrypoint, use `XueqiuClient.from_env()` / `AsyncXueqiuClient.from_env()`.
+
 Some endpoints work without auth, but most `stock.xueqiu.com` endpoints require it.
 
 Smoke test with real data:
@@ -106,6 +118,10 @@ This project covers the Xueqiu endpoints from the legacy `pysnowball` project:
 - `client.cube`: `nav_daily`, `rebalancing_history`, `rebalancing_current`, `quote`
 - `client.suggest`: `stock`
 
+## Extras
+
+- `client.csindex`: China Securities Index (中证指数) endpoints (no auth)
+
 ## Credits
 
 API coverage and endpoint shapes are based on the legacy `pysnowball` project (MIT licensed):
@@ -123,3 +139,5 @@ uv sync --group dev
 uv run pytest
 uv run ruff check .
 ```
+
+Releasing: see `RELEASING.md`.
