@@ -55,3 +55,27 @@ CSINDEX_INDEX_DETAILS_DATA_URL = (
 )
 CSINDEX_INDEX_WEIGHT_TOP10_URL = "https://www.csindex.com.cn/csindex-home/index/weight/top10"
 CSINDEX_INDEX_PERF_URL = "https://www.csindex.com.cn/csindex-home/perf/index-perf"
+
+# danjuan (extra; does not require Xueqiu auth)
+DANJUAN_FUND_DETAIL_URL = "https://danjuanapp.com/djapi/fund/detail"
+DANJUAN_FUND_INFO_URL = "https://danjuanapp.com/djapi/fund"
+DANJUAN_FUND_GROWTH_URL = "https://danjuanapp.com/djapi/fund/growth"
+DANJUAN_FUND_NAV_HISTORY_URL = "https://danjuanapp.com/djapi/fund/nav/history"
+DANJUAN_FUND_ACHIEVEMENT_URL = "https://danjuanapp.com/djapi/fundx/base/fund/achievement"
+DANJUAN_FUND_ASSET_URL = "https://danjuanapp.com/djapi/fundx/base/fund/record/asset/percent"
+DANJUAN_FUND_MANAGER_URL = "https://danjuanapp.com/djapi/fundx/base/fund/record/manager/list"
+DANJUAN_FUND_TRADE_DATE_URL = "https://danjuanapp.com/djapi/fund/order/v2/trade_date"
+DANJUAN_FUND_DERIVED_URL = "https://danjuanapp.com/djapi/fund/derived"
+
+# eastmoney (extra; does not require Xueqiu auth)
+EASTMONEY_DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+EASTMONEY_CONVERTIBLE_BOND_QUOTE_COLUMNS = (
+    "f2~01~CONVERT_STOCK_CODE~CONVERT_STOCK_PRICE,"
+    "f235~10~SECURITY_CODE~TRANSFER_PRICE,"
+    "f236~10~SECURITY_CODE~TRANSFER_VALUE,"
+    "f2~10~SECURITY_CODE~CURRENT_BOND_PRICE,"
+    "f237~10~SECURITY_CODE~TRANSFER_PREMIUM_RATIO,"
+    "f239~10~SECURITY_CODE~RESALE_TRIG_PRICE,"
+    "f240~10~SECURITY_CODE~REDEEM_TRIG_PRICE,"
+    "f23~01~CONVERT_STOCK_CODE~PBV_RATIO"
+)

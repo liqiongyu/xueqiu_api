@@ -130,6 +130,8 @@ This project covers the Xueqiu endpoints from the legacy `pysnowball` project:
 ## Extras
 
 - `client.csindex`: China Securities Index (中证指数) endpoints (no auth)
+- `client.danjuan`: Danjuan (蛋卷基金) fund endpoints (no Xueqiu auth)
+- `client.eastmoney`: Eastmoney datacenter endpoints (no Xueqiu auth)
 
 ## Credits
 

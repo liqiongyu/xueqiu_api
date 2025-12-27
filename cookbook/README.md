@@ -25,4 +25,5 @@ uv run python cookbook/01_quickstart_sync.py
 - `02_quickstart_async.py`: async client basics
 - `03_raw_json_escape_hatch.py`: use `client.request_json(...)` for raw payloads
 - `04_csindex_no_auth.py`: CSIndex endpoints (no Xueqiu auth required)
-
+- `05_danjuan_fund.py`: Danjuan (蛋卷基金) endpoints (no Xueqiu auth required)
+- `06_eastmoney_convertible_bond.py`: Eastmoney datacenter convertible bond list (no Xueqiu auth required)

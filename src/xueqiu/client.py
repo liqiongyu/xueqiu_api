@@ -209,6 +209,8 @@ class XueqiuClient:
         from xueqiu.api.capital import CapitalAPI
         from xueqiu.api.csindex import CSIndexAPI
         from xueqiu.api.cube import CubeAPI
+        from xueqiu.api.danjuan import DanjuanAPI
+        from xueqiu.api.eastmoney import EastmoneyAPI
         from xueqiu.api.f10 import F10API
         from xueqiu.api.finance import FinanceAPI
         from xueqiu.api.portfolio import PortfolioAPI
@@ -219,6 +221,8 @@ class XueqiuClient:
         self.capital = CapitalAPI(self)
         self.csindex = CSIndexAPI(self)
         self.cube = CubeAPI(self)
+        self.danjuan = DanjuanAPI(self)
+        self.eastmoney = EastmoneyAPI(self)
         self.f10 = F10API(self)
         self.finance = FinanceAPI(self)
         self.portfolio = PortfolioAPI(self)
@@ -444,6 +448,8 @@ class AsyncXueqiuClient:
         from xueqiu.api.capital import AsyncCapitalAPI
         from xueqiu.api.csindex import AsyncCSIndexAPI
         from xueqiu.api.cube import AsyncCubeAPI
+        from xueqiu.api.danjuan import AsyncDanjuanAPI
+        from xueqiu.api.eastmoney import AsyncEastmoneyAPI
         from xueqiu.api.f10 import AsyncF10API
         from xueqiu.api.finance import AsyncFinanceAPI
         from xueqiu.api.portfolio import AsyncPortfolioAPI
@@ -454,6 +460,8 @@ class AsyncXueqiuClient:
         self.capital = AsyncCapitalAPI(self)
         self.csindex = AsyncCSIndexAPI(self)
         self.cube = AsyncCubeAPI(self)
+        self.danjuan = AsyncDanjuanAPI(self)
+        self.eastmoney = AsyncEastmoneyAPI(self)
         self.f10 = AsyncF10API(self)
         self.finance = AsyncFinanceAPI(self)
         self.portfolio = AsyncPortfolioAPI(self)
