@@ -30,4 +30,3 @@ class AsyncRequester(Protocol):
         check_api_error: bool = True,
         model: Any,
     ) -> Any: ...
-

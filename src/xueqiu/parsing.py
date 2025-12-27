@@ -38,5 +38,3 @@ def parse_datetime(value: Any) -> datetime | None:
         return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
     return None
-
-

@@ -70,4 +70,3 @@ async def test_async_csindex_basic_info() -> None:
     request = route.calls[0].request
     assert "Cookie" not in request.headers
     assert resp.data is not None
-

@@ -54,4 +54,3 @@ class XueqiuAPIError(XueqiuError):
         method = f"{self.method} " if self.method else ""
         desc = self.error_description or ""
         return f"Xueqiu API error {self.error_code} for {method}{self.url}: {desc}".rstrip()
-

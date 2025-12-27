@@ -30,4 +30,3 @@ async def test_async_quotec() -> None:
     assert route.called
     assert resp.data is not None
     assert [q.symbol for q in resp.data] == ["SZ002027", "SH600000"]
-

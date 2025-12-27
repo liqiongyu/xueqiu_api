@@ -141,4 +141,3 @@ class AsyncCSIndexAPI:
             check_api_error=False,
             model=CSIndexResponse,
         )
-

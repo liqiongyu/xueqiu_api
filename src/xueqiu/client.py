@@ -62,7 +62,8 @@ def _default_headers(*, user_agent: str | None) -> dict[str, str]:
     headers: dict[str, str] = {
         "Accept": "application/json",
         # Use a "realistic enough" UA; allow overriding via constructor.
-        "User-Agent": user_agent or "Mozilla/5.0 (XueqiuAPI; +https://pypi.org/project/xueqiu-api/)",
+        "User-Agent": user_agent
+        or "Mozilla/5.0 (XueqiuAPI; +https://pypi.org/project/xueqiu-api/)",
     }
     return headers
 
@@ -105,6 +106,7 @@ def _raise_for_api_error(payload: Any, *, url: str, method: str | None) -> None:
                 payload=payload,
                 method=method,
             )
+
 
 def _parse_retry_after_seconds(value: str | None) -> float | None:
     if not value:
