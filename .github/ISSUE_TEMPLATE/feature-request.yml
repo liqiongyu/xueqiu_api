@@ -1,0 +1,40 @@
+name: Feature Request
+description: Suggest an improvement or new API coverage
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      placeholder: What are you trying to achieve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Include example code, desired API shape, and endpoints if you have them.
+      placeholder: |
+        - Endpoint(s):
+        - Proposed client method(s):
+        - Example usage:
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Would you like to contribute?
+      options:
+        - label: Yes, I can open a PR
+        - label: I can help test / provide payload samples
+        - label: Not right now
+    validations:
+      required: false
+

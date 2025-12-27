@@ -96,6 +96,15 @@ export XUEQIU_SLEEP_SECONDS=0.2  # optional, be gentle
 uv run python examples/smoke_all.py
 ```
 
+## Cookbook
+
+More runnable recipes live in `cookbook/`:
+
+```bash
+export XUEQIU_TOKEN='xq_a_token=...; u=...'
+uv run python cookbook/01_quickstart_sync.py
+```
+
 ## Pydantic stability (fields may change)
 
 Xueqiu endpoints are unofficial and may change response fields. This SDK tries to be resilient:
@@ -138,6 +147,22 @@ uv venv -p python3.10
 uv sync --group dev
 uv run pytest
 uv run ruff check .
+```
+
+Convenience scripts:
+
+```bash
+bash scripts/dev_setup.sh
+bash scripts/format.sh
+bash scripts/validate.sh
+```
+
+Windows (cmd.exe):
+
+```bat
+scripts\\dev_setup.bat
+scripts\\format.bat
+scripts\\validate.bat
 ```
 
 Releasing: see `RELEASING.md`.

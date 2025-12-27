@@ -26,6 +26,7 @@ htmlcov/
 
 # Reference repo (kept for reading only)
 pysnowball/
+agno/
 
 # Local real HTTP fixtures (do not commit)
 tests/fixtures/f10/*.json
