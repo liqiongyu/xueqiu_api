@@ -5,8 +5,27 @@ scripts/research/
 
 # 凭证和抓包
 .env
+.env.*
+!.env.example
+.envrc
 *.har
+*.flow
+*.pcap
+*.pcapng
 *cookie*.json
+cookies.txt
+*cookies*.txt
+
+# 本地数据仓库和缓存
+*.parquet
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+*.db
+
+# agent 工具的本机设置
+.claude/settings.local.json
 
 # Python
 __pycache__/
