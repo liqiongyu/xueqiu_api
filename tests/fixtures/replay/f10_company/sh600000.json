@@ -1,0 +1,54 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "company": {
+        "org_id": "02600000",
+        "org_name_cn": "上海浦东发展银行股份有限公司",
+        "org_short_name_cn": "浦发银行",
+        "org_name_en": "Shanghai Pudong Development Bank",
+        "org_short_name_en": "SPD BANK",
+        "main_operation_business": "合成主营业务",
+        "operating_scope": "合成经营范围",
+        "district_encode": "310101",
+        "org_cn_introduction": "合成公司简介",
+        "legal_representative": "示例法人",
+        "general_manager": "示例总经理",
+        "established_date": 719424000000,
+        "reg_asset": 33305838300.0,
+        "staff_num": 62204,
+        "telephone": "00-0000-0000",
+        "postcode": "000000",
+        "fax": "00-0000-0001",
+        "email": "ir@example.com",
+        "org_website": "www.example.com",
+        "reg_address_cn": "合成注册地址",
+        "reg_address_en": null,
+        "office_address_cn": "合成办公地址",
+        "office_address_en": null,
+        "currency_encode": "019001",
+        "currency": "CNY",
+        "listed_date": 942163200000,
+        "provincial_name": "上海市",
+        "actual_controller": "",
+        "classi_name": "省属国资控股",
+        "pre_name_cn": null,
+        "chairman": "示例董事长",
+        "executives_nums": 20,
+        "actual_issue_vol": 400000000.0,
+        "issue_price": 10.0,
+        "actual_rc_net_amt": 3955000000.0,
+        "pe_after_issuing": 26.3,
+        "online_success_rate_of_issue": 1.4155,
+        "affiliate_industry": {
+          "ind_code": "BK0055",
+          "ind_name": "银行"
+        }
+      }
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

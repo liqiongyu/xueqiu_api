@@ -22,10 +22,22 @@ from ._core import (
     next_step,
     request_headers,
 )
+from ._finance import Financials, ReportType
+from .endpoints.batch_quote import ENDPOINT as BATCH_QUOTE
+from .endpoints.f10_company import ENDPOINT as F10_COMPANY
+from .endpoints.f10_company import Company
+from .endpoints.finance_balance import ENDPOINT as FINANCE_BALANCE
+from .endpoints.finance_cash_flow import ENDPOINT as FINANCE_CASH_FLOW
+from .endpoints.finance_income import ENDPOINT as FINANCE_INCOME
+from .endpoints.finance_indicator import ENDPOINT as FINANCE_INDICATOR
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import Adjust, Kline, Period
+from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
+from .endpoints.quote_detail import QuoteDetail
 from .endpoints.quotec import ENDPOINT as QUOTEC
 from .endpoints.quotec import Quote
+from .endpoints.suggest_stock import ENDPOINT as SUGGEST_STOCK
+from .endpoints.suggest_stock import StockSuggestion
 from .errors import XueqiuError
 from .registry import Endpoint
 from .sites import Host
@@ -75,6 +87,14 @@ class AsyncClient(ClientBase):
         """Realtime quotes of up to 50 symbols in one request; a string may be comma-separated."""
         return await self._call(QUOTEC, {"symbols": symbols})
 
+    async def batch_quote(self, symbols: str | Sequence[str]) -> list[QuoteDetail]:
+        """Quotes of up to 20 symbols in one request, with names and market status."""
+        return await self._call(BATCH_QUOTE, {"symbols": symbols})
+
+    async def quote_detail(self, symbol: str) -> QuoteDetail:
+        """Full quote of one symbol, with its name, valuation fields and market status."""
+        return await self._call(QUOTE_DETAIL, {"symbol": symbol})
+
     async def kline(
         self,
         symbol: str,
@@ -97,6 +117,50 @@ class AsyncClient(ClientBase):
                 "count": count,
             },
         )
+
+    async def suggest_stock(self, *, query: str) -> list[StockSuggestion]:
+        """Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``."""
+        return await self._call(SUGGEST_STOCK, {"query": query})
+
+    async def finance_income(
+        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+    ) -> Financials:
+        """Income statement, latest report period first; see ``FinanceParams``."""
+        return await self._call(
+            FINANCE_INCOME,
+            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+        )
+
+    async def finance_balance(
+        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+    ) -> Financials:
+        """Balance sheet, latest report period first; see ``FinanceParams``."""
+        return await self._call(
+            FINANCE_BALANCE,
+            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+        )
+
+    async def finance_cash_flow(
+        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+    ) -> Financials:
+        """Cash flow statement, latest report period first; see ``FinanceParams``."""
+        return await self._call(
+            FINANCE_CASH_FLOW,
+            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+        )
+
+    async def finance_indicator(
+        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+    ) -> Financials:
+        """Key financial indicators, latest report period first; see ``FinanceParams``."""
+        return await self._call(
+            FINANCE_INDICATOR,
+            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+        )
+
+    async def f10_company(self, symbol: str) -> Company:
+        """Company profile of one listed company."""
+        return await self._call(F10_COMPANY, {"symbol": symbol})
 
     async def call(self, endpoint: str, /, **params: Any) -> Any:
         """Call any registered endpoint by name and return its parsed result."""

@@ -85,3 +85,24 @@ def test_clients_run_offline_on_the_replay_directory(make: Callable[..., Harness
     assert len(quotes) == 4
     with pytest.raises(UpstreamChanged):
         h.kline("SZ000001")
+
+
+@pytest.mark.parametrize(
+    ("symbol", "name", "company_name"),
+    [
+        ("SH600000", "浦发银行", "上海浦东发展银行股份有限公司"),
+        ("00700", "腾讯控股", "腾讯控股有限公司"),
+        ("AAPL", "苹果", "苹果公司"),
+    ],
+)
+def test_finance_and_company_fixtures_are_served_by_region(
+    make: Callable[..., Harness], symbol: str, name: str, company_name: str
+) -> None:
+    h = make(transport=ReplayTransport(REPLAY_DIR))
+    statements = ("income", "balance", "cash_flow", "indicator")
+
+    reports = [h.run(f"finance_{statement}", symbol) for statement in statements]
+    company = h.run("f10_company", symbol)
+
+    assert [report.name for report in reports] == [name] * 4
+    assert company.org_name_cn == company_name

@@ -1,0 +1,101 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "market": {
+        "status_id": 5,
+        "region": "US",
+        "status": "交易中",
+        "time_zone": "America/New_York",
+        "time_zone_desc": null,
+        "delay_tag": 0,
+        "downgrade_night_session": false,
+        "daylight_savings": false
+      },
+      "quote": {
+        "current_ext": 341.93,
+        "symbol": "AAPL",
+        "high52w": 353.68,
+        "percent_ext": 3.021995,
+        "delayed": 0,
+        "type": 0,
+        "tick_size": 0.01,
+        "float_shares": null,
+        "high": 353.68,
+        "float_market_capital": null,
+        "percent_night_session": -0.23500000000000001,
+        "timestamp_ext": 1793802601077,
+        "lot_size": 1,
+        "timestamp_night_session": 1793782752159,
+        "lock_set": 0,
+        "chg": 21.04,
+        "eps": 9.09533062550414,
+        "last_close": 331.9,
+        "profit_four": 132175000000.0,
+        "volume": 24224788,
+        "volume_ratio": 3.04,
+        "profit_forecast": 132175000000.0,
+        "turnover_rate": 0.17,
+        "low52w": 243.42,
+        "name": "苹果",
+        "exchange": "NASDAQ",
+        "pe_forecast": 38.805,
+        "total_shares": 14532182000,
+        "status": 1,
+        "code": "AAPL",
+        "goodwill_in_net_assets": null,
+        "avg_price": 349.517174,
+        "percent": 6.3393,
+        "psr": 8.31,
+        "amplitude": 3.82,
+        "current": 352.94,
+        "current_year_percent": 30.18,
+        "issue_date": 345398400000,
+        "sub_type": "257",
+        "low": 340.99,
+        "market_capital": 5128988315080.0,
+        "shareholder_funds": 112093000000.0,
+        "dividend": 1.071,
+        "dividend_yield": 0.323,
+        "currency": "USD",
+        "chg_ext": 10.03,
+        "navps": 7.7134,
+        "profit": 132175000000.0,
+        "beta": null,
+        "timestamp": 1793806060206,
+        "pe_lyr": 38.8045,
+        "amount": 8438741842.0,
+        "pledge_ratio": null,
+        "current_night_session": 331.12,
+        "short_ratio": null,
+        "inst_hld": null,
+        "pb": 45.7565,
+        "pe_ttm": 38.805,
+        "contract_size": 40,
+        "variable_tick_size": "0.0001 1 0.01",
+        "time": 1793806060206,
+        "chg_night_session": -0.78,
+        "open": 341.565
+      },
+      "others": {
+        "pankou_ratio": 14.29,
+        "cyb_switch": true,
+        "is_extend_to_1530": false
+      },
+      "tags": [
+        {
+          "description": "融",
+          "value": 6
+        },
+        {
+          "description": "空",
+          "value": 7
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

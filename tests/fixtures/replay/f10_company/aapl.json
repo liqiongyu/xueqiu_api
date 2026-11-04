@@ -1,0 +1,46 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "company": {
+        "org_id": "T000038499",
+        "org_name_cn": "苹果公司",
+        "org_short_name_cn": "苹果",
+        "org_name_en": "Apple Inc.",
+        "org_short_name_en": "Apple",
+        "main_operation_business": "合成主营业务",
+        "operating_scope": "合成经营范围",
+        "district_encode": "001005",
+        "org_cn_introduction": "合成公司简介",
+        "legal_representative": null,
+        "general_manager": null,
+        "established_date": 221115600000,
+        "reg_asset": null,
+        "staff_num": 167000,
+        "telephone": "00-0000-0000",
+        "postcode": "000000",
+        "fax": null,
+        "email": null,
+        "org_website": "www.example.com",
+        "reg_address_cn": "合成注册地址",
+        "reg_address_en": "加利福尼亚州",
+        "office_address_cn": null,
+        "office_address_en": "synthetic office address",
+        "currency_encode": null,
+        "currency": "",
+        "listed_date": 345445200000,
+        "td_mkt": "美国NASDAQ证券交易所",
+        "chairman": "示例董事长",
+        "executives_nums": 8,
+        "actual_issue_total_shares_num": 4600000,
+        "actual_issue_price": 22.0,
+        "total_raise_capital": 82800000.0,
+        "mainholder": "领航集团 (9.63%)"
+      }
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

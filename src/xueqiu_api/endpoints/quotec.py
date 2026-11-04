@@ -17,23 +17,19 @@ from pydantic import (
 
 from .._time import from_ms
 from ..registry import AgentInfo, Endpoint
-from ..symbols import SymbolCode, exchange_timezone
+from ..symbols import SymbolCode, exchange_timezone, split_symbols
 
 BATCH_CAP = 50
 """Symbols per request. Not measured: the survey sent 4."""
-
-
-def _split(value: Any) -> Any:
-    if isinstance(value, str):
-        return [part.strip() for part in value.split(",") if part.strip()]
-    return value
 
 
 class QuotecParams(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
     symbols: Annotated[
-        tuple[SymbolCode, ...], BeforeValidator(_split), Field(min_length=1, max_length=BATCH_CAP)
+        tuple[SymbolCode, ...],
+        BeforeValidator(split_symbols),
+        Field(min_length=1, max_length=BATCH_CAP),
     ]
     """Symbols, as a sequence or one comma-separated string."""
 
@@ -128,6 +124,5 @@ ENDPOINT = Endpoint(
         row_cap=BATCH_CAP,
         upstream_cap=BATCH_CAP,
         examples=({"symbols": ["SH600000", "00700", "AAPL"]},),
-        mcp_tool="xq_quote",
     ),
 )

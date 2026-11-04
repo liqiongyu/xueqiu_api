@@ -1,0 +1,105 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "market": {
+        "status_id": 7,
+        "region": "CN",
+        "status": "已收盘",
+        "time_zone": "Asia/Shanghai",
+        "time_zone_desc": null,
+        "delay_tag": 0,
+        "downgrade_night_session": false,
+        "daylight_savings": false
+      },
+      "quote": {
+        "current_ext": null,
+        "symbol": "SH600000",
+        "volume_ext": 31200,
+        "high52w": 11.917,
+        "delayed": 0,
+        "type": 11,
+        "tick_size": 0.01,
+        "float_shares": 33305838300,
+        "limit_down": 9.08,
+        "no_profit": null,
+        "high": 10.23,
+        "float_market_capital": 336055908447.0,
+        "timestamp_ext": 1793777400000,
+        "lot_size": 100,
+        "lock_set": null,
+        "weighted_voting_rights": null,
+        "chg": 0.0,
+        "eps": 1.55,
+        "last_close": 10.09,
+        "profit_four": 51770000000.0,
+        "volume": 82408649,
+        "volume_ratio": 0.98,
+        "profit_forecast": 54096000000.0,
+        "turnover_rate": 0.25,
+        "low52w": 8.107,
+        "name": "浦发银行",
+        "exchange": "SH",
+        "pe_forecast": 6.212,
+        "total_shares": 33305838300,
+        "status": 1,
+        "is_vie_desc": null,
+        "security_status": null,
+        "code": "600000",
+        "goodwill_in_net_assets": 0.6375740966905961,
+        "avg_price": 10.133,
+        "percent": 0.0,
+        "weighted_voting_rights_desc": null,
+        "amplitude": 1.78,
+        "current": 10.09,
+        "is_vie": null,
+        "current_year_percent": -15.06,
+        "issue_date": 942163200000,
+        "sub_type": "ASH",
+        "low": 10.05,
+        "is_registration_desc": "否",
+        "no_profit_desc": null,
+        "market_capital": 336055908447.0,
+        "dividend": 0.42,
+        "dividend_yield": 4.163,
+        "currency": "CNY",
+        "navps": 22.8,
+        "profit": 50017000000.0,
+        "timestamp": 1793775600000,
+        "pe_lyr": 6.719,
+        "amount": 835024728.0,
+        "pledge_ratio": 0.02,
+        "traded_amount_ext": 314808.0,
+        "is_registration": "N",
+        "pb": 0.443,
+        "limit_up": 11.1,
+        "pe_ttm": 6.491,
+        "time": 1793775600000,
+        "open": 10.05
+      },
+      "others": {
+        "pankou_ratio": 71.43,
+        "cyb_switch": true,
+        "is_extend_to_1530": true
+      },
+      "tags": [
+        {
+          "description": "沪股通",
+          "value": 1
+        },
+        {
+          "description": "融",
+          "value": 6
+        },
+        {
+          "description": "空",
+          "value": 7
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

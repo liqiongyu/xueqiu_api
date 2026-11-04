@@ -18,8 +18,11 @@ from .sites import Host
 
 Auth = Literal["anonymous", "optional", "required"]
 Freshness = Literal["realtime", "intraday", "daily", "static"]
-Envelope = Literal["xueqiu"]
-"""``xueqiu``: ``{"data": ..., "error_code": 0, "error_description": ...}``."""
+Envelope = Literal["xueqiu", "query"]
+"""``xueqiu``: ``{"data": ..., "error_code": 0, "error_description": ...}``.
+
+``query`` (``/query/v1/`` on www.xueqiu.com): ``{"code": 200, "success": true, "data": ...}``.
+"""
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")

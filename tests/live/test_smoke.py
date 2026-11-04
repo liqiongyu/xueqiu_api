@@ -6,8 +6,9 @@ deselects them, and CI does not select them. Opt in explicitly, on your own mach
     uv run pytest -m live tests/live
 
 Every endpoint is called once with its first registry example, serially through one client,
-so the per-host limiter spaces the requests. The session cache goes to a temporary directory.
-Set XUEQIU_TOKEN to run them with a login session.
+so the per-host limiter spaces the requests; finance and F10 are also called once each for a
+Hong Kong and a US symbol. The session cache goes to a temporary directory. Set XUEQIU_TOKEN
+to run them with a login session.
 """
 
 from __future__ import annotations
@@ -31,4 +32,12 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Client]:
 @pytest.mark.parametrize("name", sorted(REGISTRY))
 def test_endpoint_answers(client: Client, name: str) -> None:
     result: Any = client.call(name, **REGISTRY[name].agent.examples[0])
-    assert len(result) > 0
+    # Lists, Kline and Financials are empty when nothing came back; records are models.
+    assert result
+
+
+@pytest.mark.parametrize("symbol", ["00700", "AAPL"])
+@pytest.mark.parametrize("name", ["finance_income", "f10_company"])
+def test_other_regions_answer(client: Client, name: str, symbol: str) -> None:
+    result: Any = client.call(name, symbol=symbol)
+    assert result

@@ -1,0 +1,45 @@
+{
+  "params": {
+    "q": "AAPL"
+  },
+  "body": {
+    "code": 200,
+    "data": [
+      {
+        "code": "AAPL",
+        "label": "0",
+        "query": "苹果",
+        "state": 1,
+        "stock_type": 0,
+        "type": 1
+      },
+      {
+        "code": "XVAP",
+        "label": "4",
+        "query": "AAPL与目标收益",
+        "state": 1,
+        "stock_type": 4,
+        "type": 1
+      },
+      {
+        "code": "IOSX",
+        "label": "4",
+        "query": "AAPL每日2倍做多ETF",
+        "state": 1,
+        "stock_type": 4,
+        "type": 1
+      }
+    ],
+    "message": "success",
+    "meta": {
+      "count": 9,
+      "feedback": -1,
+      "has_next_page": true,
+      "maxPage": 1,
+      "page": 1,
+      "query_id": 1,
+      "size": 9
+    },
+    "success": true
+  }
+}

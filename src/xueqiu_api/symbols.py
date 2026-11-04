@@ -19,10 +19,10 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import AfterValidator
+from pydantic import AfterValidator, BaseModel, ConfigDict
 
 from .errors import SymbolNotFound
 
@@ -112,3 +112,18 @@ def _normalized_code(value: str) -> str:
 
 SymbolCode = Annotated[str, AfterValidator(_normalized_code)]
 """Pydantic field type: a symbol string normalized to its Xueqiu code."""
+
+
+def split_symbols(value: Any) -> Any:
+    """Before-validator for symbol lists: split one comma-separated string, pass other values."""
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return value
+
+
+class SymbolParams(BaseModel):
+    """Params of the endpoints that take one symbol and nothing else."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
+
+    symbol: SymbolCode

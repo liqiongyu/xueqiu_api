@@ -1,0 +1,56 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "quote_name": "苹果",
+      "currency_name": "美元",
+      "sas": "美国公认会计准则(US GAAP)",
+      "org_type": 1,
+      "annual_settle_date": "09-30",
+      "last_report_name": "2026年FY",
+      "statuses": null,
+      "currency": "USD",
+      "tip": "synthetic fiscal year note",
+      "list": [
+        {
+          "asset_liab_ratio": [0.7229179232130675, -0.09038710770631449],
+          "cce": [36305000000.0, 0.01032448377581121],
+          "ctime": null,
+          "ed": "2026-09-26",
+          "preferred_stock": [null, null],
+          "report_annual": 2026,
+          "report_date": 1790352000000,
+          "report_name": "2026年FY",
+          "report_type_code": 596001,
+          "sd": null,
+          "total_assets": [404548000000.0, 0.12611867799054116],
+          "total_current_assets": [173857000000.0, 0.17505085937130382],
+          "total_current_liab": [169915000000.0, 0.025864723391152623],
+          "total_holders_equity": [112093000000.0, 0.5202555165258432],
+          "total_liab": [292455000000.0, 0.024332067752917606]
+        },
+        {
+          "asset_liab_ratio": [0.7194637666790167, -0.10225795142280453],
+          "cce": [39544000000.0, 0.09029749924177673],
+          "ctime": null,
+          "ed": "2026-06-27",
+          "preferred_stock": [null, null],
+          "report_annual": 2026,
+          "report_date": 1782489600000,
+          "report_name": "2026年Q9",
+          "report_type_code": 596007,
+          "sd": null,
+          "total_assets": [383266000000.0, 0.15617430127151238],
+          "total_current_assets": [149818000000.0, 0.22309394159570908],
+          "total_current_liab": [149326000000.0, 0.058149092970521545],
+          "total_holders_equity": [107520000000.0, 0.6332978885006836],
+          "total_liab": [275746000000.0, 0.03794628573579508]
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

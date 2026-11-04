@@ -258,7 +258,10 @@ def unwrap(envelope: Envelope, body: Any) -> Any:
     """Payload of a successful response; ``ValueError`` when the envelope does not match."""
     if not isinstance(body, dict) or "data" not in body:
         raise ValueError(f"expected the {envelope} envelope with a data key")
-    return cast(dict[str, Any], body)["data"]
+    fields = cast(dict[str, Any], body)
+    if envelope == "query" and fields.get("success") is not True:
+        raise ValueError("expected the query envelope with success true")
+    return fields["data"]
 
 
 def _retry_after(headers: Mapping[str, str]) -> float:
