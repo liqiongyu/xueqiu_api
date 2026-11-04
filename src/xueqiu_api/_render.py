@@ -40,6 +40,7 @@ STATS_COLUMNS = (
     "first_close",
     "last_date",
     "last_close",
+    "base_close",
     "change_pct",
     "high",
     "high_date",
@@ -72,6 +73,11 @@ _EMPTY_BARS = (
     "no trading in the range, minute bars being kept only about 3 trading days (1m) or about "
     "6 months (60m), or an endpoint that returns nothing to anonymous sessions."
 )
+_LATE_BARS = (
+    "no trading in between, or minute bars being kept only about 3 trading days (1m) to about "
+    "6 months (60m); # stats cover only the bars returned."
+)
+_MISSING = "check the market prefix (indexes need SH or SZ, such as SH000001)."
 _TAG = re.compile(r"<[^>]*>")
 
 
@@ -95,18 +101,31 @@ def render(
     agent = spec.agent
     dump = params.model_dump(mode="json", exclude_none=True)
     head = [f"# {spec.name} {compact_json(dump)}"]
+    notes: list[str] = []
     keep_last, pager = False, _no_pager
     if isinstance(result, Kline):
         rows = _bar_rows(result)
         head.append(stats_line(kline_stats(result), agent.precision))
-        keep_last, pager = True, _bar_pager(cast(KlineParams, params), result)
+        bar_params = cast(KlineParams, params)
+        keep_last, pager = True, _bar_pager(bar_params, result)
+        if _starts_late(bar_params, result):
+            notes.append(
+                f"the first bar is on {result.timestamps[0].date()}, after begin "
+                f"{bar_params.begin}: {_LATE_BARS}"
+            )
     elif isinstance(result, Financials):
         rows = [_period_row(period) for period in result.periods]
-        head.append(f"# statement: name={result.name or ''} currency={result.currency or ''}")
+        head.append(f"# statement: name={cell(result.name, 0)} currency={cell(result.currency, 0)}")
     elif isinstance(result, list):
         rows = [item.model_dump() for item in cast(list[BaseModel], result)]
         if "symbols" in dump:
             pager = _symbols_pager(dump, rows)
+            returned = {row.get("symbol") for row in rows}
+            missing = [
+                symbol for symbol in dict.fromkeys(dump["symbols"]) if symbol not in returned
+            ]
+            if rows and missing:
+                notes.append(f"no data for {', '.join(missing)}; {_MISSING}")
     elif isinstance(result, BaseModel):
         rows = [result.model_dump()]
     else:
@@ -138,7 +157,8 @@ def render(
                 f"available: {', '.join(available)}"
             )
     if not rows:
-        head.append(f"# note: {_EMPTY_BARS if isinstance(result, Kline) else _EMPTY}")
+        notes.append(_EMPTY_BARS if isinstance(result, Kline) else _EMPTY)
+    head += [f"# note: {note}" for note in notes]
     free = [name for name in wanted if name in agent.free_text]
     if isinstance(result, BaseModel):
         return _record(head, rows[0], wanted, free, agent.precision, max_chars)
@@ -173,12 +193,19 @@ def render_bar_stats(
     max_chars: int,
     fetched_at: datetime,
 ) -> str:
-    """One stats row per symbol, for comparing klines of several symbols; no bar rows."""
-    shared = {
-        key: value
-        for key, value in params[0].model_dump(mode="json", exclude_none=True).items()
-        if key != "symbol"
-    }
+    """One stats row per symbol, for comparing klines of several symbols; no bar rows.
+
+    A param whose value differs between the symbols, such as a ``begin`` taken from today in
+    each exchange's timezone, is shown as an object by symbol.
+    """
+    dumps = [one.model_dump(mode="json", exclude_none=True) for one in params]
+    shared: dict[str, Any] = {}
+    for key in dict.fromkeys(key for dump in dumps for key in dump if key != "symbol"):
+        values = [dump.get(key) for dump in dumps]
+        if all(value == values[0] for value in values):
+            shared[key] = values[0]
+        else:
+            shared[key] = {one.symbol: value for one, value in zip(params, values, strict=True)}
     head = [
         f"# {spec.name} {compact_json({'symbols': [p.symbol for p in params], **shared})}",
         f"# meta: fetched_at={fetched_at.astimezone(DEFAULT_ZONE).isoformat(timespec='seconds')} "
@@ -186,6 +213,11 @@ def render_bar_stats(
     ]
     if any(len(kline) == 0 for kline in klines):
         head.append(f"# note: {_EMPTY_BARS}")
+    late = [
+        one.symbol for one, kline in zip(params, klines, strict=True) if _starts_late(one, kline)
+    ]
+    if late:
+        head.append(f"# note: the bars of {', '.join(late)} start after begin: {_LATE_BARS}")
     head.append(csv_line(["symbol", *STATS_COLUMNS]))
     lines: list[str] = []
     for one, kline in zip(params, klines, strict=True):
@@ -228,7 +260,10 @@ def fit(
 def kline_stats(kline: Kline) -> dict[str, Any]:
     """Stats over every bar: first and last close, change in percent points, high and low.
 
-    Dates are bar times as rendered; ties go to the earliest bar; missing columns give None.
+    The change is measured from ``base_close``, the close before the first bar as that bar's
+    ``percent`` implies, so it includes the first bar's own move; without ``percent`` the base
+    is the first close. Dates are bar times as rendered; ties go to the earliest bar; missing
+    columns give None.
     """
     stats: dict[str, Any] = dict.fromkeys(STATS_COLUMNS)
     stats["bars"] = len(kline)
@@ -239,8 +274,14 @@ def kline_stats(kline: Kline) -> dict[str, Any]:
         stats["first_close"] = first_close
         stats["last_date"] = bar_time(kline, kline.timestamps[last])
         stats["last_close"] = last_close
-        if first_close:
-            stats["change_pct"] = (last_close / first_close - 1) * 100
+        percents = kline.columns.get("percent")
+        percent = None if percents is None else percents[first]
+        base = (
+            first_close if percent is None or percent <= -100 else first_close / (1 + percent / 100)
+        )
+        stats["base_close"] = base
+        if base:
+            stats["change_pct"] = (last_close / base - 1) * 100
     for name, pick in (("high", max), ("low", min)):
         values = _present(kline.columns.get(name))
         if values:
@@ -272,8 +313,8 @@ def error_text(error: XueqiuError, *, hint: str | None = None) -> str:
         payload["hint"] = hint
     text = compact_json(payload)
     if len(text) > ERROR_CHARS:
-        for key, cap in (("message", 500), ("hint", 400)):
-            if len(payload[key]) > cap:
+        for key, cap in (("message", 500), ("hint", 400), ("field", 100)):
+            if len(payload.get(key) or "") > cap:
                 payload[key] = payload[key][: cap - 1] + "…"
         text = compact_json(payload)
     for key in ("valid_values", "candidates"):
@@ -303,7 +344,7 @@ def cell(value: object, precision: int) -> str:
     if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, str):
-        return value
+        return " ".join(value.split())
     return compact_json(value)
 
 
@@ -393,22 +434,39 @@ def _no_pager(first: int, stop: int) -> dict[str, Any] | None:
 
 
 def _bar_pager(params: KlineParams, kline: Kline) -> Pager:
-    """Older bars: the same call ending the day before the first bar shown.
+    """Older bars: the same call ending just before the first bar shown, with ``end`` the day
+    before it, or for minute bars with ``before`` its time.
 
     There are older bars when some fetched ones are not shown, or when a request without
-    ``begin`` came back full. Minute bars page by whole days too.
+    ``begin`` came back full.
     """
     count = params.count or DEFAULT_COUNT
 
     def pager(first: int, stop: int) -> dict[str, Any] | None:
         if first == 0 and (params.begin is not None or len(kline) < count):
             return None
-        end = kline.timestamps[first].date() - timedelta(days=1)
-        if params.begin is not None and end < params.begin:
-            return None
-        return params.model_copy(update={"end": end}).model_dump(mode="json", exclude_none=True)
+        moment = kline.timestamps[first]
+        if kline.period.endswith("m"):
+            update: dict[str, Any] = {"end": None, "before": moment}
+        else:
+            end = moment.date() - timedelta(days=1)
+            if params.begin is not None and end < params.begin:
+                return None
+            update = {"end": end, "before": None}
+        return params.model_copy(update=update).model_dump(mode="json", exclude_none=True)
 
     return pager
+
+
+def _starts_late(params: KlineParams, kline: Kline) -> bool:
+    """Whether minute bars start more than 3 days after ``begin``, more than a weekend or a
+    short holiday explains, as when ``begin`` is past what the upstream keeps."""
+    return (
+        kline.period.endswith("m")
+        and params.begin is not None
+        and len(kline) > 0
+        and (kline.timestamps[0].date() - params.begin).days > 3
+    )
 
 
 def _symbols_pager(dump: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> Pager:

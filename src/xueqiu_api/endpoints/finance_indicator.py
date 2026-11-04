@@ -40,4 +40,6 @@ ENDPOINT = finance_endpoint(
         upstream_cap=MAX_COUNT,
         examples=({"symbol": "SH600000", "count": 2},),
     ),
+    # Per share here, a total in the balance sheet.
+    items={"capital_reserve": ("capital_reserve_ps", 1.0)},
 )

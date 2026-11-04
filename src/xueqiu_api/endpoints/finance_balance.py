@@ -38,4 +38,7 @@ ENDPOINT = finance_endpoint(
         upstream_cap=MAX_COUNT,
         examples=({"symbol": "SH600000", "count": 2},),
     ),
+    # The upstream sends these ratios as fractions here and in percent points in the
+    # indicators; the Hong Kong one is liabilities over assets despite its name.
+    items={"asset_liab_ratio": ("asset_liab_ratio", 100.0), "ta_tlia": ("tlia_ta", 100.0)},
 )

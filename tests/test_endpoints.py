@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from xueqiu_api import (
-    AuthExpired,
     Company,
     Financials,
     InvalidParams,
@@ -28,13 +27,17 @@ WWW = "www.xueqiu.com"
 BATCH = "/v5/stock/batch/quote.json"
 DETAIL = "/v5/stock/quote.json"
 SUGGEST = "/query/v1/suggest_stock.json"
-BOOTSTRAP = ["xueqiu.com/", "www.xueqiu.com/"]
 TOKEN = "xq_a_token=fake-login-token-0001; u=fake-login-u-0001"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 HONG_KONG = ZoneInfo("Asia/Hong_Kong")
 NEW_YORK = ZoneInfo("America/New_York")
 REGIONS = [("SH600000", "cn"), ("00700", "hk"), ("AAPL", "us")]
 STATEMENTS = ["income", "balance", "cash_flow", "indicator"]
+RENAMED = {
+    "balance": {"asset_liab_ratio": ("asset_liab_ratio", 100), "ta_tlia": ("tlia_ta", 100)},
+    "indicator": {"capital_reserve": ("capital_reserve_ps", 1)},
+}
+"""Line items converted or renamed so that one name keeps one meaning across statements."""
 
 
 def paths(h: Harness) -> list[str]:
@@ -125,17 +128,36 @@ def test_quote_detail_of_a_us_stock_uses_new_york_time(h: Harness) -> None:
 
     assert (detail.name, detail.market_status_id) == ("苹果", 5)
     assert detail.timestamp == datetime(2026, 11, 4, 10, 27, 40, 206000, tzinfo=NEW_YORK)
+    assert detail.time == detail.timestamp
+    assert detail.timestamp_ext == datetime(2026, 11, 4, 9, 30, 1, 77000, tzinfo=NEW_YORK)
+    night = detail.timestamp_night_session
+    assert night == datetime(2026, 11, 4, 3, 59, 12, 159000, tzinfo=NEW_YORK)
+    assert night is not None and night.tzinfo == NEW_YORK
+    # Shanghai midnight, which is still the day before in New York.
+    assert detail.issue_date == date(1980, 12, 12)
 
 
-def test_suggest_stock_searches_www_with_browser_headers(h: Harness) -> None:
+def test_quote_detail_times_are_exchange_times(h: Harness) -> None:
+    h.upstream.route(STOCK, DETAIL, fixture_reply("quote_detail/sh600000"))
+
+    detail = h.run("quote_detail", "SH600000")
+
+    assert detail.time == datetime(2026, 11, 4, 15, 0, tzinfo=SHANGHAI)
+    assert detail.timestamp_ext == datetime(2026, 11, 4, 15, 30, tzinfo=SHANGHAI)
+    assert detail.issue_date == date(1999, 11, 10)
+    assert detail.model_extra is not None
+    assert not {"time", "timestamp_ext", "issue_date"} & set(detail.model_extra)
+
+
+def test_suggest_stock_searches_www_with_browser_headers_and_no_cookies(h: Harness) -> None:
     h.upstream.route(WWW, SUGGEST, fixture_reply("suggest_stock/pfyh"))
 
     results = h.run("suggest_stock", query=" pfyh ")
 
-    [sent] = h.upstream.requests(WWW, SUGGEST)
-    assert sent.params == {"q": "pfyh"}
+    [sent] = h.upstream.sent
+    assert (sent.host, sent.path, sent.params) == (WWW, SUGGEST, {"q": "pfyh"})
     assert sent.headers["user-agent"].startswith("Mozilla/5.0")
-    assert "xq_a_token=fake-anon-token-0001" in sent.headers["cookie"]
+    assert "cookie" not in sent.headers
     [first] = results
     assert isinstance(first, StockSuggestion)
     assert (first.symbol, first.name, first.stock_type) == ("SH600000", "浦发银行", 11)
@@ -175,9 +197,8 @@ def test_suggest_stock_keeps_the_3_second_interval_of_www(h: Harness) -> None:
     h.run("suggest_stock", query="pfyh")
     h.run("suggest_stock", query="AAPL")
 
-    home = [sent.at for sent in h.upstream.requests("xueqiu.com", "/")]
     searches = [sent.at for sent in h.upstream.requests(WWW, SUGGEST)]
-    assert gaps(home + searches) == pytest.approx([3.0, 3.0])
+    assert gaps(searches) == pytest.approx([3.0])
 
 
 def test_suggest_stock_31005_is_rate_limited_without_retry(h: Harness) -> None:
@@ -189,40 +210,34 @@ def test_suggest_stock_31005_is_rate_limited_without_retry(h: Harness) -> None:
     error = caught.value
     assert (error.upstream_code, error.status, error.retry_after_s) == ("31005", 400, 10.0)
     assert (error.endpoint, error.params) == ("suggest_stock", {"query": "pfyh"})
-    assert paths(h) == [*BOOTSTRAP, f"{WWW}{SUGGEST}"]
+    assert paths(h) == [f"{WWW}{SUGGEST}"]
 
 
-def test_suggest_stock_400016_refreshes_the_cookies_once(h: Harness) -> None:
-    h.upstream.route(
-        WWW, SUGGEST, error_reply("400016", "请刷新页面", 400), fixture_reply("suggest_stock/pfyh")
-    )
-
-    results = h.run("suggest_stock", query="pfyh")
-
-    assert [item.symbol for item in results] == ["SH600000"]
-    assert paths(h) == [*BOOTSTRAP, f"{WWW}{SUGGEST}", *BOOTSTRAP, f"{WWW}{SUGGEST}"]
-
-
-def test_suggest_stock_400016_after_a_refresh_is_upstream_changed(h: Harness) -> None:
+@pytest.mark.parametrize("token", [None, TOKEN])
+def test_suggest_stock_login_codes_are_upstream_changed_without_a_refresh(
+    make: Callable[..., Harness], token: str | None
+) -> None:
+    h = make(token=token)
     h.upstream.route(WWW, SUGGEST, error_reply("400016", "请刷新页面", 400))
 
     with pytest.raises(UpstreamChanged) as caught:
         h.run("suggest_stock", query="pfyh")
 
     assert (caught.value.upstream_code, caught.value.endpoint) == ("400016", "suggest_stock")
-    assert "XUEQIU_TOKEN" in caught.value.hint
-    assert paths(h) == [*BOOTSTRAP, f"{WWW}{SUGGEST}", *BOOTSTRAP, f"{WWW}{SUGGEST}"]
-
-
-def test_suggest_stock_400016_with_a_token_is_auth_expired(make: Callable[..., Harness]) -> None:
-    h = make(token=TOKEN)
-    h.upstream.route(WWW, SUGGEST, error_reply("400016", "请刷新页面", 400))
-
-    with pytest.raises(AuthExpired):
-        h.run("suggest_stock", query="pfyh")
-
+    # No cookies go with the search, so a token would not help.
+    assert "without cookies" in caught.value.hint and "XUEQIU_TOKEN" not in caught.value.hint
     assert paths(h) == [f"{WWW}{SUGGEST}"]
-    assert h.upstream.sent[0].headers["cookie"] == TOKEN
+    assert "cookie" not in h.upstream.sent[0].headers
+
+
+def test_suggest_stock_works_while_the_home_page_fails(h: Harness) -> None:
+    h.upstream.route(WWW, "/", json_reply({}, 503))
+    h.upstream.route(WWW, SUGGEST, fixture_reply("suggest_stock/pfyh"))
+
+    results = h.run("suggest_stock", query="pfyh")
+
+    assert [item.symbol for item in results] == ["SH600000"]
+    assert paths(h) == [f"{WWW}{SUGGEST}"]
 
 
 @pytest.mark.parametrize("statement", STATEMENTS)
@@ -240,13 +255,37 @@ def test_finance_goes_to_the_region_of_the_symbol(
     assert sent.params == {"symbol": symbol, "type": "all", "is_detail": "true", "count": "2"}
     assert isinstance(report, Financials)
     assert (report.symbol, len(report)) == (symbol, 2)
+    renamed = RENAMED.get(statement, {})
     for period, raw in zip(report.periods, replay_body(fixture)["data"]["list"], strict=True):
         assert period.report_name == raw["report_name"]
         pairs: dict[str, list[Any]] = {k: v for k, v in raw.items() if isinstance(v, list)}
-        assert set(period.items) == set(pairs)
+        assert set(period.items) == {renamed.get(key, (key, 1))[0] for key in pairs}
         for key, (value, yoy) in pairs.items():
-            assert period.items[key].value == value
-            assert period.items[key].yoy == (None if yoy is None else pytest.approx(yoy * 100))
+            name, factor = renamed.get(key, (key, 1))
+            assert period.items[name].value == (None if value is None else value * factor)
+            assert period.items[name].yoy == (None if yoy is None else pytest.approx(yoy * 100))
+
+
+@pytest.mark.parametrize(
+    ("symbol", "region", "balance", "indicator"),
+    [
+        ("SH600000", "cn", "asset_liab_ratio", "asset_liab_ratio"),
+        ("00700", "hk", "tlia_ta", "tlia_ta"),
+        ("AAPL", "us", "asset_liab_ratio", "asset_liab_ratio"),
+    ],
+)
+def test_the_debt_ratio_is_in_percent_points_in_both_statements(
+    h: Harness, symbol: str, region: str, balance: str, indicator: str
+) -> None:
+    for statement in ("balance", "indicator"):
+        fixture = fixture_reply(f"finance_{statement}/{symbol.lower()}")
+        h.upstream.route(STOCK, finance_path(region, statement), fixture)
+
+    sheet = h.run("finance_balance", symbol, count=2).periods[0]
+    ratios = h.run("finance_indicator", symbol, count=2).periods[0]
+
+    assert sheet.items[balance].value == pytest.approx(ratios.items[indicator].value, abs=1e-3)
+    assert 1 < sheet.items[balance].value < 100
 
 
 def test_finance_report_type_and_detail_map_to_upstream_values(h: Harness) -> None:
@@ -293,7 +332,7 @@ def test_finance_periods_have_dates_names_and_line_items(h: Harness) -> None:
     assert net_profit.yoy == pytest.approx(4.998595900028082)
     value, yoy = latest.items["invest_incomes_from_rr"]
     assert (value, yoy) == (None, None)
-    assert latest.extra == {"ctime": 1793358014000}
+    assert latest.extra == {"ctime": datetime(2026, 10, 30, 19, 0, 14, tzinfo=SHANGHAI)}
 
 
 def test_us_report_dates_are_read_in_shanghai(h: Harness) -> None:
@@ -413,6 +452,12 @@ MISMATCHES: list[Case] = [
         {"data": {"list": [{"report_date": 0, "report_name": "x", "op": [1, 2, 3]}]}},
     ),
     ("f10_company", STOCK, company_path("cn"), {"data": {"company": None}}),
+    (
+        "f10_company",
+        STOCK,
+        company_path("cn"),
+        {"data": {"company": {"listed_date": 9_999_999_999_999_999}}},
+    ),
 ]
 
 

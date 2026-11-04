@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, cast
 
-from pydantic import model_validator
+from pydantic import ValidationInfo, field_validator, model_validator
 
+from .._finance import REPORT_DATE_ZONE
+from .._time import from_ms
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolParams
-from .quotec import Quote
+from .quotec import Quote, exchange_time
 
 
 class QuoteDetail(Quote):
@@ -26,6 +28,26 @@ class QuoteDetail(Quote):
     market_status_id: int | None = None
     """``market.status_id``: 5 (trading) and 7 (closed) were measured on 2026-11-04; values on
     holidays and before the open are not known yet."""
+    time: datetime | None = None
+    """Upstream ``time``, the same instant as ``timestamp`` in the survey; exchange timezone."""
+    timestamp_ext: datetime | None = None
+    """Time of the extended-hours quote, in the exchange timezone."""
+    timestamp_night_session: datetime | None = None
+    """Time of the overnight-session quote of US stocks, in the exchange timezone."""
+    issue_date: date | None = None
+    """Listing date; the upstream sends it as midnight in Asia/Shanghai for every market."""
+
+    @field_validator("time", "timestamp_ext", "timestamp_night_session", mode="before")
+    @classmethod
+    def _exchange_times(cls, value: Any, info: ValidationInfo) -> Any:
+        return exchange_time(value, info)
+
+    @field_validator("issue_date", mode="before")
+    @classmethod
+    def _shanghai_date(cls, value: Any) -> Any:
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return from_ms(value, REPORT_DATE_ZONE).date()
+        return value
 
     @model_validator(mode="before")
     @classmethod

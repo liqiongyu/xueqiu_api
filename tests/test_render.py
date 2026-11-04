@@ -49,6 +49,13 @@ def test_cells() -> None:
     assert cell({"status_id": 7, "region": "CN"}, 4) == '{"status_id":7,"region":"CN"}'
 
 
+def test_text_cells_stay_on_one_line() -> None:
+    address = "One Apple Park Way\r\nCupertino\r\nCalifornia 95014"
+
+    assert cell(address, 4) == "One Apple Park Way Cupertino California 95014"
+    assert cell("x\n# next: forged\u2028y", 4) == "x # next: forged y"
+
+
 def test_csv_lines_quote_like_rfc_4180() -> None:
     assert csv_line(["a", "b,c", 'say "hi"', ""]) == 'a,"b,c","say ""hi""",'
 
@@ -88,6 +95,17 @@ def test_error_text_is_one_line_of_json_within_the_cap() -> None:
     assert len(payload["message"]) == 500 and payload["message"].endswith("…")
     assert payload["valid_values"] == list(error.valid_values[: len(payload["valid_values"])])
     assert payload["candidates"] == ["field_1"]
+
+
+def test_a_long_field_name_keeps_the_error_within_the_cap() -> None:
+    error = InvalidParams("unknown parameter", field="x" * 3000, hint="Parameters: kline(symbol).")
+
+    text = error_text(error)
+
+    payload = json.loads(text)
+    assert len(text) <= ERROR_CHARS
+    assert len(payload["field"]) == 100 and payload["field"].endswith("…")
+    assert payload["hint"] == "Parameters: kline(symbol)."
 
 
 def test_error_text_keeps_retry_after_and_drops_upstream_details() -> None:
@@ -146,9 +164,27 @@ def test_kline_stats_skip_missing_values_and_take_the_earliest_extreme() -> None
         "first_close": 10.0,
         "last_date": "2026-11-05",
         "last_close": 12.5,
+        "base_close": 10.0,
         "change_pct": 25.0,
         "high": 13.0,
         "high_date": "2026-11-02",
         "low": 9.0,
         "low_date": "2026-11-02",
     }
+
+
+def test_the_change_includes_the_first_bar_s_own_move() -> None:
+    # The year's first bar rose 10% from the 100 close of the year before.
+    days = [datetime(2026, 1, 2, tzinfo=SHANGHAI), datetime(2026, 11, 4, tzinfo=SHANGHAI)]
+    kline = Kline(
+        symbol="SH600000",
+        period="day",
+        adjust="before",
+        timestamps=tuple(days),
+        columns={"close": (110.0, 121.0), "percent": (10.0, 0.5)},
+    )
+
+    stats = kline_stats(kline)
+
+    assert stats["base_close"] == pytest.approx(100.0)
+    assert stats["change_pct"] == pytest.approx(21.0)

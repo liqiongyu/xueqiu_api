@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, tzinfo
-from typing import Any, Literal, Self, cast
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from typing import Annotated, Any, Literal, Self, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from .._time import from_ms, to_ms
 from ..registry import AgentInfo, Endpoint
@@ -22,13 +22,30 @@ DEFAULT_COUNT = 100
 MAX_COUNT = 10_000
 """Largest count sent upstream; one request returned all 8756 daily bars of SH000001."""
 
+BarDate = Annotated[date, Field(ge=date(1900, 1, 1), le=date(2100, 12, 31))]
+"""A range date, 1900-01-01 to 2100-12-31."""
+BarTime = Annotated[
+    AwareDatetime, Field(ge=datetime(1900, 1, 2, tzinfo=UTC), le=datetime(2100, 12, 31, tzinfo=UTC))
+]
+"""A range moment with its UTC offset, from 1900-01-02 to 2100-12-31."""
+
+
+def check_range(begin: date | None, end: date | None, before: datetime | None) -> None:
+    """Raise ``ValueError`` for a range that is given twice or ends before it begins."""
+    if end is not None and before is not None:
+        raise ValueError("give end or before, not both")
+    last = end if before is None else before.date()
+    if begin is not None and last is not None and begin > last:
+        raise ValueError("begin must not be after the end of the range")
+
 
 class KlineParams(BaseModel):
     """Bars ending at ``end`` (default: now) going back, or starting at ``begin`` going forward.
 
     With ``begin``, up to ``count`` bars from that date are requested; when ``count`` is not set,
     enough to cover ``begin`` through ``end`` (default: today). Bars outside ``begin`` and
-    ``end`` are dropped. Dates are in the exchange timezone.
+    ``end`` are dropped. Dates are in the exchange timezone. ``before`` ends the range just
+    before a moment instead of with a day, to page back through minute bars.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
@@ -39,17 +56,18 @@ class KlineParams(BaseModel):
     months (60m); day, week, month, quarter and year cover the full history."""
     adjust: Adjust = "before"
     """before (前复权, forward-adjusted), after (后复权, backward-adjusted) or normal (不复权)."""
-    begin: date | None = None
+    begin: BarDate | None = None
     """First date, inclusive."""
-    end: date | None = None
+    end: BarDate | None = None
     """Last date, inclusive."""
+    before: BarTime | None = None
+    """End of the range, exclusive, as an ISO time with offset; instead of ``end``."""
     count: int | None = Field(default=None, ge=1, le=MAX_COUNT)
     """Most bars to fetch: by default 100 back from ``end``, or enough to cover the dates."""
 
     @model_validator(mode="after")
     def _check_range(self) -> Self:
-        if self.begin is not None and self.end is not None and self.begin > self.end:
-            raise ValueError("begin must not be after end")
+        check_range(self.begin, self.end, self.before)
         return self
 
 
@@ -77,7 +95,9 @@ class Kline:
 def _window(params: KlineParams, tz: tzinfo) -> tuple[datetime | None, datetime | None]:
     first = None if params.begin is None else datetime.combine(params.begin, time(), tz)
     last = None
-    if params.end is not None:
+    if params.before is not None:
+        last = params.before - timedelta(milliseconds=1)
+    elif params.end is not None:
         next_day = datetime.combine(params.end + timedelta(days=1), time(), tz)
         last = next_day - timedelta(milliseconds=1)
     return first, last
@@ -91,13 +111,14 @@ def _bars_upper_bound(first: date, last: date, period: Period) -> int:
 
 def _build_query(params: KlineParams, now: datetime) -> dict[str, str]:
     tz = normalize_symbol(params.symbol).timezone
-    if params.begin is not None:
-        until = params.end or now.astimezone(tz).date()
-        count = params.count or _bars_upper_bound(params.begin, until, params.period)
-        begin = datetime.combine(params.begin, time(), tz)
+    first, last = _window(params, tz)
+    if first is not None:
+        until = (last or now).astimezone(tz).date()
+        count = params.count or _bars_upper_bound(first.date(), until, params.period)
+        begin = first
     else:
         count = -(params.count or DEFAULT_COUNT)
-        begin = _window(params, tz)[1] or now
+        begin = last or now
     return {
         "symbol": params.symbol,
         "begin": str(to_ms(begin)),
@@ -152,8 +173,15 @@ def _table(data: dict[str, Any]) -> tuple[list[str], list[list[Any]]]:
     for row in cast(list[Any], rows):
         if not isinstance(row, list) or len(cast(list[Any], row)) != len(checked_names):
             raise ValueError("kline item rows must match the column list")
-        checked_rows.append(cast(list[Any], row))
+        cells = cast(list[Any], row)
+        if not all(cell is None or _is_number(cell) for cell in cells):
+            raise ValueError("kline item cells must be numbers or null")
+        checked_rows.append(cells)
     return checked_names, checked_rows
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 ENDPOINT = Endpoint(

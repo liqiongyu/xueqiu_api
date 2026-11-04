@@ -59,7 +59,8 @@ SITES: Mapping[Host, Site] = MappingProxyType(
             headers=BROWSER_HEADERS,
             cookies=False,
             min_interval_s=1.0,
-            login_codes=frozenset({"300001"}),
+            # 400016 comes from the Xueqiu stock paths it proxies under /xqstock/.
+            login_codes=frozenset({"300001", "400016"}),
         ),
     }
 )

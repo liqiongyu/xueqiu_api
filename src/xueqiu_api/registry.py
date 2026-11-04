@@ -6,10 +6,11 @@ package collects them into ``xueqiu_api.endpoints.REGISTRY``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+import difflib
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
@@ -83,12 +84,89 @@ class Endpoint(Generic[P, R]):
         try:
             return self.params.model_validate(dict(params))
         except ValidationError as exc:
-            problems = "; ".join(
-                f"{'.'.join(str(part) for part in error['loc']) or 'params'}: {error['msg']}"
-                for error in exc.errors()
-            )
-            raise InvalidParams(
-                f"invalid parameters for {self.name}: {problems}",
+            raise invalid_params(
+                self.params,
+                exc,
+                name=self.name,
                 endpoint=self.name,
                 params={key: value for key, value in params.items() if value is not None},
             ) from None
+
+
+def invalid_params(
+    model: type[BaseModel],
+    exc: ValidationError,
+    *,
+    name: str,
+    endpoint: str | None,
+    choices: Mapping[str, Sequence[str]] | None = None,
+    more: str = "",
+    params: Mapping[str, Any] | None = None,
+) -> InvalidParams:
+    """``InvalidParams`` for a failed validation of ``model``, the params of ``name``.
+
+    It names the first rejected field, its allowed values (from ``choices`` or a Literal) and
+    the closest of them; unknown parameter names get the list of known ones. The hint is the
+    signature, followed by ``more``.
+    """
+    errors = exc.errors()
+    hint = f"Parameters: {signature(name, model)}.{more}"
+    unknown = [str(e["loc"][0])[:60] for e in errors if e["type"] == "extra_forbidden" and e["loc"]]
+    keys = list(model.model_fields)
+    if unknown:
+        return InvalidParams(
+            f"unknown parameter {', '.join(unknown)} for {name}",
+            endpoint=endpoint,
+            params=params,
+            field=unknown[0],
+            valid_values=keys,
+            candidates=difflib.get_close_matches(unknown[0], keys, n=3),
+            hint=hint,
+        )
+    first = errors[0]
+    key = str(first["loc"][0]) if first["loc"] else ""
+    valid = list((choices or {}).get(key) or _literal_values(model, key))
+    value = first.get("input")
+    problems = "; ".join(
+        f"{'.'.join(str(part) for part in e['loc']) or 'arguments'}: {e['msg']}" for e in errors
+    )
+    return InvalidParams(
+        f"invalid parameters for {name}: {problems}",
+        endpoint=endpoint,
+        params=params,
+        field=".".join(str(part) for part in first["loc"]) or None,
+        valid_values=valid,
+        candidates=difflib.get_close_matches(value, valid, n=3) if isinstance(value, str) else (),
+        hint=hint,
+    )
+
+
+def signature(name: str, model: type[BaseModel]) -> str:
+    """Compact call signature, such as ``kline(symbol, period='day', count=null)``."""
+    parts = [
+        key
+        if field.is_required()
+        else f"{key}={_default(field.get_default(call_default_factory=True))}"
+        for key, field in model.model_fields.items()
+    ]
+    return f"{name}({', '.join(parts)})"
+
+
+def _literal_values(model: type[BaseModel], key: str) -> list[str]:
+    field = model.model_fields.get(key)
+    if field is None:
+        return []
+    for option in (field.annotation, *get_args(field.annotation)):
+        if get_origin(option) is Literal:
+            return [str(value) for value in get_args(option)]
+    return []
+
+
+def _default(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return repr(value)
+    return str(value)

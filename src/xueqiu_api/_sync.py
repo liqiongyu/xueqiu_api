@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Self, TypeVar
 
 import httpx2
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from ._base import DEFAULT_DEADLINE_S, ClientBase, http_result, no_cookie_jar
 from ._core import (
     HOME_CALL,
+    MAX_REDIRECTS,
     Call,
     Failure,
     Ok,
@@ -60,12 +62,15 @@ class Client(ClientBase):
 
     Args:
         token: a bare ``xq_a_token`` value or a cookie string such as ``"xq_a_token=...; u=..."``.
-            Defaults to the ``XUEQIU_TOKEN`` environment variable; without either the client
-            uses an anonymous session. Some endpoints (kline) also need the ``u`` cookie.
+            Defaults to the ``XUEQIU_TOKEN`` environment variable; without either, or with
+            ``token=""``, the client uses an anonymous session. Some endpoints (kline) also
+            need the ``u`` cookie.
         session_path: where the anonymous cookies are cached; defaults to the user cache
             directory. Login cookies are never written.
         min_intervals: longer minimum intervals between requests per host, in seconds.
-        deadline: seconds a call may take, queueing and retries included.
+        deadline: seconds a call may take, queueing and retries included. A response that
+            keeps arriving after the deadline is given up when its next chunk comes, which
+            can be up to one 10 s read timeout later.
     """
 
     def __init__(
@@ -86,7 +91,9 @@ class Client(ClientBase):
             clock=runtime.clock,
         )
         self._sleep = runtime.sleep
-        self._http = httpx2.Client(transport=runtime.transport, cookies=no_cookie_jar())
+        self._http = httpx2.Client(
+            transport=runtime.transport, cookies=no_cookie_jar(), max_redirects=MAX_REDIRECTS
+        )
         self._session_lock = threading.Lock()
 
     def quotec(self, symbols: str | Sequence[str]) -> list[Quote]:
@@ -109,6 +116,7 @@ class Client(ClientBase):
         adjust: Adjust = "before",
         begin: date | None = None,
         end: date | None = None,
+        before: datetime | None = None,
         count: int | None = None,
     ) -> Kline:
         """Bars of one symbol in one request; see ``KlineParams`` for how the range is chosen."""
@@ -120,6 +128,7 @@ class Client(ClientBase):
                 "adjust": adjust,
                 "begin": begin,
                 "end": end,
+                "before": before,
                 "count": count,
             },
         )
@@ -202,12 +211,12 @@ class Client(ClientBase):
         earliest = self._clock()
         while True:
             if call.cookies:
-                self._ensure_session(deadline)
+                self._ensure_session(call, deadline)
             generation = self._session.generation
             wait = self._book(call, earliest=earliest, deadline=deadline, last=last)
             if wait > 0:
                 self._sleep(wait)
-            self._check_breaker(call)
+            self._check_host(call)
             outcome = self._attempt(call, deadline)
             if isinstance(outcome, Ok):
                 return outcome.value
@@ -222,7 +231,7 @@ class Client(ClientBase):
             if isinstance(step, XueqiuError):
                 raise step
             if step.refresh:
-                self._refresh(generation, deadline)
+                self._refresh(call, generation, deadline)
                 refreshed = True
             else:
                 attempt += 1
@@ -237,23 +246,43 @@ class Client(ClientBase):
             headers=request_headers(call, self._session.cookie_header()),
             timeout=self._timeout(deadline),
         )
+        chunks: list[bytes] = []
         try:
-            response = self._http.send(request, follow_redirects=call.home)
+            # Streamed, so that a body still arriving at the deadline is given up.
+            response = self._http.send(request, stream=True, follow_redirects=call.home)
+            try:
+                for chunk in response.iter_bytes():
+                    chunks.append(chunk)
+                    if self._clock() > deadline:
+                        return network_failure(TimeoutError(), call)
+            finally:
+                response.close()
         except httpx2.RequestError as exc:
             return network_failure(exc, call)
-        return classify(call, http_result(call, response), self._session.secrets())
+        result = http_result(call, response, b"".join(chunks))
+        return classify(call, result, self._session.secrets())
 
-    def _ensure_session(self, deadline: float) -> None:
+    def _ensure_session(self, call: Call, deadline: float) -> None:
         if self._session.ready:
             return
-        with self._session_lock:
+        with self._session_locked(call, deadline):
             if not self._session.ready:
                 self._bootstrap(deadline)
 
-    def _refresh(self, seen: int, deadline: float) -> None:
-        with self._session_lock:
+    def _refresh(self, call: Call, seen: int, deadline: float) -> None:
+        with self._session_locked(call, deadline):
             if self._session.generation == seen:
                 self._bootstrap(deadline)
+
+    @contextlib.contextmanager
+    def _session_locked(self, call: Call, deadline: float) -> Generator[None]:
+        """Hold the session lock; give up waiting for it at the call's deadline."""
+        if not self._session_lock.acquire(timeout=max(0.0, deadline - self._clock())):
+            raise self._session_wait_error(call)
+        try:
+            yield
+        finally:
+            self._session_lock.release()
 
     def _bootstrap(self, deadline: float) -> None:
         self._session.set_anonymous(self._run(HOME_CALL, deadline))

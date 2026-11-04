@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import re
 import sys
 import tempfile
 import time
@@ -13,18 +12,17 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from ._core import log
+from ._core import COOKIE_NAME, COOKIE_VALUE, log, usable_cookie
 
 TOKEN_ENV = "XUEQIU_TOKEN"
 _VERSION = 1
-_COOKIE_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
-_COOKIE_VALUE = re.compile(r"[!#-+\--:<-\[\]-~]+")
 
 
 def parse_credentials(token: str) -> dict[str, str]:
     """Parse a bare ``xq_a_token`` value or a ``name=value; name=value`` cookie string.
 
-    Values containing ``=`` are read as cookie strings. Error messages never echo the input.
+    Values containing ``=`` are read as cookie strings. Error messages never echo the input;
+    they name the cookie whose value is not valid.
     """
     text = token.strip()
     if not text:
@@ -42,8 +40,12 @@ def parse_credentials(token: str) -> dict[str, str]:
                 raise ValueError("a cookie string must contain only name=value pairs")
             pairs[name.strip()] = value.strip()
     for name, value in pairs.items():
-        if not _COOKIE_NAME.fullmatch(name) or not _COOKIE_VALUE.fullmatch(value):
-            raise ValueError("the token contains characters that are not valid in a cookie")
+        if not COOKIE_NAME.fullmatch(name):
+            raise ValueError("a cookie name contains characters that are not valid in a cookie")
+        if not COOKIE_VALUE.fullmatch(value):
+            raise ValueError(
+                f"the value of the {name} cookie contains characters that are not valid"
+            )
     return pairs
 
 
@@ -76,7 +78,9 @@ class SessionStore:
         if not isinstance(cookies, dict) or "xq_a_token" not in cookies:
             return None
         items = cast(dict[Any, Any], cookies).items()
-        if not all(isinstance(k, str) and isinstance(v, str) for k, v in items):
+        if not all(
+            isinstance(k, str) and isinstance(v, str) and usable_cookie(k, v) for k, v in items
+        ):
             return None
         return cast(dict[str, str], cookies)
 

@@ -10,6 +10,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx2
 import pytest
 
 from xueqiu_api import AuthExpired, Blocked, Client, InvalidParams, UpstreamChanged
@@ -90,7 +91,10 @@ def test_concurrent_first_calls_bootstrap_once(h: Harness) -> None:
         "{not json",
         json.dumps({"version": 1, "cookies": {"u": "x"}}),
         json.dumps({"version": 99, "cookies": {"xq_a_token": "x"}}),
+        json.dumps({"version": 1, "cookies": {"xq_a_token": "abc\r\nX-Injected: 1"}}),
+        json.dumps({"version": 1, "cookies": {"xq_a_token": "abc", "u": "café"}}),
     ],
+    ids=["broken", "no-token", "version", "crlf", "non-ascii"],
 )
 def test_unusable_cache_is_ignored(
     make: Callable[..., Harness], session_path: Path, content: str
@@ -103,6 +107,35 @@ def test_unusable_cache_is_ignored(
     h.kline("SH600000")
 
     assert len(h.upstream.requests("xueqiu.com", "/")) == 1
+    saved = json.loads(session_path.read_text(encoding="utf-8"))
+    assert saved["cookies"]["xq_a_token"] == ANON_COOKIES["xq_a_token"]
+
+
+def test_bootstrap_drops_cookies_that_cannot_be_sent(h: Harness, session_path: Path) -> None:
+    headers = [
+        (b"Set-Cookie", f"xq_a_token={ANON_COOKIES['xq_a_token']}; Path=/".encode()),
+        (b"Set-Cookie", "cookiesu=café; Path=/".encode()),
+    ]
+    h.upstream.route("www.xueqiu.com", "/", lambda request: httpx2.Response(200, headers=headers))
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    assert len(h.kline("SH600000")) == 3
+
+    kept = {name: ANON_COOKIES[name] for name in ("acw_tc", "xq_a_token")}
+    cookie = h.upstream.requests(STOCK)[0].headers["cookie"]
+    assert cookie == "; ".join(f"{name}={value}" for name, value in kept.items())
+    assert json.loads(session_path.read_text(encoding="utf-8"))["cookies"] == kept
+
+
+def test_bootstrap_with_an_unusable_token_cookie_is_upstream_changed(h: Harness) -> None:
+    headers = [(b"Set-Cookie", "xq_a_token=café; Path=/".encode())]
+    h.upstream.route("www.xueqiu.com", "/", lambda request: httpx2.Response(200, headers=headers))
+
+    with pytest.raises(UpstreamChanged) as caught:
+        h.kline("SH600000")
+
+    assert "usable anonymous token cookie" in caught.value.message
+    assert h.upstream.requests(STOCK) == []
 
 
 def test_cache_write_failure_does_not_fail_the_call(
@@ -229,22 +262,56 @@ def test_credential_like_params_are_redacted_in_error_payloads(h: Harness) -> No
     [
         ("abc123", {"xq_a_token": "abc123"}),
         (" xq_a_token=abc; u=123 ;", {"xq_a_token": "abc", "u": "123"}),
+        # A Cookie header copied from a browser: empty, quoted and comma-separated values.
+        (
+            'xq_a_token=abc; xq_is_login=; s="quoted"; Hm_lvt_1db8=1730000000,1730100000',
+            {
+                "xq_a_token": "abc",
+                "xq_is_login": "",
+                "s": '"quoted"',
+                "Hm_lvt_1db8": "1730000000,1730100000",
+            },
+        ),
     ],
 )
 def test_parse_credentials(token: str, expected: dict[str, str]) -> None:
     assert parse_credentials(token) == expected
 
 
-@pytest.mark.parametrize("token", ["", "   ", "xq_a_token=abc; garbage", "a=b\nc", "a=b c"])
+@pytest.mark.parametrize(
+    "token",
+    ["", "   ", "xq_a_token=abc; garbage", "a=b\nc", "a=b c", "xq_a_token=abc; u=garbage é"],
+)
 def test_parse_credentials_rejects_bad_input_without_echoing_it(token: str) -> None:
     with pytest.raises(ValueError) as caught:
         parse_credentials(token)
     assert "garbage" not in str(caught.value)
 
 
+def test_parse_credentials_names_the_cookie_with_a_bad_value() -> None:
+    with pytest.raises(ValueError) as caught:
+        parse_credentials("xq_a_token=abc; u=12 3")
+    assert "u cookie" in str(caught.value) and "12 3" not in str(caught.value)
+
+
 def test_invalid_token_is_rejected_at_construction(tmp_path: Path) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidParams) as caught:
         Client(token="xq_a_token=a b", session_path=tmp_path / "session.json")
+    assert caught.value.message.startswith("token is not a valid token")
+    assert "a b" not in caught.value.message
+
+
+def test_an_empty_token_means_anonymous_even_with_the_variable_set(
+    make: Callable[..., Harness], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XUEQIU_TOKEN", LOGIN_TOKEN)
+    h = make(token="")
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    h.kline("SH600000")
+
+    assert repr(h.client) == f"{type(h.client).__name__}(session='anonymous')"
+    assert LOGIN_TOKEN not in h.upstream.requests(STOCK)[0].headers["cookie"]
 
 
 def test_default_session_path_follows_platform_conventions(

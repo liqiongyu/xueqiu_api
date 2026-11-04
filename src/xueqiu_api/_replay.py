@@ -87,16 +87,23 @@ def path_pattern(template: str) -> re.Pattern[str]:
 
 
 def _load_case(file: Path) -> _Case:
-    data: Any = json.loads(file.read_text(encoding="utf-8"))
+    try:
+        data: Any = json.loads(file.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise ValueError(f"replay fixture {file} is not UTF-8 JSON: {exc}") from None
     if not isinstance(data, dict) or "body" not in data:
         raise ValueError(f"replay fixture {file} needs a body")
     fields = cast(dict[str, Any], data)
     params: Any = fields.get("params", {})
     if not isinstance(params, dict):
         raise ValueError(f"replay fixture {file} has params that are not an object")
+    try:
+        status = int(fields.get("status", 200))
+    except (TypeError, ValueError):
+        raise ValueError(f"replay fixture {file} has a status that is not an integer") from None
     return _Case(
         file=file.name,
         params={str(key): str(value) for key, value in cast(dict[Any, Any], params).items()},
-        status=int(fields.get("status", 200)),
+        status=status,
         body=fields["body"],
     )

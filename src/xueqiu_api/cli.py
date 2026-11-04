@@ -9,9 +9,11 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import logging
 import os
 import platform
 import sys
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal, NoReturn, get_args
@@ -23,6 +25,7 @@ from ._sync import Client, SyncRuntime
 from .endpoints import REGISTRY
 from .errors import (
     ERROR_TABLE,
+    ISSUES_URL,
     DisabledByConfig,
     ErrorCode,
     InternalError,
@@ -31,6 +34,8 @@ from .errors import (
     XueqiuError,
 )
 from .mcp import MAX_MAX_CHARS, MIN_MAX_CHARS, LogLevel, McpOptions
+
+log = logging.getLogger("xueqiu_api.cli")
 
 Status = Literal["ok", "empty", "needs_login", "blocked", "rate_limited", "error"]
 """Outcome of one ``doctor`` check."""
@@ -55,11 +60,6 @@ Bugs in this package come first, then upstream changes, then problems the user h
 then problems that pass with time.
 """
 
-_TEST_REPLAY_ENV = "XUEQIU_TEST_REPLAY_DIR"
-"""Test-only, not a public interface and kept out of ``--help``: when set, every request is
-served from this replay directory on a virtual clock, so tests run ``doctor`` offline and
-without waiting."""
-
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run ``xueqiu`` with ``argv`` (default: ``sys.argv[1:]``) and return the exit code."""
@@ -68,10 +68,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _doctor(args) if args.command == "doctor" else _mcp(args)
     except XueqiuError as exc:
         error = exc
-    except Exception as exc:
-        error = InternalError(f"unexpected {type(exc).__name__}: {str(exc)[:200]}")
+    except Exception:
+        error = _internal_error()
     print(json.dumps(error.to_dict()), file=sys.stderr)
     return error.exit_code
+
+
+def _internal_error(endpoint: str | None = None) -> InternalError:
+    """Log the exception being handled, with its traceback, and name it by an event id."""
+    event = uuid.uuid4().hex[:12]
+    log.exception("internal error, event id %s", event)
+    return InternalError(
+        f"unexpected internal error, event id {event}",
+        endpoint=endpoint,
+        hint=f"This is a bug in xueqiu-api. Report it with event id {event} at {ISSUES_URL}.",
+    )
 
 
 class _Parser(argparse.ArgumentParser):
@@ -136,7 +147,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     mcp.add_argument(
         "--replay",
-        type=_directory,
+        type=_replay_directory,
         default=os.environ.get("XUEQIU_MCP_REPLAY") or None,
         metavar="DIR",
         help="serve recorded responses from DIR instead of the upstream (env: XUEQIU_MCP_REPLAY)",
@@ -177,9 +188,13 @@ def _max_chars(value: str) -> int:
     return int(value)
 
 
-def _directory(value: str) -> Path:
+def _replay_directory(value: str) -> Path:
     if not Path(value).is_dir():
         raise argparse.ArgumentTypeError(f"{value!r} is not a directory")
+    try:
+        ReplayTransport(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a replay directory: {exc}") from None
     return Path(value)
 
 
@@ -203,14 +218,7 @@ def _doctor(args: argparse.Namespace) -> int:
     cache = default_session_path()
     credentials = "env" if os.environ.get(TOKEN_ENV) else "none"
     cache_exists = cache.exists()
-    try:
-        client = Client(session_path=cache, _runtime=runtime)
-    except ValueError as exc:
-        raise InvalidParams(
-            f"{TOKEN_ENV} is not a valid token: {exc}",
-            hint=f"Set {TOKEN_ENV} to the xq_a_token value or to a cookie string such as "
-            "'xq_a_token=...; u=...'.",
-        ) from None
+    client = Client(session_path=cache, _runtime=runtime)
     # Every JSON object carries the run's facts, so the output stays a flat list of objects.
     facts = {
         "package_version": __version__,
@@ -261,6 +269,8 @@ def _check(
         result: Any = client.call(name, **REGISTRY[name].agent.examples[0])
     except XueqiuError as exc:
         return _status(exc), runtime.clock() - start, exc
+    except Exception:
+        return "error", runtime.clock() - start, _internal_error(name)
     # Lists, Kline and Financials are empty when nothing came back; records are models.
     return ("ok" if result else "empty"), runtime.clock() - start, None
 
@@ -277,25 +287,9 @@ def _row(width: int, endpoint: str, status: str, elapsed: str, detail: str) -> s
     return f"{endpoint:<{width}}  {status:<12}  {elapsed:>7}  {detail}".rstrip()
 
 
-class _VirtualClock:
-    """Test-only time that moves only when the client sleeps."""
-
-    def __init__(self) -> None:
-        self._now = 0.0
-
-    def now(self) -> float:
-        return self._now
-
-    def sleep(self, seconds: float) -> None:
-        self._now += seconds
-
-
 def _runtime() -> SyncRuntime:
-    directory = os.environ.get(_TEST_REPLAY_ENV)
-    if not directory:
-        return SyncRuntime()
-    clock = _VirtualClock()
-    return SyncRuntime(transport=ReplayTransport(directory), clock=clock.now, sleep=clock.sleep)
+    """Transport, clock and sleep of the doctor's client; tests replace this."""
+    return SyncRuntime()
 
 
 def _mcp(args: argparse.Namespace) -> int:

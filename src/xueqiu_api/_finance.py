@@ -44,8 +44,10 @@ class LineItem(NamedTuple):
     """One line item of a report period, from the upstream ``[value, yoy]`` pair."""
 
     value: float | None
-    """Reported value. Amounts are in the statement currency; ratios keep the upstream unit,
-    which differs between items."""
+    """Reported value. Amounts are in the statement currency and percentages in percent points
+    (91.9 means 91.9%); multiples such as current_ratio and per-share values are as sent. Items
+    whose upstream name means something else in another statement are renamed, such as the
+    per-share capital reserve of the indicators, capital_reserve_ps."""
     yoy: float | None
     """Change against the same period a year earlier, in percent points (1.23 means +1.23%):
     the upstream fraction times 100."""
@@ -61,8 +63,9 @@ class ReportPeriod:
     items: Mapping[str, LineItem]
     """Line items under their upstream names, which differ between A shares, Hong Kong and US."""
     extra: Mapping[str, Any]
-    """Other upstream fields as sent, such as ``ctime``, or ``sd`` and ``ed`` (period start and
-    end dates) for Hong Kong and US."""
+    """Other upstream fields as sent, such as ``sd`` and ``ed`` (period start and end dates) for
+    Hong Kong and US; ``ctime``, when the upstream recorded the period, is an aware datetime in
+    the exchange timezone."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +86,9 @@ class Financials:
         return len(self.periods)
 
 
+ItemFixes = Mapping[str, tuple[str, float]]
+"""Upstream line item name to (name, factor of its value)."""
+
 _TEXT = TypeAdapter(str | None)
 _PAIRS = TypeAdapter(dict[str, tuple[float | None, float | None]])
 _PERIOD_KEYS = frozenset({"report_date", "report_name"})
@@ -99,21 +105,22 @@ def _build_query(params: FinanceParams, now: datetime) -> dict[str, str]:
     }
 
 
-def _parse(payload: Any, params: FinanceParams) -> Financials:
+def _parse(payload: Any, params: FinanceParams, items: ItemFixes) -> Financials:
     data = cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
     rows: Any = data.get("list")
     if not isinstance(rows, list):
         raise ValueError("finance data needs a list of report periods")
+    tz = normalize_symbol(params.symbol).timezone
     return Financials(
         symbol=params.symbol,
         name=_TEXT.validate_python(data.get("quote_name")),
         currency=_TEXT.validate_python(data.get("currency")),
-        periods=tuple(_period(row) for row in cast(list[Any], rows)),
+        periods=tuple(_period(row, tz, items) for row in cast(list[Any], rows)),
         extra={key: value for key, value in data.items() if key not in _HEADER_KEYS},
     )
 
 
-def _period(row: Any) -> ReportPeriod:
+def _period(row: Any, tz: ZoneInfo, items: ItemFixes) -> ReportPeriod:
     if not isinstance(row, dict):
         raise ValueError("a report period is not an object")
     fields = cast(dict[str, Any], row)
@@ -121,30 +128,46 @@ def _period(row: Any) -> ReportPeriod:
     if not isinstance(name, str):
         raise ValueError("a report period needs a report_name")
     pairs = _PAIRS.validate_python({k: v for k, v in fields.items() if isinstance(v, list)})
+    line_items: dict[str, LineItem] = {}
+    for key, (value, yoy) in pairs.items():
+        item, factor = items.get(key, (key, 1.0))
+        line_items[item] = LineItem(
+            None if value is None else value * factor, None if yoy is None else yoy * 100
+        )
+    extra = {
+        key: value
+        for key, value in fields.items()
+        if key not in _PERIOD_KEYS and not isinstance(value, list)
+    }
+    if extra.get("ctime") is not None:
+        extra["ctime"] = from_ms(extra["ctime"], tz)
     return ReportPeriod(
         report_date=from_ms(fields.get("report_date"), REPORT_DATE_ZONE).date(),
         report_name=name,
-        items={
-            key: LineItem(value, None if yoy is None else yoy * 100)
-            for key, (value, yoy) in pairs.items()
-        },
-        extra={
-            key: value
-            for key, value in fields.items()
-            if key not in _PERIOD_KEYS and not isinstance(value, list)
-        },
+        items=line_items,
+        extra=extra,
     )
 
 
-def finance_endpoint(statement: str, *, agent: AgentInfo) -> Endpoint[FinanceParams, Financials]:
-    """Spec of ``/v5/stock/finance/{region}/<statement>.json``, named ``finance_<statement>``."""
+def finance_endpoint(
+    statement: str, *, agent: AgentInfo, items: ItemFixes = MappingProxyType({})
+) -> Endpoint[FinanceParams, Financials]:
+    """Spec of ``/v5/stock/finance/{region}/<statement>.json``, named ``finance_<statement>``.
+
+    ``items`` maps upstream line items of this statement to their name and value factor here,
+    for the ones whose name means another thing or unit in another statement.
+    """
+
+    def parse(payload: Any, params: FinanceParams) -> Financials:
+        return _parse(payload, params, items)
+
     return Endpoint(
         name=f"finance_{statement}",
         host="stock.xueqiu.com",
         path=f"/v5/stock/finance/{{region}}/{statement}.json",
         params=FinanceParams,
         build_query=_build_query,
-        parse=_parse,
+        parse=parse,
         auth="anonymous",
         freshness="daily",
         envelope="xueqiu",

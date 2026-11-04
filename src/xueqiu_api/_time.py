@@ -9,7 +9,10 @@ def from_ms(value: object, tz: tzinfo) -> datetime:
     """Convert an upstream millisecond timestamp to an aware datetime in ``tz``."""
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError(f"expected a millisecond timestamp, got {type(value).__name__}")
-    return (_EPOCH + timedelta(milliseconds=int(value))).astimezone(tz)
+    try:
+        return (_EPOCH + timedelta(milliseconds=int(value))).astimezone(tz)
+    except OverflowError:
+        raise ValueError(f"timestamp {value!r} is out of range") from None
 
 
 def to_ms(moment: datetime) -> int:

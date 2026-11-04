@@ -31,6 +31,10 @@ CASES = [
     ("430047", "BJ430047", "CN"),
     ("830799", "BJ830799", "CN"),
     ("920045", "BJ920045", "CN"),
+    # Bonds and repos with a prefix
+    ("SH113050", "SH113050", "CN"),
+    ("SZ123001", "SZ123001", "CN"),
+    ("SH204001", "SH204001", "CN"),
     # Hong Kong
     ("00700", "00700", "HK"),
     ("89988", "89988", "HK"),
@@ -81,6 +85,11 @@ def test_region_and_timezone(text: str, region: str, timezone: str) -> None:
         "AAPL.US",
         "ZH2567925",
         "\uff16\uff10\uff10\uff15\uff11\uff19",
+        # Bonds, convertible bonds and repos are numbered in both exchanges.
+        "110059",
+        "113050",
+        "118000",
+        "204001",
     ],
 )
 def test_unrecognized_symbols(text: str) -> None:

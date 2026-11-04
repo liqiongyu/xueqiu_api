@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import time
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Self, TypeVar
 
 import httpx2
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from ._base import DEFAULT_DEADLINE_S, ClientBase, http_result, no_cookie_jar
 from ._core import (
     HOME_CALL,
+    MAX_REDIRECTS,
     Call,
     Failure,
     Ok,
@@ -59,7 +61,7 @@ class AsyncClient(ClientBase):
     """Asynchronous (asyncio) client with the same surface as ``Client``; methods are coroutines.
 
     Concurrent tasks share one per-host limiter, circuit breaker and session. Arguments are
-    the same as for ``Client``.
+    the same as for ``Client``; the deadline also bounds a response that is still arriving.
     """
 
     def __init__(
@@ -80,7 +82,9 @@ class AsyncClient(ClientBase):
             clock=runtime.clock,
         )
         self._sleep = runtime.sleep
-        self._http = httpx2.AsyncClient(transport=runtime.transport, cookies=no_cookie_jar())
+        self._http = httpx2.AsyncClient(
+            transport=runtime.transport, cookies=no_cookie_jar(), max_redirects=MAX_REDIRECTS
+        )
         self._session_lock = asyncio.Lock()
 
     async def quotec(self, symbols: str | Sequence[str]) -> list[Quote]:
@@ -103,6 +107,7 @@ class AsyncClient(ClientBase):
         adjust: Adjust = "before",
         begin: date | None = None,
         end: date | None = None,
+        before: datetime | None = None,
         count: int | None = None,
     ) -> Kline:
         """Bars of one symbol in one request; see ``KlineParams`` for how the range is chosen."""
@@ -114,6 +119,7 @@ class AsyncClient(ClientBase):
                 "adjust": adjust,
                 "begin": begin,
                 "end": end,
+                "before": before,
                 "count": count,
             },
         )
@@ -196,12 +202,12 @@ class AsyncClient(ClientBase):
         earliest = self._clock()
         while True:
             if call.cookies:
-                await self._ensure_session(deadline)
+                await self._ensure_session(call, deadline)
             generation = self._session.generation
             wait = self._book(call, earliest=earliest, deadline=deadline, last=last)
             if wait > 0:
                 await self._sleep(wait)
-            self._check_breaker(call)
+            self._check_host(call)
             outcome = await self._attempt(call, deadline)
             if isinstance(outcome, Ok):
                 return outcome.value
@@ -216,7 +222,7 @@ class AsyncClient(ClientBase):
             if isinstance(step, XueqiuError):
                 raise step
             if step.refresh:
-                await self._refresh(generation, deadline)
+                await self._refresh(call, generation, deadline)
                 refreshed = True
             else:
                 attempt += 1
@@ -232,22 +238,37 @@ class AsyncClient(ClientBase):
             timeout=self._timeout(deadline),
         )
         try:
-            response = await self._http.send(request, follow_redirects=call.home)
-        except httpx2.RequestError as exc:
+            async with asyncio.timeout(max(0.001, deadline - self._clock())):
+                response = await self._http.send(request, follow_redirects=call.home)
+        except (httpx2.RequestError, TimeoutError) as exc:
             return network_failure(exc, call)
-        return classify(call, http_result(call, response), self._session.secrets())
+        result = http_result(call, response, response.content)
+        return classify(call, result, self._session.secrets())
 
-    async def _ensure_session(self, deadline: float) -> None:
+    async def _ensure_session(self, call: Call, deadline: float) -> None:
         if self._session.ready:
             return
-        async with self._session_lock:
+        async with self._session_locked(call, deadline):
             if not self._session.ready:
                 await self._bootstrap(deadline)
 
-    async def _refresh(self, seen: int, deadline: float) -> None:
-        async with self._session_lock:
+    async def _refresh(self, call: Call, seen: int, deadline: float) -> None:
+        async with self._session_locked(call, deadline):
             if self._session.generation == seen:
                 await self._bootstrap(deadline)
+
+    @contextlib.asynccontextmanager
+    async def _session_locked(self, call: Call, deadline: float) -> AsyncGenerator[None]:
+        """Hold the session lock; give up waiting for it at the call's deadline."""
+        try:
+            async with asyncio.timeout(max(0.0, deadline - self._clock())):
+                await self._session_lock.acquire()
+        except TimeoutError:
+            raise self._session_wait_error(call) from None
+        try:
+            yield
+        finally:
+            self._session_lock.release()
 
     async def _bootstrap(self, deadline: float) -> None:
         self._session.set_anonymous(await self._run(HOME_CALL, deadline))

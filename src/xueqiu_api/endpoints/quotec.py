@@ -34,6 +34,14 @@ class QuotecParams(BaseModel):
     """Symbols, as a sequence or one comma-separated string."""
 
 
+def exchange_time(value: Any, info: ValidationInfo) -> Any:
+    """Before-validator body: a millisecond timestamp becomes an aware datetime in the exchange
+    timezone of the model's ``symbol``."""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return from_ms(value, exchange_timezone(info.data.get("symbol")))
+    return value
+
+
 class Quote(BaseModel):
     """Realtime quote of one symbol. Unknown upstream fields are kept in ``model_extra``."""
 
@@ -76,9 +84,7 @@ class Quote(BaseModel):
     @field_validator("timestamp", mode="before")
     @classmethod
     def _exchange_time(cls, value: Any, info: ValidationInfo) -> Any:
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return from_ms(value, exchange_timezone(info.data.get("symbol")))
-        return value
+        return exchange_time(value, info)
 
 
 _QUOTES = TypeAdapter(list[Quote])

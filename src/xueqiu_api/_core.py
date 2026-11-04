@@ -37,6 +37,10 @@ MAX_RETRIES = 2
 """Retries after HTTP 5xx, timeouts and network errors."""
 BACKOFF_BASE_S = 1.0
 ATTEMPT_TIMEOUT_S = 10.0
+MIN_ATTEMPT_S = 1.0
+"""Least time a request gets before its call's deadline; later limiter slots are not booked."""
+MAX_REDIRECTS = 3
+"""Redirects the cookie bootstrap follows; the real chain has one, from the apex to www."""
 BREAKER_COOLDOWN_S = 300.0
 RATE_LIMIT_RETRY_AFTER_S = 10.0
 """retry_after_s for upstream rate limits that come without a Retry-After header."""
@@ -45,6 +49,20 @@ UNAVAILABLE_RETRY_AFTER_S = 5.0
 # Aliyun WAF challenge pages, measured on xueqiu.com: HTML whose first bytes carry
 # {"_waf_<hex>": ...} render data and a <meta name="aliyun_waf_aa"> tag.
 _WAF_PAGE = re.compile(rb"aliyun_waf|_waf_[0-9a-f]{6,}", re.IGNORECASE)
+_PATH_REFUSED_HINT = (
+    "The host refuses this path, so retrying will not help. If an endpoint of this package "
+    f"gets this, upgrade xueqiu-api or report it at {ISSUES_URL}."
+)
+
+COOKIE_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
+COOKIE_VALUE = re.compile(r"[!-:<-~]*")
+"""Visible ASCII except ``;``: RFC 6265 cookie octets plus the double quotes, commas and
+backslashes that browsers send."""
+
+
+def usable_cookie(name: str, value: str) -> bool:
+    """Whether a cookie can go into a Cookie header as it is."""
+    return bool(COOKIE_NAME.fullmatch(name) and COOKIE_VALUE.fullmatch(value))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -99,11 +117,16 @@ class Failure:
     status: int | None = None
     upstream_code: str | None = None
     retry_after_s: float | None = None
+    wait_s: float = 0.0
+    """Least delay before a retry, from the upstream's Retry-After header."""
+    hint: str | None = None
+    """Hint of this failure; None keeps the default hint of its code."""
     trips_breaker: bool = False
     login: bool = False
     """A login-class upstream code; ``next_step`` decides which error it becomes."""
 
     def error(self, call: Call, cls: type[XueqiuError] | None = None, **extra: Any) -> XueqiuError:
+        extra.setdefault("hint", self.hint)
         return (cls or ERROR_TABLE[self.code].exception)(
             self.message,
             endpoint=call.endpoint,
@@ -155,9 +178,15 @@ def upstream_error(body: Any) -> tuple[str, str] | None:
     return None
 
 
-def network_failure(exc: httpx2.RequestError, call: Call) -> Failure:
+def network_failure(exc: httpx2.RequestError | TimeoutError, call: Call) -> Failure:
+    """Failure of an attempt without a response; ``TimeoutError`` is the call's deadline."""
     host = call.site.host
-    if isinstance(exc, httpx2.TimeoutException):
+    if isinstance(exc, httpx2.TooManyRedirects):
+        return Failure(
+            code="upstream_changed",
+            message=f"{call.url} redirected more than {MAX_REDIRECTS} times",
+        )
+    if isinstance(exc, httpx2.TimeoutException | TimeoutError):
         message = f"{host} timed out"
     else:
         message = f"{host} network error ({type(exc).__name__})"
@@ -192,28 +221,38 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
             trips_breaker=True,
         )
     if status == 403:
-        # Seen as a path-level refusal (openresty 403 page); the host keeps answering.
-        return Failure(code="blocked", message=f"{host} refused the request (HTTP 403)", status=403)
+        # Seen as a path-level refusal (openresty 403 page) that lasts: the host keeps
+        # answering other paths, so the breaker stays closed.
+        return Failure(
+            code="blocked",
+            message=f"{host} refused the request (HTTP 403)",
+            status=403,
+            hint=_PATH_REFUSED_HINT,
+        )
     if status == 429:
         return Failure(
             code="rate_limited",
             message=f"{host} rate limited the request (HTTP 429)",
             status=429,
-            retry_after_s=_retry_after(result.headers),
+            retry_after_s=_retry_after(result.headers, RATE_LIMIT_RETRY_AFTER_S),
         )
     if status >= 500:
         return Failure(
             code="upstream_unavailable",
             message=f"{host} returned HTTP {status}",
             status=status,
-            retry_after_s=UNAVAILABLE_RETRY_AFTER_S,
+            retry_after_s=_retry_after(result.headers, UNAVAILABLE_RETRY_AFTER_S),
+            wait_s=_retry_after(result.headers, 0.0),
         )
     if call.home:
-        if status == 200 and "xq_a_token" in result.cookies:
-            return Ok(dict(result.cookies))
+        cookies = {
+            name: value for name, value in result.cookies.items() if usable_cookie(name, value)
+        }
+        if status == 200 and "xq_a_token" in cookies:
+            return Ok(cookies)
         return Failure(
             code="upstream_changed",
-            message=f"the home page returned HTTP {status} without the anonymous token cookie",
+            message=f"the home page returned HTTP {status} without a usable anonymous token cookie",
             status=status,
         )
     error = upstream_error(body) if is_json else None
@@ -236,7 +275,7 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
                 message=message,
                 status=status,
                 upstream_code=code,
-                retry_after_s=_retry_after(result.headers),
+                retry_after_s=_retry_after(result.headers, RATE_LIMIT_RETRY_AFTER_S),
             )
         return Failure(code="upstream_error", message=message, status=status, upstream_code=code)
     if 300 <= status < 400 or status == 404:
@@ -248,9 +287,10 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
             code="upstream_error", message=f"{host} returned HTTP {status}", status=status
         )
     if not is_json:
+        log.debug("non-JSON body from %s: %r", host, excerpt(result.content, secrets))
         return Failure(
             code="upstream_changed",
-            message=f"{host} returned a non-JSON body: {excerpt(result.content, secrets)!r}",
+            message=f"{host} returned a non-JSON body (HTTP {status}, {len(result.content)} bytes)",
             status=status,
         )
     return Ok(body)
@@ -266,13 +306,13 @@ def unwrap(envelope: Envelope, body: Any) -> Any:
     return fields["data"]
 
 
-def _retry_after(headers: Mapping[str, str]) -> float:
-    value = headers.get("retry-after", "")
+def _retry_after(headers: Mapping[str, str], default: float) -> float:
+    """Seconds of the Retry-After header, or ``default`` without a usable one."""
     try:
-        seconds = float(value)
+        seconds = float(headers.get("retry-after", ""))
     except ValueError:
-        return RATE_LIMIT_RETRY_AFTER_S
-    return seconds if math.isfinite(seconds) and seconds >= 0 else RATE_LIMIT_RETRY_AFTER_S
+        return default
+    return seconds if math.isfinite(seconds) and seconds >= 0 else default
 
 
 def next_step(
@@ -280,6 +320,7 @@ def next_step(
 ) -> Retry | XueqiuError:
     """Decide whether a failed attempt is retried, refreshes the session, or raises.
 
+    Retries back off exponentially, and wait at least as long as a Retry-After header asks.
     Login-class codes: a request that carried the configured credentials raises
     ``auth_expired``; one that carried anonymous cookies refreshes them once and retries. When
     that does not help, or no cookies were sent, the error is ``login_required`` if the
@@ -288,7 +329,7 @@ def next_step(
     class no longer holds.
     """
     if failure.code == "upstream_unavailable" and attempt < MAX_RETRIES:
-        return Retry(BACKOFF_BASE_S * 2**attempt)
+        return Retry(max(BACKOFF_BASE_S * 2**attempt, failure.wait_s))
     if not failure.login:
         return failure.error(call)
     if call.cookies and credentials:
@@ -297,26 +338,31 @@ def next_step(
         return Retry(0.0, refresh=True)
     if call.auth is None or call.auth == "required":
         return failure.error(call, LoginRequired)
-    return failure.error(
-        call,
-        UpstreamChanged,
-        hint=(
+    if not call.cookies:
+        hint = (
+            f"{call.endpoint} was verified to work without cookies and now returns a login "
+            f"error; please report it at {ISSUES_URL}."
+        )
+    else:
+        hint = (
             f"{call.endpoint} was verified to work without login and now returns a login "
             f"error. Setting XUEQIU_TOKEN may help; please report it at {ISSUES_URL}."
-        ),
-    )
+        )
+    return failure.error(call, UpstreamChanged, hint=hint)
 
 
 class HostLimiter:
     """Minimum interval between request starts per host, shared by all calls of one client.
 
     ``reserve`` books the next free slot under a lock and returns the wait; it never sleeps,
-    so threads of the sync client and tasks of the async client share it.
+    so threads of the sync client and tasks of the async client share it. ``pause`` holds a
+    host that rate limited a request: calls to it fail fast until then.
     """
 
     def __init__(self, intervals: Mapping[str, float]) -> None:
         self._intervals = dict(intervals)
         self._next: dict[str, float] = {}
+        self._paused_until: dict[str, float] = {}
         self._lock = threading.Lock()
 
     def reserve(
@@ -332,6 +378,15 @@ class HostLimiter:
                 return False, slot - now
             self._next[host] = slot + self._intervals[host]
             return True, slot - now
+
+    def pause(self, host: str, until: float) -> None:
+        with self._lock:
+            self._paused_until[host] = max(until, self._paused_until.get(host, until))
+
+    def paused(self, host: str, now: float) -> float:
+        """Seconds the host stays paused."""
+        with self._lock:
+            return max(0.0, self._paused_until.get(host, now) - now)
 
 
 class CircuitBreaker:

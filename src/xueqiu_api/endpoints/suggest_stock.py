@@ -11,12 +11,15 @@ from ..registry import AgentInfo, Endpoint
 
 RESULT_CAP = 10
 """Results one request returns. Not measured: the survey saw at most 9."""
+QUERY_CHARS = 50
 
 
 class SuggestStockParams(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
-    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+    query: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=QUERY_CHARS)
+    ]
     """Code, pinyin initials or name, such as 600000, pfyh, 浦发银行 or AAPL."""
 
 
@@ -56,6 +59,8 @@ ENDPOINT = Endpoint(
     freshness="static",
     envelope="query",
     verified_on=date(2026, 11, 4),
+    # The survey got results with every cookie left out.
+    cookies=False,
     agent=AgentInfo(
         title_zh="证券搜索",
         title_en="Security search",

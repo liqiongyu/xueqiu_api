@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp import MCPError
-from mcp.server import Server, ServerRequestContext
+from mcp.server import CacheHint, Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     INVALID_PARAMS,
@@ -78,18 +78,26 @@ def build_server(
         SERVER_NAME,
         version=__version__,
         instructions=toolbox.instructions,
+        # The list is fixed for the life of the process.
+        cache_hints={"tools/list": CacheHint(ttl_ms=3_600_000, scope="private")},
         on_list_tools=list_tools,
         on_call_tool=call_tool,
     )
 
 
 def main(options: McpOptions) -> int:
-    """Serve on stdin and stdout until the client disconnects; log to stderr only."""
+    """Serve on stdin and stdout until the client disconnects; log to stderr only.
+
+    The log level applies to this package and the mcp SDK. Other loggers stay at warning:
+    the HTTP layer logs response headers at debug, Set-Cookie included.
+    """
     logging.basicConfig(
         stream=sys.stderr,
-        level=options.log_level.upper(),
+        level=logging.WARNING,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    for name in ("xueqiu_api", "mcp"):
+        logging.getLogger(name).setLevel(options.log_level.upper())
     asyncio.run(_serve(options))
     return 0
 

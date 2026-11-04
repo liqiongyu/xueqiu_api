@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -22,6 +23,7 @@ from .harness import Harness, error_reply, fixture_reply, json_reply
 STOCK = "stock.xueqiu.com"
 QUOTEC = "/v5/stock/realtime/quotec.json"
 KLINE = "/v5/stock/chart/kline.json"
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 def test_quotec_sends_one_batch_request_without_cookies(h: Harness) -> None:
@@ -43,8 +45,9 @@ def test_quotec_accepts_a_comma_separated_string(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
 
     h.quotec("SH600000, 00700")
+    h.quotec("SH600000，00700")
 
-    assert h.upstream.sent[0].params == {"symbol": "SH600000,00700"}
+    assert [sent.params for sent in h.upstream.sent] == [{"symbol": "SH600000,00700"}] * 2
 
 
 def test_kline_bootstraps_cookies_and_parses_bars(h: Harness) -> None:
@@ -84,6 +87,37 @@ def test_kline_with_a_date_range_goes_forward_from_begin(h: Harness) -> None:
     assert [stamp.date() for stamp in bars.timestamps] == [date(2026, 11, 3)]
 
 
+def test_kline_before_a_moment_goes_back_from_just_before_it(h: Harness) -> None:
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+    before = datetime(2026, 11, 4, tzinfo=SHANGHAI)
+
+    bars = h.kline("SH600000", before=before, count=3)
+
+    params = h.upstream.sent[-1].params
+    assert (params["begin"], params["count"]) == (str(int(before.timestamp() * 1000) - 1), "-3")
+    assert [stamp.date() for stamp in bars.timestamps] == [date(2026, 11, 2), date(2026, 11, 3)]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"end": date(9999, 12, 31)},
+        {"begin": date(1, 1, 1)},
+        {"before": datetime(9999, 12, 31, tzinfo=SHANGHAI)},
+        {"before": datetime(2026, 11, 4)},
+        {"end": date(2026, 11, 3), "before": datetime(2026, 11, 4, tzinfo=SHANGHAI)},
+        {"begin": date(2026, 11, 5), "before": datetime(2026, 11, 4, tzinfo=SHANGHAI)},
+    ],
+)
+def test_kline_rejects_dates_out_of_range_before_any_request(
+    h: Harness, params: dict[str, Any]
+) -> None:
+    with pytest.raises(InvalidParams):
+        h.kline("SH600000", **params)
+
+    assert h.upstream.sent == []
+
+
 def test_call_returns_the_same_result_as_the_explicit_method(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
 
@@ -103,6 +137,19 @@ def test_call_rejects_unknown_endpoints_and_params(h: Harness) -> None:
     with pytest.raises(InvalidParams):
         h.kline("SH600000", period="2d")
     assert h.upstream.sent == []
+
+
+def test_invalid_params_name_the_field_and_its_valid_values(h: Harness) -> None:
+    with pytest.raises(InvalidParams) as period:
+        h.kline("SH600000", period="dya")
+    with pytest.raises(InvalidParams) as unknown:
+        h.call("kline", symbol="SH600000", start="2026-01-01")
+
+    assert period.value.field == "period"
+    assert "day" in period.value.valid_values and period.value.candidates[0] == "day"
+    assert "kline(symbol, period='day'" in period.value.hint
+    assert unknown.value.field == "start"
+    assert unknown.value.valid_values[:5] == ("symbol", "period", "adjust", "begin", "end")
 
 
 def test_unrecognized_symbols_raise_symbol_not_found(h: Harness) -> None:
@@ -142,6 +189,30 @@ def test_request_rejects_unknown_hosts_and_relative_paths(h: Harness) -> None:
     with pytest.raises(InvalidParams):
         h.request(host="stock.xueqiu.com", path="@example.com/")
     assert h.upstream.sent == []
+
+
+@pytest.mark.parametrize(
+    ("path", "params"),
+    [("/x\n", None), ("/a\x00b", None), ("/v5/stock/quote.json", {"symbol": "x" * 70_000})],
+    ids=["newline", "nul", "long-query"],
+)
+def test_request_rejects_an_invalid_url_before_the_session_and_the_limiter(
+    h: Harness, session_path: Path, path: str, params: dict[str, Any] | None
+) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        h.request(host="www.xueqiu.com", path=path, params=params)
+
+    assert "invalid request URL" in caught.value.message
+    assert h.upstream.sent == []
+    assert not session_path.exists()
+
+
+def test_request_encodes_control_characters_in_param_values(h: Harness) -> None:
+    h.upstream.route(STOCK, QUOTEC, json_reply({"data": [], "error_code": 0}))
+
+    h.request(host=STOCK, path=QUOTEC, params={"symbol": "a\nb"})
+
+    assert h.upstream.sent[-1].params == {"symbol": "a\nb"}
 
 
 @pytest.mark.parametrize("data", [None, []])

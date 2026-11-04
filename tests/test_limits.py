@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import itertools
 import math
-from collections.abc import Callable, Sequence
+import time
+from collections.abc import Callable, Iterator, Sequence
+from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 
-from xueqiu_api import Blocked, RateLimited, UpstreamUnavailable
+from xueqiu_api import AsyncClient, Blocked, Client, RateLimited, UpstreamUnavailable
+from xueqiu_api._async import AsyncRuntime
 from xueqiu_api._core import HostLimiter
+from xueqiu_api._sync import SyncRuntime
 
-from .harness import Harness, fixture_reply, json_reply, text_reply
+from .harness import FakeClock, FakeUpstream, Harness, fixture_reply, json_reply, text_reply
 
 STOCK = "stock.xueqiu.com"
 WWW = "www.xueqiu.com"
@@ -72,16 +78,25 @@ def test_intervals_cannot_be_shortened(
 
 
 def test_calls_that_cannot_start_before_the_deadline_fail_fast(h: Harness) -> None:
-    h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
+    quotes = fixture_reply("quotec/cn_hk_us")
+    read_timeouts: list[float] = []
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        read_timeouts.append(request.extensions["timeout"]["read"])
+        return quotes(request)
+
+    h.upstream.route(STOCK, QUOTEC, reply)
 
     results = h.concurrently([("quotec", ("SH600000",), {}) for _ in range(40)])
 
     limited = [result for result in results if isinstance(result, RateLimited)]
-    assert len(h.upstream.sent) == 31
-    assert len(limited) == 9
-    assert all(error.retry_after_s == 31.0 for error in limited)
+    assert len(h.upstream.sent) == 30
+    assert len(limited) == 10
+    assert all(error.retry_after_s == 30.0 for error in limited)
     assert all("local queue" in error.message for error in limited)
-    assert max(sent.at for sent in h.upstream.sent) - min(sent.at for sent in h.upstream.sent) == 30
+    assert max(sent.at for sent in h.upstream.sent) - min(sent.at for sent in h.upstream.sent) == 29
+    # The last slot still leaves its request a second before the 30 s deadline.
+    assert min(read_timeouts) == pytest.approx(1.0)
 
 
 def test_a_shorter_deadline_limits_queueing(make: Callable[..., Harness]) -> None:
@@ -90,8 +105,8 @@ def test_a_shorter_deadline_limits_queueing(make: Callable[..., Harness]) -> Non
 
     results = h.concurrently([("quotec", ("SH600000",), {}) for _ in range(5)])
 
-    assert sum(isinstance(result, RateLimited) for result in results) == 2
-    assert len(h.upstream.sent) == 3
+    assert sum(isinstance(result, RateLimited) for result in results) == 3
+    assert len(h.upstream.sent) == 2
 
 
 def test_retries_wait_for_the_host_interval(h: Harness) -> None:
@@ -113,8 +128,145 @@ def test_retry_that_would_miss_the_deadline_reports_the_failure(
     with pytest.raises(UpstreamUnavailable):
         h.quotec("SH600000")
 
-    # The second retry would start at 3 s, after the 1.5 s deadline.
+    # The retry would start at 1 s, leaving less than half the 1.5 s deadline for it.
+    assert len(h.upstream.sent) == 1
+
+
+def test_a_retry_waits_as_long_as_retry_after_asks(h: Harness) -> None:
+    h.upstream.route(
+        STOCK, QUOTEC, json_reply({}, 503, {"Retry-After": "4"}), fixture_reply("quotec/cn_hk_us")
+    )
+
+    assert len(h.quotec("SH600000")) == 4
+
+    assert gaps([sent.at for sent in h.upstream.sent]) == pytest.approx([4.0])
+
+
+def test_a_retry_after_past_the_deadline_is_not_attempted(h: Harness) -> None:
+    h.upstream.route(STOCK, QUOTEC, json_reply({}, 503, {"Retry-After": "120"}))
+
+    with pytest.raises(UpstreamUnavailable) as caught:
+        h.quotec("SH600000")
+
+    assert caught.value.retry_after_s == 120.0
+    assert len(h.upstream.sent) == 1
+
+
+def test_a_rate_limit_holds_the_host_until_retry_after(h: Harness) -> None:
+    h.upstream.route(
+        STOCK, QUOTEC, json_reply({}, 429, {"Retry-After": "60"}), fixture_reply("quotec/cn_hk_us")
+    )
+    h.upstream.route(DANJUAN, FUND_PATH, json_reply({"data": {}, "result_code": 0}))
+
+    with pytest.raises(RateLimited):
+        h.quotec("SH600000")
+    with pytest.raises(RateLimited) as held:
+        h.quotec("SH600000")
+    # Other hosts are not held.
+    h.request(host=DANJUAN, path=FUND_PATH)
+    h.clock.advance(60.0)
+    quotes = h.quotec("SH600000")
+
+    assert held.value.retry_after_s == 60.0
+    assert len(quotes) == 4
+    assert len(h.upstream.requests(STOCK)) == 2
+
+
+# Tasks only: threads do not interleave deterministically on the fake clock.
+@pytest.mark.parametrize("kind", ["async"])
+def test_calls_queued_behind_a_rate_limited_one_are_held(h: Harness) -> None:
+    quotes = fixture_reply("quotec/cn_hk_us")
+    h.upstream.route(STOCK, QUOTEC, quotes, json_reply({}, 429), quotes)
+    h.quotec("SH600000")
+
+    # Both tasks book a slot and sleep; the first gets the 429, then the second wakes up.
+    results = h.concurrently([("quotec", ("SH600000",), {}) for _ in range(2)])
+
+    assert [type(result) for result in results] == [RateLimited, RateLimited]
+    assert "held" in str(results[1])
     assert len(h.upstream.sent) == 2
+
+
+def test_the_async_deadline_bounds_a_response_still_arriving(tmp_path: Path) -> None:
+    async def slow(request: httpx2.Request) -> httpx2.Response:
+        await asyncio.sleep(5)
+        return httpx2.Response(200, json={})
+
+    async def main() -> tuple[float, UpstreamUnavailable]:
+        runtime = AsyncRuntime(transport=httpx2.MockTransport(slow))
+        session = tmp_path / "session.json"
+        async with AsyncClient(session_path=session, deadline=0.3, _runtime=runtime) as client:
+            start = time.monotonic()
+            with pytest.raises(UpstreamUnavailable) as caught:
+                await client.quotec("SH600000")
+            return time.monotonic() - start, caught.value
+
+    elapsed, error = asyncio.run(main())
+
+    assert "timed out" in error.message
+    assert elapsed < 1.5
+
+
+def test_the_sync_deadline_gives_up_a_body_still_arriving(tmp_path: Path) -> None:
+    def drip() -> Iterator[bytes]:
+        for _ in range(40):
+            time.sleep(0.05)
+            yield b" "
+
+    runtime = SyncRuntime(
+        transport=httpx2.MockTransport(lambda request: httpx2.Response(200, content=drip()))
+    )
+    session = tmp_path / "session.json"
+    with Client(session_path=session, deadline=0.3, _runtime=runtime) as client:
+        start = time.monotonic()
+        with pytest.raises(UpstreamUnavailable) as caught:
+            client.quotec("SH600000")
+        elapsed = time.monotonic() - start
+
+    assert "timed out" in caught.value.message
+    assert elapsed < 1.5
+
+
+def test_waiting_for_the_session_cookies_ends_at_the_deadline(tmp_path: Path) -> None:
+    upstream = FakeUpstream(FakeClock())
+    session = tmp_path / "session.json"
+    runtime = SyncRuntime(transport=upstream.transport)
+
+    with (
+        Client(session_path=session, deadline=0.2, _runtime=runtime) as client,
+        # As if another call were fetching the cookies.
+        client._session_lock,  # pyright: ignore[reportPrivateUsage]
+    ):
+        start = time.monotonic()
+        with pytest.raises(RateLimited) as caught:
+            client.kline("SH600000")
+        elapsed = time.monotonic() - start
+
+    assert "fetched the session cookies" in caught.value.message
+    assert 0.1 < elapsed < 1.5
+    assert upstream.sent == []
+
+
+def test_tasks_waiting_for_the_session_cookies_end_at_the_deadline(tmp_path: Path) -> None:
+    upstream = FakeUpstream(FakeClock())
+    session = tmp_path / "session.json"
+    runtime = AsyncRuntime(transport=upstream.transport)
+
+    async def main() -> tuple[float, RateLimited]:
+        async with (
+            AsyncClient(session_path=session, deadline=0.2, _runtime=runtime) as client,
+            client._session_lock,  # pyright: ignore[reportPrivateUsage]
+        ):
+            start = time.monotonic()
+            with pytest.raises(RateLimited) as caught:
+                await client.kline("SH600000")
+            return time.monotonic() - start, caught.value
+
+    elapsed, error = asyncio.run(main())
+
+    assert "fetched the session cookies" in error.message
+    assert 0.1 < elapsed < 1.5
+    assert upstream.sent == []
 
 
 def test_breaker_fails_fast_then_recovers_after_the_cooldown(h: Harness) -> None:

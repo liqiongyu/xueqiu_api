@@ -18,6 +18,8 @@ from pydantic import BaseModel, ValidationError
 from ._core import (
     ATTEMPT_TIMEOUT_S,
     BREAKER_COOLDOWN_S,
+    MIN_ATTEMPT_S,
+    UNAVAILABLE_RETRY_AFTER_S,
     Call,
     CircuitBreaker,
     Failure,
@@ -50,14 +52,23 @@ class ClientBase:
     ) -> None:
         if not deadline > 0:
             raise ValueError("deadline must be a positive number of seconds")
-        raw = token if token is not None else os.environ.get(TOKEN_ENV) or None
-        credentials = None if raw is None else parse_credentials(raw)
+        raw = (token if token is not None else os.environ.get(TOKEN_ENV)) or None
+        try:
+            credentials = None if raw is None else parse_credentials(raw)
+        except ValueError as exc:
+            source = "token" if token is not None else TOKEN_ENV
+            raise InvalidParams(
+                f"{source} is not a valid token: {exc}",
+                hint=f"Pass token= or set {TOKEN_ENV} to the xq_a_token value or to a cookie "
+                "string such as 'xq_a_token=...; u=...'.",
+            ) from None
         path = default_session_path() if session_path is None else Path(session_path)
         self._session = Session(credentials=credentials, store=SessionStore(path))
         self._limiter = HostLimiter(_intervals(min_intervals))
         self._breaker = CircuitBreaker(BREAKER_COOLDOWN_S)
         self._clock = clock
         self._deadline_s = float(deadline)
+        self._attempt_budget_s = min(MIN_ATTEMPT_S, self._deadline_s / 2)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(session={self._session.kind!r})"
@@ -96,9 +107,16 @@ class ClientBase:
         if not path.startswith("/"):
             raise InvalidParams("path must start with /", params={"path": path[:200]})
         query = {str(key): _query_value(value) for key, value in (params or {}).items()}
+        url = f"https://{site.host}{path}"
+        try:
+            httpx2.URL(url, params=query)
+        except httpx2.InvalidURL as exc:
+            raise InvalidParams(
+                f"invalid request URL: {exc}", params={"host": host, "path": path[:200]}
+            ) from None
         return Call(
             site=site,
-            url=f"https://{site.host}{path}",
+            url=url,
             query=query,
             endpoint=None,
             auth=None,
@@ -117,11 +135,15 @@ class ClientBase:
             ) from None
 
     def _book(self, call: Call, *, earliest: float, deadline: float, last: Failure | None) -> float:
-        """Book a limiter slot and return the wait; raise when the deadline cannot be met."""
+        """Book a limiter slot and return the wait; raise when the deadline cannot be met.
+
+        A slot must leave the request ``MIN_ATTEMPT_S`` before the deadline (half the deadline
+        when that is shorter).
+        """
         now = self._clock()
-        self._check_breaker(call, now)
+        self._check_host(call, now)
         booked, wait = self._limiter.reserve(
-            call.site.host, now=now, earliest=earliest, deadline=deadline
+            call.site.host, now=now, earliest=earliest, deadline=deadline - self._attempt_budget_s
         )
         if booked:
             return wait
@@ -135,8 +157,10 @@ class ClientBase:
             params=call.params,
         )
 
-    def _check_breaker(self, call: Call, now: float | None = None) -> None:
-        remaining = self._breaker.remaining(call.site.host, self._clock() if now is None else now)
+    def _check_host(self, call: Call, now: float | None = None) -> None:
+        """Fail fast while the host's breaker is open or the host is paused after a rate limit."""
+        now = self._clock() if now is None else now
+        remaining = self._breaker.remaining(call.site.host, now)
         if remaining > 0:
             raise Blocked(
                 f"circuit breaker open for {call.site.host}",
@@ -144,12 +168,33 @@ class ClientBase:
                 retry_after_s=round(remaining, 1),
                 params=call.params,
             )
+        paused = self._limiter.paused(call.site.host, now)
+        if paused > 0:
+            raise RateLimited(
+                f"{call.site.host} rate limited an earlier request; requests to it are held "
+                f"for {paused:.1f} s more",
+                endpoint=call.endpoint,
+                retry_after_s=round(paused, 1),
+                params=call.params,
+            )
+
+    def _session_wait_error(self, call: Call) -> RateLimited:
+        """The error of a call whose deadline passed while it waited for the session cookies."""
+        return RateLimited(
+            f"the {self._deadline_s:g} s deadline passed while another call fetched the session "
+            "cookies",
+            endpoint=call.endpoint,
+            retry_after_s=UNAVAILABLE_RETRY_AFTER_S,
+            params=call.params,
+        )
 
     def _timeout(self, deadline: float) -> float:
         return max(0.001, min(ATTEMPT_TIMEOUT_S, deadline - self._clock()))
 
     def _note_failure(self, call: Call, failure: Failure) -> None:
         log.debug("GET %s failed: %s", call.url, failure.message)
+        if failure.code == "rate_limited" and failure.retry_after_s:
+            self._limiter.pause(call.site.host, self._clock() + failure.retry_after_s)
         if failure.trips_breaker:
             self._breaker.trip(call.site.host, self._clock())
             log.warning(
@@ -165,7 +210,7 @@ def no_cookie_jar() -> CookieJar:
     return CookieJar(policy=DefaultCookiePolicy(allowed_domains=[]))
 
 
-def http_result(call: Call, response: httpx2.Response) -> HttpResult:
+def http_result(call: Call, response: httpx2.Response, content: bytes) -> HttpResult:
     cookies: dict[str, str] = {}
     if call.home:
         for hop in (*response.history, response):
@@ -173,7 +218,7 @@ def http_result(call: Call, response: httpx2.Response) -> HttpResult:
                 if cookie.value is not None:
                     cookies[cookie.name] = cookie.value
     log.debug("GET %s -> HTTP %d", call.url, response.status_code)
-    return HttpResult(response.status_code, response.headers, response.content, cookies)
+    return HttpResult(response.status_code, response.headers, content, cookies)
 
 
 def _intervals(overrides: Mapping[str, float] | None) -> dict[str, float]:

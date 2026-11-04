@@ -5,7 +5,8 @@ Accepted forms (case-insensitive, surrounding spaces ignored):
 - A shares and A-share indexes: ``SH600519``, ``600519.SH``; Beijing codes look like ``BJ920xxx``.
 - Bare 6 digits are stocks: 6, 9 and 5 go to SH; 0, 1, 2 and 3 go to SZ; 4, 8 and 920 go to BJ.
   Indexes need the prefix, because ``000001`` is SZ000001 (Ping An Bank), while the Shanghai
-  index is ``SH000001``.
+  index is ``SH000001``. So do codes starting with 11 or 201 to 209: bonds, convertible bonds
+  and repos, numbered in both exchanges.
 - Hong Kong: 5 digits such as ``00700``, or ``0700.HK``; indexes such as ``HKHSI``.
 - US: tickers such as ``AAPL`` or ``BRK.B``; indexes such as ``.DJI``.
 
@@ -87,6 +88,8 @@ def normalize_symbol(value: str) -> Symbol:
 
 
 def _bare_exchange(digits: str) -> str | None:
+    if digits.startswith("11") or (digits.startswith("20") and not digits.startswith("200")):
+        return None
     if digits.startswith("920") or digits[0] in "48":
         return "BJ"
     if digits[0] in "695":
@@ -114,11 +117,14 @@ SymbolCode = Annotated[str, AfterValidator(_normalized_code)]
 """Pydantic field type: a symbol string normalized to its Xueqiu code."""
 
 
+def split_list(text: str) -> list[str]:
+    """Items of a comma-separated string; ASCII and fullwidth commas both separate."""
+    return [part.strip() for part in re.split(r"[,，]", text) if part.strip()]
+
+
 def split_symbols(value: Any) -> Any:
     """Before-validator for symbol lists: split one comma-separated string, pass other values."""
-    if isinstance(value, str):
-        return [part.strip() for part in value.split(",") if part.strip()]
-    return value
+    return split_list(value) if isinstance(value, str) else value
 
 
 class SymbolParams(BaseModel):

@@ -1,39 +1,65 @@
 """The xueqiu CLI: usage and error JSON, doctor on the replay transport, the mcp hook.
 
-Every run here is offline: an autouse fixture points the CLI's test-only replay hook at the
-replay fixtures and the session cache at a temporary directory.
+Every run here is offline: an autouse fixture gives doctor's client the replay transport and a
+virtual clock, and points the session cache at a temporary directory.
 """
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
+import logging
 import platform
+import re
 import shutil
 import sys
 import types
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 
 import xueqiu_api
 from xueqiu_api import ERROR_TABLE, REGISTRY, cli
+from xueqiu_api._replay import ReplayTransport
+from xueqiu_api._sync import SyncRuntime
 from xueqiu_api.mcp import McpOptions
 
-from .harness import REPLAY_DIR
+from .harness import REPLAY_DIR, FakeClock
 
-REPLAY_ENV = "XUEQIU_TEST_REPLAY_DIR"
 LOGIN_ERROR = {"body": {"error_code": 60201, "error_description": "synthetic login error"}}
+
+
+def replay_runtime(directory: Path) -> Callable[[], SyncRuntime]:
+    """A runtime factory for doctor: the replay directory on a fresh virtual clock each run."""
+
+    def runtime() -> SyncRuntime:
+        clock = FakeClock()
+        return SyncRuntime(transport=ReplayTransport(directory), clock=clock.now, sleep=clock.sleep)
+
+    return runtime
 
 
 @pytest.fixture(autouse=True)
 def session_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Run every CLI call on the replay fixtures with a temporary session cache."""
-    monkeypatch.setenv(REPLAY_ENV, str(REPLAY_DIR))
+    monkeypatch.setattr(cli, "_runtime", replay_runtime(REPLAY_DIR))
     path = tmp_path / "cache" / "session.json"
     monkeypatch.setattr(cli, "default_session_path", lambda: path)
     return path
+
+
+@pytest.fixture
+def logger_levels() -> Iterator[None]:
+    """Restore the levels the real MCP server's main sets on the package and SDK loggers."""
+    loggers = [logging.getLogger(name) for name in ("xueqiu_api", "mcp")]
+    levels = [logger.level for logger in loggers]
+    yield
+    for logger, level in zip(loggers, levels, strict=True):
+        logger.setLevel(level)
 
 
 def run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str, str]:
@@ -62,7 +88,7 @@ def replay_with(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **cases: dict[s
         shutil.rmtree(root / endpoint)
         (root / endpoint).mkdir()
         (root / endpoint / "case.json").write_text(json.dumps(case), encoding="utf-8")
-    monkeypatch.setenv(REPLAY_ENV, str(root))
+    monkeypatch.setattr(cli, "_runtime", replay_runtime(root))
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -82,14 +108,6 @@ def test_help_lists_every_exit_code(capsys: pytest.CaptureFixture[str]) -> None:
     assert "  0   success" in out
     for code, info in ERROR_TABLE.items():
         assert f"  {info.exit_code:<3} {code} ({info.recoverable}" in out
-
-
-@pytest.mark.parametrize("argv", [["--help"], ["doctor", "--help"], ["mcp", "--help"]])
-def test_help_leaves_out_the_test_hook(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
-    with pytest.raises(SystemExit):
-        cli.main(argv)
-
-    assert REPLAY_ENV not in capsys.readouterr().out
 
 
 def test_severity_ranks_every_error_code() -> None:
@@ -141,6 +159,16 @@ def test_doctor_checks_every_endpoint_once_spaced_by_the_limiter(
     assert table(out) == [
         [name, "ok", seconds] for name, seconds in zip(REGISTRY, elapsed, strict=True)
     ]
+
+
+def test_offline_tests_cannot_reach_a_real_transport() -> None:
+    # Loopback, so that a broken guard sends nothing off this machine.
+    request = httpx2.Request("GET", "http://127.0.0.1:9/")
+
+    with pytest.raises(pytest.fail.Exception, match="real httpx2 transport"):
+        httpx2.HTTPTransport().handle_request(request)
+    with pytest.raises(pytest.fail.Exception, match="real httpx2 transport"):
+        asyncio.run(httpx2.AsyncHTTPTransport().handle_async_request(request))
 
 
 def test_doctor_reports_whether_the_session_cache_exists(
@@ -263,19 +291,88 @@ def test_doctor_exits_with_the_most_severe_failure(
         quote_detail={"body": {"data": "not a quote", "error_code": 0}},
     )
 
+    # quotec goes last: after a 429 the client holds the host for a while.
     code, out, err = run(
         capsys,
         "doctor",
-        *("--endpoint", "quotec", "--endpoint", "kline", "--endpoint", "quote_detail"),
+        *("--endpoint", "kline", "--endpoint", "quote_detail", "--endpoint", "quotec"),
     )
 
     assert [row[:2] for row in table(out)] == [
-        ["quotec", "rate_limited"],
         ["kline", "needs_login"],
         ["quote_detail", "error"],
+        ["quotec", "rate_limited"],
     ]
     assert code == ERROR_TABLE["upstream_changed"].exit_code
     assert error_json(err)["endpoint"] == "quote_detail"
+
+
+def test_doctor_reports_out_of_range_upstream_values_and_checks_the_rest(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = json.loads((REPLAY_DIR / "f10_company" / "sh600000.json").read_text(encoding="utf-8"))
+    case["body"]["data"]["company"]["listed_date"] = 9_999_999_999_999_999
+    replay_with(tmp_path, monkeypatch, f10_company=case)
+
+    code, out, _ = run(capsys, "--format", "json", "doctor")
+
+    rows = {row["endpoint"]: row for row in json.loads(out)}
+    assert list(rows) == list(REGISTRY)
+    assert rows["f10_company"]["error"]["error_code"] == "upstream_changed"
+    assert "out of range" in rows["f10_company"]["error"]["message"]
+    assert code == ERROR_TABLE["upstream_changed"].exit_code
+
+
+def test_doctor_reports_a_bug_in_one_check_and_runs_the_others(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    call = cli.Client.call
+
+    def broken(self: cli.Client, endpoint: str, /, **params: Any) -> Any:
+        if endpoint == "f10_company":
+            raise RuntimeError("secret internals")
+        return call(self, endpoint, **params)
+
+    monkeypatch.setattr(cli.Client, "call", broken)
+
+    code, out, err = run(capsys, "--format", "json", "doctor")
+
+    rows = {row["endpoint"]: row for row in json.loads(out)}
+    assert {name: row["status"] for name, row in rows.items()} == {
+        **dict.fromkeys(REGISTRY, "ok"),
+        "f10_company": "error",
+    }
+    payload = error_json(err)
+    [event] = re.findall(r"event id ([0-9a-f]{12})", payload["message"])
+    assert (code, payload["error_code"], payload["endpoint"]) == (
+        1,
+        "internal_error",
+        "f10_company",
+    )
+    assert "secret internals" not in out + err
+    assert event in caplog.text and "secret internals" in caplog.text
+
+
+def test_unexpected_errors_print_an_event_id_and_log_the_details(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def broken(args: object) -> int:
+        raise RuntimeError("secret internals")
+
+    monkeypatch.setattr(cli, "_doctor", broken)
+
+    code, out, err = run(capsys, "doctor")
+
+    payload = error_json(err)
+    [event] = re.findall(r"event id ([0-9a-f]{12})", payload["message"])
+    assert (code, out, payload["error_code"]) == (1, "", "internal_error")
+    assert event in payload["hint"] and "secret internals" not in err
+    [record] = [r for r in caplog.records if event in r.getMessage()]
+    assert record.exc_info is not None and "secret internals" in str(record.exc_info[1])
 
 
 def test_doctor_rejects_unknown_endpoints_before_any_request(
@@ -300,6 +397,49 @@ def test_doctor_rejects_an_unusable_token_without_echoing_it(
     assert (code, out) == (2, "")
     assert error_json(err)["error_code"] == "invalid_params"
     assert "fake token" not in err
+
+
+@pytest.mark.usefixtures("logger_levels")
+def test_mcp_rejects_an_unusable_token_before_serving(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("mcp")
+    monkeypatch.setenv("XUEQIU_TOKEN", "fake token")
+
+    # The real server: the client is built before stdin is read.
+    code, out, err = run(capsys, "mcp", "--replay", str(REPLAY_DIR))
+
+    payload = error_json(err)
+    assert (code, out) == (2, "")
+    assert (payload["error_code"], payload["recoverable"]) == ("invalid_params", "fix_params")
+    assert "XUEQIU_TOKEN" in payload["message"] and "fake token" not in err
+
+
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [
+        ("no_such_endpoint/case.json", '{"body": {}}'),
+        ("kline/broken.json", "{not json"),
+        ("kline/status.json", '{"status": null, "body": {}}'),
+    ],
+)
+def test_mcp_rejects_an_unusable_replay_directory(
+    served: list[McpOptions],
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    name: str,
+    content: str,
+) -> None:
+    file = tmp_path / "replay" / name
+    file.parent.mkdir(parents=True)
+    file.write_text(content, encoding="utf-8")
+
+    code, out, err = run(capsys, "mcp", "--replay", str(tmp_path / "replay"))
+
+    payload = error_json(err)
+    assert (code, out, served) == (2, "", [])
+    assert payload["error_code"] == "invalid_params"
+    assert file.name in payload["message"]
 
 
 def test_mcp_without_the_extra_says_how_to_install_it(
