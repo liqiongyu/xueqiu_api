@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,14 @@ def _no_ambient_token(request: pytest.FixtureRequest, monkeypatch: pytest.Monkey
     """Keep a developer's XUEQIU_TOKEN out of offline tests."""
     if request.node.get_closest_marker("live") is None:
         monkeypatch.delenv("XUEQIU_TOKEN", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_mcp_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep a developer's XUEQIU_MCP_* settings out of the CLI defaults under test."""
+    for name in list(os.environ):
+        if name.startswith("XUEQIU_MCP_"):
+            monkeypatch.delenv(name)
 
 
 @pytest.fixture

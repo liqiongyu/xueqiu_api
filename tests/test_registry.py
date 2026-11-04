@@ -52,6 +52,8 @@ def test_endpoint_spec_is_complete(name: str) -> None:
     assert agent.default_fields
     assert 0 < agent.row_default <= agent.row_cap and agent.upstream_cap > 0
     assert agent.mcp_tool is None or re.fullmatch(r"xq_[a-z0-9_]+", agent.mcp_tool)
+    assert agent.precision >= 0
+    assert not set(agent.free_text) & set(agent.default_fields)
     assert agent.examples
     for example in agent.examples:
         spec.validate(example)

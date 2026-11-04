@@ -110,5 +110,6 @@ ENDPOINT = Endpoint(
         row_cap=1,
         upstream_cap=1,
         examples=({"symbol": "SH600000"},),
+        free_text=("main_operation_business", "org_cn_introduction", "operating_scope"),
     ),
 )

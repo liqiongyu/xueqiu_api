@@ -48,6 +48,10 @@ class AgentInfo:
     """Parameter sets that validate against the params model."""
     mcp_tool: str | None = None
     """Dedicated MCP tool, if any; every endpoint is also reachable through ``xq_call``."""
+    precision: int = 4
+    """Decimal places of rendered floats; trailing zeros are dropped."""
+    free_text: tuple[str, ...] = ()
+    """Fields holding upstream prose: never rendered by default, cleaned and fenced on request."""
 
 
 @dataclass(frozen=True, kw_only=True)

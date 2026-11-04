@@ -115,35 +115,44 @@ def _parser() -> argparse.ArgumentParser:
         help="run the MCP server on stdio",
         description="Run the read-only MCP server on stdio. It needs the mcp extra: "
         "pip install 'xueqiu-api[mcp]'.",
+        epilog="Each option can also be set with the environment variable named in its help; "
+        "a flag wins over the variable, except that --exclude adds to XUEQIU_MCP_EXCLUDE.",
     )
     mcp.add_argument(
         "--exclude",
         action="append",
+        default=_env_list("XUEQIU_MCP_EXCLUDE"),
         metavar="NAME",
         help="endpoint or tool to disable, glob patterns allowed; repeatable; wins over the "
-        "other options",
+        "other options (env: XUEQIU_MCP_EXCLUDE, comma-separated)",
     )
     mcp.add_argument(
         "--max-chars",
         type=_max_chars,
-        default=McpOptions.max_chars,
+        default=os.environ.get("XUEQIU_MCP_MAX_CHARS") or McpOptions.max_chars,
         metavar="N",
         help=f"character budget of one tool result, {MIN_MAX_CHARS} to {MAX_MAX_CHARS} "
-        "(default: %(default)s)",
+        "(default: %(default)s; env: XUEQIU_MCP_MAX_CHARS)",
     )
     mcp.add_argument(
         "--replay",
         type=_directory,
+        default=os.environ.get("XUEQIU_MCP_REPLAY") or None,
         metavar="DIR",
-        help="serve recorded responses from DIR instead of the upstream",
+        help="serve recorded responses from DIR instead of the upstream (env: XUEQIU_MCP_REPLAY)",
     )
     mcp.add_argument(
         "--log-level",
+        type=_log_level,
         choices=get_args(LogLevel),
-        default=McpOptions.log_level,
-        help="lowest level logged to stderr (default: %(default)s)",
+        default=os.environ.get("XUEQIU_MCP_LOG_LEVEL") or McpOptions.log_level,
+        help="lowest level logged to stderr (default: %(default)s; env: XUEQIU_MCP_LOG_LEVEL)",
     )
     return parser
+
+
+def _env_list(name: str) -> list[str]:
+    return [part.strip() for part in os.environ.get(name, "").split(",") if part.strip()]
 
 
 def _exit_codes() -> str:
@@ -172,6 +181,15 @@ def _directory(value: str) -> Path:
     if not Path(value).is_dir():
         raise argparse.ArgumentTypeError(f"{value!r} is not a directory")
     return Path(value)
+
+
+def _log_level(value: str) -> str:
+    # argparse checks choices for flags but not for defaults read from the environment.
+    if value not in get_args(LogLevel):
+        raise argparse.ArgumentTypeError(
+            f"expected one of {', '.join(get_args(LogLevel))}, got {value[:20]!r}"
+        )
+    return value
 
 
 def _doctor(args: argparse.Namespace) -> int:

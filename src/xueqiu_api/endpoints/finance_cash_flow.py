@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .._finance import DEFAULT_COUNT, MAX_COUNT, finance_endpoint
+from .._finance import MAX_COUNT, finance_endpoint
 from ..registry import AgentInfo
 
 ENDPOINT = finance_endpoint(
@@ -33,7 +33,7 @@ ENDPOINT = finance_endpoint(
             "ncf_from_fa",
             "net_increase_in_cce",
         ),
-        row_default=DEFAULT_COUNT,
+        row_default=MAX_COUNT,
         row_cap=MAX_COUNT,
         upstream_cap=MAX_COUNT,
         examples=({"symbol": "SH600000", "count": 2},),

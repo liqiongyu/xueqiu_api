@@ -334,9 +334,9 @@ def test_mcp_reports_other_import_errors_as_bugs(
     assert "[mcp]" not in payload["hint"]
 
 
-def test_mcp_hands_the_options_to_the_server(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+@pytest.fixture
+def served(monkeypatch: pytest.MonkeyPatch) -> list[McpOptions]:
+    """Options the CLI hands to a fake ``xueqiu_api.mcp.server`` module."""
     received: list[McpOptions] = []
 
     def main(options: McpOptions) -> int:
@@ -346,7 +346,10 @@ def test_mcp_hands_the_options_to_the_server(
     server = types.ModuleType("xueqiu_api.mcp.server")
     monkeypatch.setattr(server, "main", main, raising=False)
     monkeypatch.setitem(sys.modules, "xueqiu_api.mcp.server", server)
+    return received
 
+
+def test_mcp_hands_the_options_to_the_server(served: list[McpOptions], tmp_path: Path) -> None:
     assert cli.main(["mcp"]) == 0
     assert (
         cli.main(
@@ -358,9 +361,56 @@ def test_mcp_hands_the_options_to_the_server(
         )
         == 0
     )
-    assert received == [
+    assert served == [
         McpOptions(),
         McpOptions(
             exclude=("kline", "xq_call"), max_chars=4000, replay=tmp_path, log_level="debug"
         ),
     ]
+
+
+def test_mcp_options_also_come_from_the_environment(
+    served: list[McpOptions], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XUEQIU_MCP_EXCLUDE", "kline, xq_call")
+    monkeypatch.setenv("XUEQIU_MCP_MAX_CHARS", "5000")
+    monkeypatch.setenv("XUEQIU_MCP_REPLAY", str(tmp_path))
+    monkeypatch.setenv("XUEQIU_MCP_LOG_LEVEL", "info")
+
+    assert cli.main(["mcp"]) == 0
+    flags = ["--exclude", "quotec", "--max-chars", "6000", "--log-level", "error"]
+    assert cli.main(["mcp", *flags]) == 0
+    # Flags win over the variables, except that --exclude adds to XUEQIU_MCP_EXCLUDE.
+    assert served == [
+        McpOptions(exclude=("kline", "xq_call"), max_chars=5000, replay=tmp_path, log_level="info"),
+        McpOptions(
+            exclude=("kline", "xq_call", "quotec"),
+            max_chars=6000,
+            replay=tmp_path,
+            log_level="error",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("XUEQIU_MCP_MAX_CHARS", "abc"),
+        ("XUEQIU_MCP_MAX_CHARS", "100"),
+        ("XUEQIU_MCP_LOG_LEVEL", "trace"),
+        ("XUEQIU_MCP_REPLAY", "no-such-replay-dir"),
+    ],
+)
+def test_invalid_mcp_environment_values_are_usage_errors(
+    served: list[McpOptions],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    code, out, err = run(capsys, "mcp")
+
+    assert (code, out, served) == (2, "", [])
+    assert error_json(err)["error_code"] == "invalid_params"

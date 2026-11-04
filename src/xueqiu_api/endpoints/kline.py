@@ -35,7 +35,10 @@ class KlineParams(BaseModel):
 
     symbol: SymbolCode
     period: Period = "day"
+    """1m to 120m are minute bars, kept upstream for about 3 trading days (1m) to about 6
+    months (60m); day, week, month, quarter and year cover the full history."""
     adjust: Adjust = "before"
+    """before (前复权, forward-adjusted), after (后复权, backward-adjusted) or normal (不复权)."""
     begin: date | None = None
     """First date, inclusive."""
     end: date | None = None

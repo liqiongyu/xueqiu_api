@@ -180,6 +180,7 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
             code="blocked",
             message=f"{host} blocked the request (HTTP 418)",
             status=status,
+            retry_after_s=BREAKER_COOLDOWN_S,
             trips_breaker=True,
         )
     if not is_json and _WAF_PAGE.search(result.content[:4096]):
@@ -187,6 +188,7 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
             code="blocked",
             message=f"{host} answered with a WAF challenge page (HTTP {status})",
             status=status,
+            retry_after_s=BREAKER_COOLDOWN_S,
             trips_breaker=True,
         )
     if status == 403:

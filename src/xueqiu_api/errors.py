@@ -7,7 +7,7 @@ recovery class, its CLI exit code and its default hint.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, ClassVar, Literal, cast
@@ -56,7 +56,9 @@ class XueqiuError(Exception):
     """Base class of every error raised by this package.
 
     ``code`` is the stable error code; ``recoverable``, ``exit_code`` and the default ``hint``
-    come from ``ERROR_TABLE``. ``params`` never holds credential values.
+    come from ``ERROR_TABLE``. ``params`` never holds credential values. ``field``,
+    ``valid_values`` and ``candidates`` name the rejected input, its allowed values and the
+    closest of them, when they are known.
     """
 
     code: ClassVar[ErrorCode] = "internal_error"
@@ -71,6 +73,9 @@ class XueqiuError(Exception):
         retry_after_s: float | None = None,
         params: Mapping[str, Any] | None = None,
         hint: str | None = None,
+        field: str | None = None,
+        valid_values: Sequence[str] = (),
+        candidates: Sequence[str] = (),
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -80,6 +85,9 @@ class XueqiuError(Exception):
         self.retry_after_s = retry_after_s
         self.params = redact_params(params or {})
         self.hint = ERROR_TABLE[self.code].hint if hint is None else hint
+        self.field = field
+        self.valid_values = tuple(valid_values)
+        self.candidates = tuple(candidates)
 
     @property
     def recoverable(self) -> Recoverable:
@@ -104,6 +112,12 @@ class XueqiuError(Exception):
             "upstream_code": self.upstream_code,
         }
         payload.update({key: value for key, value in extra.items() if value is not None})
+        if self.field is not None:
+            payload["field"] = self.field
+        if self.valid_values:
+            payload["valid_values"] = list(self.valid_values)
+        if self.candidates:
+            payload["candidates"] = list(self.candidates)
         if self.params:
             payload["params"] = self.params
         return payload

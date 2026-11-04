@@ -33,6 +33,7 @@ class FinanceParams(BaseModel):
     symbol: SymbolCode
     """A-share, Hong Kong or US stock; the request goes to the region of its market."""
     type: ReportType = "all"
+    """all (quarterly, half-year and annual reports) or annual (annual reports only)."""
     is_detail: bool = True
     """Every line item, or only the upstream's short list (8 items for A-share indicators)."""
     count: int = Field(default=DEFAULT_COUNT, ge=1, le=MAX_COUNT)
