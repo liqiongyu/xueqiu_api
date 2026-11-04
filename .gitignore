@@ -1,0 +1,25 @@
+# 内部研究资料，只留在本地
+research/
+docs/research/
+scripts/research/
+
+# 凭证和抓包
+.env
+*.har
+*cookie*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 系统文件
+.DS_Store
