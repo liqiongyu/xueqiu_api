@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from xueqiu_api import REGISTRY, InvalidParams, UpstreamChanged
+from xueqiu_api import REGISTRY, InvalidParams, SymbolNotFound, UpstreamChanged
 from xueqiu_api._render import compact_json, render
 from xueqiu_api.endpoints.f10_executive_trades import ExecutiveTrade
 from xueqiu_api.endpoints.f10_executives import Executive
@@ -335,6 +335,16 @@ def test_finance_business_turns_fractions_into_percent_points(h: Harness) -> Non
     assert latest.groups[2].segments[0].gross_profit_rate == pytest.approx(58.84, abs=0.01)
     # The denominator differs between groups, so a share can exceed 100.
     assert annual.groups[0].segments[0].income_ratio == 107.05
+
+
+def test_finance_business_of_an_unknown_code_is_symbol_not_found(h: Harness) -> None:
+    h.upstream.route(STOCK, BUSINESS_CN, json_reply({"data": {}, "error_code": 0}))
+
+    with pytest.raises(SymbolNotFound) as caught:
+        h.call("finance_business", symbol="SH999999")
+
+    assert caught.value.endpoint == "finance_business"
+    assert "SH999999" in caught.value.message
 
 
 @pytest.mark.sample("finance_business")

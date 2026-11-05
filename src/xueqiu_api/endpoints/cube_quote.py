@@ -60,7 +60,7 @@ ENDPOINT = Endpoint(
     freshness="intraday",
     envelope="bare",
     verified_on=date(2026, 11, 5),
-    not_found=NotFound(statuses=(400,), codes=("20809",)),
+    not_found=NotFound(codes=("20809",)),
     agent=AgentInfo(
         category="cube",
         group="xq_cube",

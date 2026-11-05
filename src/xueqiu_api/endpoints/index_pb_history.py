@@ -46,6 +46,6 @@ ENDPOINT = Endpoint(
         row_default=100,
         row_cap=500,
         upstream_cap=600,
-        examples=({"index_code": "SH000300"}, {"index_code": "SZ399006", "day": "5y"}),
+        examples=({"index_code": "SH000300"}, {"index_code": "SZ399006", "period": "5y"}),
     ),
 )

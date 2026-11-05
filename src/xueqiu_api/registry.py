@@ -54,7 +54,7 @@ CATEGORY_TITLES: Mapping[Category, str] = MappingProxyType(
         "f10": "F10",
         "finance": "财报",
         "screener": "选股器",
-        "market": "榜单",
+        "market": "市场概览",
         "search": "搜索",
         "index": "指数估值",
         "fund": "基金",
@@ -117,6 +117,9 @@ class AgentInfo:
     """Chinese and English search terms."""
     default_fields: tuple[str, ...]
     """Fields rendered when the caller does not choose any."""
+    market_fields: Mapping[Market, tuple[str, ...]] | None = None
+    """Fields rendered in place of ``default_fields`` for a symbol of that market, whose upstream
+    keys differ."""
     row_default: int
     row_cap: int
     upstream_cap: int

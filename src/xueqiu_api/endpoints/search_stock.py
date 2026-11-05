@@ -86,6 +86,7 @@ ENDPOINT = Endpoint(
         default_fields=(
             "symbol",
             "name",
+            "name_en",
             "exchange",
             "stock_type",
             "ind_name",

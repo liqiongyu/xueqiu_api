@@ -120,7 +120,9 @@ class PageWalk:
             )
         if rule.key is not None:
             fresh = [row for row in rows if rule.key(row) not in self.seen]
-            if rows and not fresh:
+            # Rows tied in the sort order can move between pages, so a page of known rows alone
+            # proves nothing; the same page twice does.
+            if rows and rows == self.previous:
                 raise self._stuck(page, sent)
             self.seen.update(rule.key(row) for row in fresh)
             rows = tuple(fresh)

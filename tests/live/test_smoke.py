@@ -7,8 +7,8 @@ deselects them, and CI does not select them. Opt in explicitly, on your own mach
 
 Every endpoint that needs no login is called once with its first registry example, serially
 through one client, so the per-host limiter spaces the requests; finance and F10 are also called
-once each for a Hong Kong and a US symbol. The session cache goes to a temporary directory. Set
-XUEQIU_TOKEN to run them with a login session.
+once each for a Hong Kong and a US symbol. The session cache goes to a temporary directory. They
+always use anonymous cookies: login-only endpoints join once a login session has measured them.
 """
 
 from __future__ import annotations

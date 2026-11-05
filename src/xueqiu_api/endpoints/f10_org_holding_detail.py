@@ -62,6 +62,12 @@ class OrgHoldingDetail(UpstreamModel):
             "total_held_num": self.total.held_num if self.total else None,
             "total_to_float_shares_ratio": self.total.to_float_shares_ratio if self.total else None,
             "report_periods": len(self.report_periods),
+            "latest_report_periods": ",".join(
+                period.report_date.isoformat()
+                for period in self.report_periods[:8]
+                if period.report_date is not None
+            )
+            or None,
         }
 
     def sections(self) -> Mapping[str, Sequence[BaseModel]]:

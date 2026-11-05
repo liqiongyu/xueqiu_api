@@ -16,8 +16,10 @@ COMMUNITY_PATHS = re.compile(
     r"|/symbol/search"
     r"|/status/stock_timeline"
     r"|^/query/v1/hot_event"
+    r"|^/cubes/list\.json"
 )
-"""Posts and comments, news flashes published as posts, user profiles and hot topics."""
+"""Posts and comments, news flashes published as posts, user profiles, hot topics and the list of
+one user's portfolios, whose only input is a user id and whose rows carry the owner's profile."""
 
 
 @pytest.mark.parametrize(
@@ -34,6 +36,7 @@ COMMUNITY_PATHS = re.compile(
         "/query/v1/symbol/search/status.json",
         "/query/v1/status/stock_timeline.json",
         "/query/v1/hot_event/tag.json",
+        "/cubes/list.json",
     ],
 )
 def test_the_pattern_covers_community_paths(path: str) -> None:

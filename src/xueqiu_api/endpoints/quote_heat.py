@@ -62,6 +62,8 @@ def _build_query(params: SymbolParams, now: datetime) -> dict[str, str]:
 
 
 def _parse(payload: Any, params: SymbolParams) -> StockHeat:
+    if payload == {}:
+        raise ValueError("the upstream sent no popularity data")
     return StockHeat.model_validate({**payload, "symbol": params.symbol})
 
 

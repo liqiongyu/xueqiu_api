@@ -22,6 +22,7 @@ class MarketIndustryStocksParams(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
     symbol: SymbolCode
+    """An A-share, such as SH600000."""
     count: int = Field(default=10, ge=1, le=COUNT_CAP)
     """How many rows from the top to fetch."""
 
@@ -109,18 +110,17 @@ ENDPOINT = Endpoint(
         category="market",
         group="xq_market",
         section="industry_stocks",
-        title_zh="同行业股票",
-        title_en="Industry peers",
+        title_zh="板块下股票",
+        title_en="Stocks under a board",
         summary=(
-            "取上游列在一只 A 股所属板块下的股票，含最新价、涨跌幅、市盈率和市值，行里可能是港股。"
+            "取上游列在一只 A 股所属板块下的股票，含最新价、涨跌幅、市盈率和市值，行里可能是港股，"
+            "也可能和所查股票不同行业；同业分析用 screener_quote_list 的 ind_code。"
         ),
         keywords=(
-            "同行业股票",
             "行业个股",
-            "同业公司",
             "板块个股",
-            "industry peers",
             "industry stocks",
+            "board stocks",
             "sector",
         ),
         default_fields=(

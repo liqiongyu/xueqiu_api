@@ -111,6 +111,7 @@ ENDPOINT = Endpoint(
             "人气榜",
             "热门股票",
             "热度榜",
+            "榜单",
             "hot stocks",
             "trending",
             "popular stocks",

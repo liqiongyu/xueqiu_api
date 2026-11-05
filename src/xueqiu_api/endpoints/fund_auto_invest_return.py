@@ -43,7 +43,7 @@ class FundAutoInvestReturn(UpstreamModel):
     """Upstream setting, such as mv."""
     cycle: str | None = None
     """Upstream cadence code; its meaning is unconfirmed."""
-    amount: Number = Field(default=None, validation_alias="base_invest_amount")
+    invest_amount: Number = Field(default=None, validation_alias="base_invest_amount")
     """CNY per installment (inferred)."""
     windows: tuple[FundAutoInvestWindow, ...] = Field(default=(), validation_alias="recent_yields")
 
@@ -53,7 +53,7 @@ class FundAutoInvestReturn(UpstreamModel):
             "strategy": self.strategy,
             "smart_strategy": self.smart_strategy,
             "cycle": self.cycle,
-            "amount": self.amount,
+            "invest_amount": self.invest_amount,
         }
 
     def sections(self) -> Mapping[str, Sequence[BaseModel | Mapping[str, Any]]]:

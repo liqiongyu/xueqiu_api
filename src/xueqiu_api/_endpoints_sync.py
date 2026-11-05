@@ -188,6 +188,10 @@ class SyncEndpoints:
         """成交分布: Today's buy and sell turnover of one A-share by size class, with the totals per
         side.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness intraday.
         """
         return self._call(CAPITAL_ASSORT, {"symbol": symbol})
@@ -244,12 +248,20 @@ class SyncEndpoints:
     def capital_distribution(self, symbol: str) -> CapitalDistribution:
         """资金分布: Today's buy and sell turnover of one A-share by order size, and its main-force net.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness intraday.
         """
         return self._call(CAPITAL_DISTRIBUTION, {"symbol": symbol})
 
     def capital_flow(self, symbol: str) -> CapitalFlow:
         """分时资金流向: Net inflow of one A-share or Hong Kong stock by the minute through one session.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness intraday.
         """
@@ -259,6 +271,10 @@ class SyncEndpoints:
         """历史资金流向: Main-force net inflow of one A-share per day for 20 trading days, with running
         sums.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness daily.
         """
         return self._call(CAPITAL_HISTORY, {"symbol": symbol})
@@ -266,6 +282,10 @@ class SyncEndpoints:
     def capital_history_detail(self, symbol: str) -> CapitalHistoryDetail:
         """历史资金流向明细: Net inflow of one A-share per day for 20 trading days, broken down by order
         size.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness daily.
         """
@@ -493,8 +513,10 @@ class SyncEndpoints:
         """分红送配: Dividends of one listed company, latest first; A-shares add issues and allotments.
 
         Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
             page: Page number, from 1; page 1 holds the latest dividends.
-            page_size: Dividends per page.
+            page_size: Dividends per page; a small one also cuts the share issues of page 1.
 
         Auth anonymous; freshness daily.
         """
@@ -513,6 +535,8 @@ class SyncEndpoints:
         latest first; A-shares add issues and allotments.
 
         Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
             page: Page number, from 1; page 1 holds the latest dividends.
             page_size: Rows per page; by default the largest, 100.
             max_pages: Stop after this many pages.
@@ -530,12 +554,20 @@ class SyncEndpoints:
     def f10_business_analysis(self, symbol: str) -> list[BusinessAnalysis]:
         """经营分析: Management's discussion in the periodic reports of one A-share, latest first.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness daily.
         """
         return self._call(F10_BUSINESS_ANALYSIS, {"symbol": symbol})
 
     def f10_company(self, symbol: str) -> Company:
         """公司资料: Company profile of one listed company.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness static.
         """
@@ -545,12 +577,20 @@ class SyncEndpoints:
         """高管增减持: Share changes of the directors, supervisors and executives of one A-share, latest
         first.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness daily.
         """
         return self._call(F10_EXECUTIVE_TRADES, {"symbol": symbol})
 
     def f10_executives(self, symbol: str) -> list[Executive]:
         """公司高管: Directors, supervisors and executives of one A-share, in the upstream's order.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness daily.
         """
@@ -559,12 +599,20 @@ class SyncEndpoints:
     def f10_holders(self, symbol: str) -> Holders:
         """股东与股本: Holder counts of an A-share; major holders, capital and splits of HK and US stocks.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness daily.
         """
         return self._call(F10_HOLDERS, {"symbol": symbol})
 
     def f10_indicator(self, symbol: str) -> list[MainIndicator]:
         """主要指标: Key figures of the latest report of one A-share, valued at the latest price.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness intraday.
         """
@@ -574,12 +622,20 @@ class SyncEndpoints:
         """所属行业和概念: Industry and concept boards of one listed company, with the classification
         standard.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness static.
         """
         return self._call(F10_INDUSTRY, {"symbol": symbol})
 
     def f10_industry_compare(self, symbol: str) -> IndustryCompare:
         """行业对比: One A-share against the average, minimum and maximum of its industry.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness intraday.
         """
@@ -588,6 +644,10 @@ class SyncEndpoints:
     def f10_org_holding_change(self, symbol: str) -> OrgHoldingChange:
         """机构持仓变动: Institutional ownership of one stock, by report period for A-shares and by day for
         US.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness daily.
         """
@@ -602,6 +662,8 @@ class SyncEndpoints:
         """持股基金名单: The funds holding one A-share at one report period, with their total.
 
         Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
             report_date: Period end to list, one of ``report_periods``, such as 2026-06-30; by
                 default the latest.
 
@@ -623,6 +685,10 @@ class SyncEndpoints:
     def f10_top_holders(self, symbol: str) -> TopHolders:
         """十大股东: Ten largest shareholders of one A-share in the latest report period; the denominator
         of held_ratio is unverified.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness daily.
         """
@@ -794,7 +860,8 @@ class SyncEndpoints:
 
     def fund_growth(self, fund_code: str, *, period: FundGrowthPeriod = "ty") -> FundGrowth:
         """基金业绩走势: Net value and cumulative return of one fund against its index and benchmark,
-        oldest first; long windows are sampled, so do not compute a drawdown from them.
+        oldest first; long windows are sampled, so do not compute a drawdown or extremes from
+        them.
 
         Args:
             fund_code: Six digits, such as 008975.
@@ -965,16 +1032,18 @@ class SyncEndpoints:
         self,
         index_code: str,
         *,
-        day: ValuationWindow = "all",
+        period: ValuationWindow = "all",
         begin: date | None = None,
         end: date | None = None,
     ) -> ValuationHistory:
         """指数PB历史: PB of one index over time with Danjuan's reference lines, oldest first.
 
+        One request returns the whole window; ``begin`` and ``end`` choose the rows kept of it.
+
         Args:
             index_code: An index from index_valuation_list, such as SH000300 or CSIH30269. Case-
                 insensitive.
-            day: Window: all, 3y or 5y. all starts about 10 years back.
+            period: Window: all, 3y or 5y. all starts about 10 years back.
             begin: First date, inclusive.
             end: Last date, inclusive.
 
@@ -982,23 +1051,25 @@ class SyncEndpoints:
         """
         return self._call(
             INDEX_PB_HISTORY,
-            {"index_code": index_code, "day": day, "begin": begin, "end": end},
+            {"index_code": index_code, "period": period, "begin": begin, "end": end},
         )
 
     def index_pe_history(
         self,
         index_code: str,
         *,
-        day: ValuationWindow = "all",
+        period: ValuationWindow = "all",
         begin: date | None = None,
         end: date | None = None,
     ) -> ValuationHistory:
         """指数PE历史: PE of one index over time with Danjuan's reference lines, oldest first.
 
+        One request returns the whole window; ``begin`` and ``end`` choose the rows kept of it.
+
         Args:
             index_code: An index from index_valuation_list, such as SH000300 or CSIH30269. Case-
                 insensitive.
-            day: Window: all, 3y or 5y. all starts about 10 years back.
+            period: Window: all, 3y or 5y. all starts about 10 years back.
             begin: First date, inclusive.
             end: Last date, inclusive.
 
@@ -1006,7 +1077,7 @@ class SyncEndpoints:
         """
         return self._call(
             INDEX_PE_HISTORY,
-            {"index_code": index_code, "day": day, "begin": begin, "end": end},
+            {"index_code": index_code, "period": period, "begin": begin, "end": end},
         )
 
     def index_stock_bond_percentile(
@@ -1068,6 +1139,8 @@ class SyncEndpoints:
         of with a day, to page back through minute bars.
 
         Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
             period: 1m to 120m are minute bars, kept upstream for about 3 trading days (1m) to
                 about 6 months (60m); day, week, month, quarter and year cover the full history.
             adjust: before (前复权, forward-adjusted), after (后复权, backward-adjusted) or normal
@@ -1094,7 +1167,7 @@ class SyncEndpoints:
         )
 
     def market_bj_indexes(self) -> list[BoardIndexQuote]:
-        """北证50: Quotes of the BSE 50 and its two comparison indexes, SSE 50 and SZSE 100.
+        """北交所栏目指数: Quotes of the BSE 50 and its two comparison indexes, SSE 50 and SZSE 100.
 
         Auth anonymous; freshness realtime.
         """
@@ -1121,10 +1194,11 @@ class SyncEndpoints:
         return self._call(MARKET_HOT_STOCKS, {"region": region, "window": window, "count": count})
 
     def market_industry_stocks(self, symbol: str, *, count: int = 10) -> IndustryStocks:
-        """同行业股票: Stocks the upstream lists under the board of one A-share, with their quotes and
+        """板块下股票: Stocks the upstream lists under the board of one A-share, with their quotes and
         size.
 
         Args:
+            symbol: An A-share, such as SH600000.
             count: How many rows from the top to fetch.
 
         Auth anonymous; freshness intraday.
@@ -1134,12 +1208,20 @@ class SyncEndpoints:
     def quote_detail(self, symbol: str) -> QuoteDetail:
         """行情详情: Full quote of one symbol, with its name, valuation fields and market status.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness realtime.
         """
         return self._call(QUOTE_DETAIL, {"symbol": symbol})
 
     def quote_heat(self, symbol: str) -> StockHeat:
         """个股热度: Popularity rank of one stock on Xueqiu, with its visitor and discussion counts.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness intraday.
         """
@@ -1150,6 +1232,8 @@ class SyncEndpoints:
         older than that are in ``kline``.
 
         Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
             days: 1: the latest session, a point a minute. 5: the latest 5, a point every 10
                 minutes.
 
@@ -1161,12 +1245,20 @@ class SyncEndpoints:
         """盘口: Snapshot of the resting bids and asks of one A-share with their imbalance; executed
         trades are in ``quote_trades``.
 
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
+
         Auth anonymous; freshness realtime.
         """
         return self._call(QUOTE_ORDER_BOOK, {"symbol": symbol})
 
     def quote_relevant(self, symbol: str) -> list[RelatedStock]:
         """相关股票: Other stocks the upstream relates to one A-share, with their last price and change.
+
+        Args:
+            symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
+                a stock, so an index needs its prefix, as SH000001 does.
 
         Auth anonymous; freshness intraday.
         """
@@ -1177,6 +1269,7 @@ class SyncEndpoints:
         ``quote_order_book``.
 
         Args:
+            symbol: Stock code, such as SH600000.
             count: How many of the most recent trades to fetch; earlier ones are out of reach.
 
         Auth anonymous; freshness realtime.

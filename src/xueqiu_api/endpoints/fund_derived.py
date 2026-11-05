@@ -144,6 +144,7 @@ ENDPOINT = Endpoint(
             "return_since_inception_pct",
             "rank_1y",
             "rank_1y_total",
+            "aip_return_1y_pct",
         ),
         row_default=1,
         row_cap=1,

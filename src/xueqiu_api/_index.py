@@ -27,15 +27,18 @@ ValuationWindow = Literal["all", "3y", "5y"]
 class IndexValuation(UpstreamModel):
     """Valuation of one index on its latest date, as Danjuan computes it."""
 
-    drop: ClassVar[frozenset[str]] = frozenset({"date", "created_at", "begin_at"})
-    """``date`` is a month and a day with no year, ``created_at`` repeats ``updated_at``, and
-    ``begin_at`` was the same on every row."""
+    drop: ClassVar[frozenset[str]] = frozenset({"date", "created_at"})
+    """``date`` is a month and a day with no year, and ``created_at`` repeats ``updated_at``."""
 
     index_code: str
     """Danjuan's code, such as SH000300, CSIH30269, NDX or 935600."""
     name: str | None = None
     trade_date: date | None = Field(default=None, validation_alias="ts")
     """Date of the values."""
+    begin_at: date | None = None
+    """Upstream name kept, because its meaning is unconfirmed: perhaps where the history behind
+    the percentiles starts. It differs between indexes: 14 dates among the 63 measured 2026-11-05,
+    2016-07-20 on 44 of them and 2020-07-27 on HKHSTECH."""
     pe: Number = None
     """Price to earnings, as a multiple; None when the upstream has none and sends 0."""
     pb: Number = None
@@ -51,7 +54,8 @@ class IndexValuation(UpstreamModel):
     """In percent points; equalled 100 minus ``pb_percentile`` on all 63 indexes measured
     2026-11-05."""
     roe: FractionPoints = None
-    """Return on equity, in percent points. Sent as 0 next to a placeholder ``pe``."""
+    """Return on equity, in percent points; None when it is sent as 0 next to a placeholder
+    ``pe``, the one row of 63 measured 2026-11-05 with a ``roe`` of 0."""
     dividend_yield: FractionPoints = Field(default=None, validation_alias="yeild")
     """Dividend yield, in percent points."""
     bond_yield: FractionPoints = Field(default=None, validation_alias="bond_yeild")
@@ -69,7 +73,8 @@ class IndexValuation(UpstreamModel):
     @model_validator(mode="before")
     @classmethod
     def _no_placeholders(cls, value: Any) -> Any:
-        """A multiple of 0 means no value, and so do the percentiles sent next to it."""
+        """A multiple of 0 means no value, and so do the percentiles sent next to it and the
+        return on equity sent next to a ``pe`` of 0."""
         if not isinstance(value, dict):
             return value
         fields = cast(dict[str, Any], value)
@@ -79,9 +84,11 @@ class IndexValuation(UpstreamModel):
             if fields.get(metric) == 0
             for suffix in ("", "_percentile", "_over_history")
         }
+        if fields.get("pe") == 0:
+            blank["roe"] = None
         return {**fields, **blank}
 
-    @field_validator("trade_date", mode="before")
+    @field_validator("trade_date", "begin_at", mode="before")
     @classmethod
     def _shanghai_date(cls, value: Any) -> Any:
         return date_from_ms(value, REPORT_DATE_ZONE)
@@ -99,7 +106,7 @@ class ValuationHistoryParams(BaseModel):
 
     index_code: IndexCode
     """An index from index_valuation_list, such as SH000300 or CSIH30269. Case-insensitive."""
-    day: ValuationWindow = "all"
+    period: ValuationWindow = "all"
     """Window: all, 3y or 5y. all starts about 10 years back."""
     begin: BarDate | None = None
     """First date, inclusive."""
@@ -164,7 +171,7 @@ def in_range(day: date, begin: date | None, end: date | None) -> bool:
 
 
 def history_query(params: ValuationHistoryParams, now: datetime) -> dict[str, str]:
-    return {"index_code": params.index_code, "day": params.day}
+    return {"index_code": params.index_code, "day": params.period}
 
 
 def parse_history(payload: Any, params: ValuationHistoryParams, metric: str) -> ValuationHistory:

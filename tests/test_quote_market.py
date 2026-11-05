@@ -469,6 +469,13 @@ def test_quote_heat_turns_text_ranks_and_dates_into_values(h: Harness) -> None:
     assert REGISTRY["quote_heat"].order is None
 
 
+def test_quote_heat_of_an_empty_payload_is_no_blank_record(h: Harness) -> None:
+    answer(h.upstream, "quote_heat", xueqiu({}))
+
+    with pytest.raises(UpstreamChanged):
+        h.call("quote_heat", symbol="SH600000")
+
+
 def test_quote_heat_leaves_the_award_out(h: Harness, mcp_call: McpCall) -> None:
     award = {"award_name": "合成奖项", "award_link": "https://example.invalid/a", "weight": 1}
     answer(h.upstream, "quote_heat", xueqiu({"rank": "7", "award": award}))

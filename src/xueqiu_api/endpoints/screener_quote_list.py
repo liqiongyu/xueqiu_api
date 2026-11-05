@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self, cast
 
 from pydantic import (
     BaseModel,
@@ -89,15 +89,16 @@ class ScreenerQuote(QuoteRow):
     current_year_percent: Number = None
     """Change since the start of the year, in percent points."""
     market_capital: Number = None
-    """Market value, in the quote currency."""
+    """Market value, in the quote currency; None when the upstream sends 0 for it and for the
+    shares, as on 3 of 200 US rows measured 2026-11-05, all with a .L suffix and a price."""
     float_market_capital: Number = None
     """Market value of the free float, in the quote currency; none on US rows."""
     total_shares: Number = None
-    """Shares outstanding."""
+    """Shares outstanding; None when the upstream sends 0."""
     float_shares: Number = None
     """Shares in the free float; none on US rows."""
     pe_ttm: Number = None
-    """Price to trailing earnings, as a multiple."""
+    """Price to trailing earnings, as a multiple; None when the upstream sends 0."""
     pb: Number = None
     """Price to book, as a multiple."""
     dividend_yield: Number = None
@@ -108,6 +109,18 @@ class ScreenerQuote(QuoteRow):
         default=None, validation_alias="north_net_inflow_time"
     )
     """Date of the northbound flow figure, sent as midnight in Asia/Shanghai."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_placeholders(cls, value: Any) -> Any:
+        """A ratio or a share count of 0 means no value, and so does the market value next to it."""
+        if not isinstance(value, dict):
+            return value
+        fields = cast(dict[str, Any], value)
+        blank: dict[str, None] = {"pe_ttm": None} if fields.get("pe_ttm") == 0 else {}
+        if fields.get("total_shares") == 0:
+            blank |= {"total_shares": None, "market_capital": None}
+        return {**fields, **blank}
 
     @field_validator("issue_date", "north_net_inflow_date", mode="before")
     @classmethod

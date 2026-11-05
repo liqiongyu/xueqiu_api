@@ -1032,12 +1032,58 @@ def test_f10_org_holding_detail_renders_the_total_in_the_header(replay: Harness)
 
     assert (
         "# info: report_date=2026-09-30 report_name=2026三季报 total_held_num=169885009 "
-        "total_to_float_shares_ratio=0.51 report_periods=3\n"
+        "total_to_float_shares_ratio=0.51 report_periods=3 "
+        "latest_report_periods=2026-09-30,2026-06-30,2026-03-31\n"
     ) in text
     assert "holder_name,held_num,to_float_shares_ratio\n" in text
     assert "华宝中证银行交易型开放式指数证券投资基金,40200187,0.1207\n" in text
     assert "全部合计" not in text
     assert text.endswith('# next: {"symbol":"SH600000","offset":1}')
+
+
+def bonus_body(additions: int) -> dict[str, Any]:
+    row = {"listing_ad": 1788710400000, "actual_issue_vol": 1.0}
+    items = {"items": [], "addtions": [row] * additions, "allots": []}
+    return {"data": items, "error_code": 0}
+
+
+def test_f10_bonus_notes_share_issues_as_many_as_the_page_size(h: Harness) -> None:
+    h.upstream.route(STOCK, "/v5/stock/f10/cn/bonus.json", json_reply(bonus_body(3)))
+
+    text = rendered(h, "f10_bonus", symbol="SH600000", page_size=3)
+
+    assert "# note: additions may be cut by page_size; a larger page_size shows the rest.\n" in text
+
+
+def test_f10_bonus_has_no_note_when_the_page_size_is_above_the_share_issues(h: Harness) -> None:
+    h.upstream.route(STOCK, "/v5/stock/f10/cn/bonus.json", json_reply(bonus_body(3)))
+
+    assert "may be cut" not in rendered(h, "f10_bonus", symbol="SH600000", page_size=4)
+
+
+def test_listing_prose_a_market_does_not_send_leaves_it_empty(replay: Harness) -> None:
+    text = rendered(
+        replay,
+        "f10_company",
+        symbol="00700",
+        fields=["org_cn_introduction", "operating_scope"],
+    )
+
+    assert "# note: no value here for operating_scope\n" in text
+    assert "org_cn_introduction: " in text and "operating_scope: \n" in text
+
+
+def test_a_field_nobody_declares_is_still_refused(replay: Harness) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        rendered(replay, "f10_company", symbol="00700", fields=["no_such_field"])
+
+    assert caught.value.field == "fields"
+
+
+def test_listing_prose_of_a_table_that_has_none_says_so(replay: Harness) -> None:
+    text = rendered(replay, "f10_holders", symbol="SH600000", fields=["reason"])
+
+    assert "# note: no value here for reason\n" in text
 
 
 @pytest.mark.sample("f10_holders")

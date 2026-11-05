@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
@@ -48,9 +48,9 @@ class FundGrowth:
 
     Long windows are sampled: ``all`` gave 497 rows for 1603 value dates, 1 to 4 dates apart,
     while ``ty`` gave 202 rows, one per session, measured 2026-11-05; where sampling starts among
-    ``1y``, ``3y`` and ``5y`` was not measured. Do not compute a drawdown from these rows: the 497
-    give 49.73%, every value 51.59%. Take ``max_drawdown_pct`` from fund_achievement, or walk
-    fund_nav_history.
+    ``1y``, ``3y`` and ``5y`` was not measured. Do not compute a drawdown or extremes from these
+    rows: the 497 give a drawdown of 49.73% and a highest ``nav`` of 2.0455, every value 51.59% and
+    2.124. Take ``max_drawdown_pct`` from fund_achievement, or walk fund_nav_history.
     """
 
     fund_code: str
@@ -64,6 +64,14 @@ class FundGrowth:
 
     def header(self) -> Mapping[str, Any]:
         return {} if self.index_name is None else {"index_name": self.index_name}
+
+    def render_notes(self) -> Sequence[str]:
+        if self.period == "ty":
+            return ()
+        return (
+            "this window may be sampled, so the highs and lows in # stats and their dates can "
+            "miss the real ones; fund_nav_history has every value.",
+        )
 
     def __len__(self) -> int:
         return len(self.dates)
@@ -112,7 +120,7 @@ ENDPOINT = Endpoint(
     name="fund_growth",
     doc=(
         "Net value and cumulative return of one fund against its index and benchmark, oldest "
-        "first; long windows are sampled, so do not compute a drawdown from them."
+        "first; long windows are sampled, so do not compute a drawdown or extremes from them."
     ),
     host="danjuanfunds.com",
     path="/djapi/fund/growth/{fund_code}",
@@ -132,7 +140,7 @@ ENDPOINT = Endpoint(
         title_en="Fund growth",
         summary=(
             "取一只基金在今年以来等区间内的单位净值、日涨跌和累计收益，并与跟踪指数、业绩比较基准"
-            "对比，长区间是抽样点，不能用来算回撤。"
+            "对比，长区间是抽样点，不能用来算回撤和最高最低。"
         ),
         keywords=(
             "基金业绩走势",

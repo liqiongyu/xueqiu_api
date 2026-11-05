@@ -32,8 +32,8 @@ class CubeHolding(UnverifiedModel):
 class CubeHoldings(UnverifiedModel):
     """Holdings of one portfolio.
 
-    The structure is unverified: no real response has been seen, only the keys needed to parse
-    are declared, others are not kept, and this model is outside the semantic versioning promise.
+    The structure is unverified: no real response has been seen, only the keys declared here are
+    kept, and this model is outside the semantic versioning promise.
     ``holdings`` holds the rows; the other fields describe the rebalancing.
     """
 
@@ -96,5 +96,6 @@ ENDPOINT = Endpoint(
         upstream_cap=100,
         examples=({"cube_symbol": "ZH2567925"},),
         labels=("segment_name",),
+        empty_hint="no rows: the portfolio may hold only cash; cash_weight in # info says.",
     ),
 )

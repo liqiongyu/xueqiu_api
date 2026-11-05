@@ -112,8 +112,8 @@ ENDPOINT = Endpoint(
         title_zh="龙虎榜",
         title_en="Top-trader disclosures (longhu)",
         summary=(
-            "取一只 A 股的龙虎榜记录，包括上榜原因、当日涨跌幅、成交额、买卖合计和营业部明细，"
-            "最新的在前。"
+            "取一只 A 股的龙虎榜记录，包括上榜原因、当日涨跌幅、成交额和买卖合计，最新的在前；"
+            "营业部明细在 branches 列，要在 fields 里点名。"
         ),
         keywords=(
             "龙虎榜",

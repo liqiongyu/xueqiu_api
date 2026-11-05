@@ -75,15 +75,15 @@ def lint_spec(module: str, spec: Endpoint[Any, Any]) -> list[str]:
             problems.append(f"param {name} shadows a builtin")
         if "token" in name.lower():
             problems.append(f"param {name} names a credential")
-        if name in CODE_PARAMS:
-            continue
-        if CODE_LIKE.search(name) and name not in NOT_A_SECURITY:
+        if name not in CODE_PARAMS | NOT_A_SECURITY and CODE_LIKE.search(name):
             problems.append(f"param {name} must be one of {sorted(CODE_PARAMS)}")
         if not field.description:
             problems.append(f"param {name} has no description")
+    if spec.auth != "required" and spec.verified_on is None:
+        problems.append(f"{spec.name} needs no login but has no verified_on")
     returns = get_type_hints(spec.parse).get("return")
     for name in result_fields(returns, set()):
-        if USER_KEY.match(name):
+        if USER_KEY.search(name):
             problems.append(f"result field {name} names a user")
     return problems + lint_pagination(spec)
 
@@ -172,6 +172,12 @@ class _UndescribedParam(SymbolParams):
     window: str = "day"
 
 
+class _UndescribedCode(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
+
+    symbol: str
+
+
 class _StockCodeParam(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
@@ -203,16 +209,73 @@ def _owner_result(payload: Any, params: SymbolParams) -> _OwnerResult:
         ("quote_other", synthetic_endpoint(), "does not match the name"),
         ("quote_synthetic", synthetic_endpoint(params=_TypeParam), "shadows a builtin"),
         ("quote_synthetic", synthetic_endpoint(params=_UndescribedParam), "has no description"),
+        ("quote_synthetic", synthetic_endpoint(params=_UndescribedCode), "has no description"),
+        ("quote_synthetic", synthetic_endpoint(verified_on=None), "has no verified_on"),
         ("quote_synthetic", synthetic_endpoint(params=_StockCodeParam), "must be one of"),
         ("quote_synthetic", synthetic_endpoint(params=_TokenParam), "names a credential"),
         ("quote_synthetic", synthetic_endpoint(parse=_owner_result), "names a user"),
     ],
-    ids=["prefix", "module", "builtin", "description", "code-param", "token", "user-field"],
+    ids=[
+        "prefix",
+        "module",
+        "builtin",
+        "description",
+        "code-description",
+        "unverified",
+        "code-param",
+        "token",
+        "user-field",
+    ],
 )
 def test_the_lint_rejects_a_bad_endpoint(
     module: str, spec: Endpoint[Any, Any], problem: str
 ) -> None:
     assert any(problem in line for line in lint_spec(module, spec))
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "user",
+        "users",
+        "userId",
+        "user_id",
+        "uid",
+        "screen_name",
+        "reply_screenName",
+        "bonus_screen_name",
+        "screenname_pinyin",
+        "fortuneUser",
+        "answer_users",
+        "reply_user_images",
+        "nick_name",
+        "avatar_url",
+        "profile_image_url",
+        "photo_domain",
+        "comments",
+        "last_comment_id",
+        "retweeted_status",
+        "owner_id",
+        "cube_owner",
+        "contractor_name",
+    ],
+)
+def test_a_key_naming_a_user_is_dropped_under_any_spelling(key: str) -> None:
+    class Row(UpstreamModel):
+        symbol: str
+
+    row = Row.model_validate({"symbol": "ZH2567925", "rows": [{key: "someone"}], key: "someone"})
+
+    assert key not in (row.model_extra or {})
+    assert (row.model_extra or {})["rows"] == [{}]
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["last_user_rb_gid", "other_illiquid_fnncl_assets", "followers", "follower_count", "profile"],
+)
+def test_a_key_that_only_looks_like_one_stays(key: str) -> None:
+    assert not USER_KEY.search(key)
 
 
 class _PageParams(BaseModel):

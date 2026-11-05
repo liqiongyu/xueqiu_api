@@ -154,6 +154,7 @@ ENDPOINT = Endpoint(
             "type_desc",
             "found_date",
             "company",
+            "custodian",
             "manager_name",
             "risk_level",
             "total_shares",

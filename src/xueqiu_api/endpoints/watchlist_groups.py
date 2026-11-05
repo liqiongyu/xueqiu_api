@@ -19,8 +19,8 @@ _CATEGORIES = {"stocks": "stock", "funds": "fund", "cubes": "cube", "mutualFunds
 class WatchlistGroup(UnverifiedModel):
     """One group, in the order the upstream sends them.
 
-    The structure is unverified: no real response has been seen, only the keys needed to parse
-    are declared, others are not kept, and this model is outside the semantic versioning promise.
+    The structure is unverified: no real response has been seen, only the keys declared here are
+    kept, and this model is outside the semantic versioning promise.
     """
 
     pid: int = Field(validation_alias="id")
@@ -28,8 +28,8 @@ class WatchlistGroup(UnverifiedModel):
     name: str
     """Group name; the account owner writes those of custom groups."""
     category: str = Field(validation_alias=_LIST_KEY)
-    """The ``category`` of ``watchlist_stocks``: stock, fund, cube or mutual_fund; any other kind
-    of list keeps its upstream name."""
+    """Kind of list: stock, fund, cube or mutual_fund; any other keeps its upstream name. Only
+    stock is accepted as the ``category`` of ``watchlist_stocks`` so far."""
     category_code: int | None = Field(default=None, validation_alias="category")
     """The upstream's number for the category."""
     symbol_count: int | None = None
@@ -93,5 +93,6 @@ ENDPOINT = Endpoint(
         upstream_cap=100,
         examples=({},),
         labels=("name",),
+        empty_hint="no rows: this account has no watchlist groups.",
     ),
 )

@@ -26,7 +26,7 @@
           "symbol": "SH600000",
           "subtype": 16,
           "title": "大宗交易",
-          "message": "大宗交易成交均价10.09元，成交金额4492.98万元",
+          "message": "示例大宗交易",
           "priority": 17,
           "timestamp": 1793721600000,
           "tags": null
@@ -36,7 +36,7 @@
           "symbol": "SH600000",
           "subtype": 30,
           "title": "财报发布",
-          "message": "2026年三季报营收同比增长4.42%",
+          "message": "示例财报发布",
           "priority": 13,
           "timestamp": 1793376000000,
           "tags": null

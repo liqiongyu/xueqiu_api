@@ -143,6 +143,13 @@ class Series(Protocol):
     def __len__(self) -> int: ...
 
 
+@runtime_checkable
+class Noted(Protocol):
+    """A result with caveats of its own, each rendered as a ``# note:`` line."""
+
+    def render_notes(self) -> Sequence[str]: ...
+
+
 @dataclass(frozen=True, slots=True)
 class _Table:
     """The rows ``start`` to ``stop`` of a result, with the columns they render."""
@@ -195,7 +202,7 @@ def render(
         raise no_offset(spec)
     keep_last = spec.order == "oldest_first"
     head = [f"# {spec.name} {compact_json(dump)}"]
-    notes: list[str] = []
+    notes = list(result.render_notes()) if isinstance(result, Noted) else []
     pager: Pager = _no_pager
     named: list[tuple[str, list[dict[str, Any]]]] = []
     if isinstance(result, Kline):
@@ -255,22 +262,28 @@ def render(
     available = list(dict.fromkeys(key for row in rows for key in row))
     later_page = isinstance(result, Page) and cast(Page[Any], result).page > 1
     missing_fields: list[str] = []
+    defaults = _default_fields(agent, params)
     if fields:
         wanted = list(dict.fromkeys(fields))
-        unknown = [name for name in wanted if name not in available]
+        absent = [name for name in wanted if name not in available]
+        # Prose and labels are declared for all markets, but some markets do not send every one.
+        unknown = [name for name in absent if name not in (*agent.free_text, *agent.labels)]
         # A column only some pages have stays, empty, on the others: # next carries the fields on.
         if rows and unknown and not later_page:
             raise InvalidParams(
                 f"{spec.name} results have no field {', '.join(unknown)}",
                 endpoint=spec.name,
                 field="fields",
-                valid_values=available,
+                # An error that does not fit keeps the first names: the defaults go first.
+                valid_values=sorted(available, key=lambda name: name not in defaults),
                 candidates=difflib.get_close_matches(unknown[0], available, n=3),
                 hint="Use names from valid_values in fields.",
             )
+        if rows and absent and not later_page:
+            notes.append(f"no value here for {', '.join(absent)}")
     else:
-        wanted = [name for name in agent.default_fields if name in available]
-        missing = [name for name in agent.default_fields if name not in available]
+        wanted = [name for name in defaults if name in available]
+        missing = [name for name in defaults if name not in available]
         if rows and missing and not sectioned:
             missing_fields = [
                 f"# note: default fields missing here: {', '.join(missing)}; "
@@ -535,7 +548,8 @@ def bar_time(kline: Kline, moment: datetime) -> str:
 def error_text(error: XueqiuError, *, hint: str | None = None) -> str:
     """The error as one line of compact JSON of at most ``ERROR_CHARS`` characters.
 
-    When it is too long, message and hint are shortened first, then the value lists.
+    When it is too long, message and hint are shortened first, then the value lists, and the hint
+    says how many of the valid values are left.
     """
     payload: dict[str, Any] = {k: v for k, v in error.to_dict().items() if k in ERROR_KEYS}
     if hint is not None:
@@ -546,9 +560,14 @@ def error_text(error: XueqiuError, *, hint: str | None = None) -> str:
             if len(payload.get(key) or "") > cap:
                 payload[key] = payload[key][: cap - 1] + "…"
         text = compact_json(payload)
+    total = len(payload.get("valid_values") or ())
+    hint_text = payload.get("hint") or ""
     for key in ("valid_values", "candidates"):
         while len(text) > ERROR_CHARS and payload.get(key):
             payload[key] = payload[key][:-1]
+            if key == "valid_values":
+                shown = len(payload[key])
+                payload["hint"] = f"{hint_text} valid_values shows {shown} of {total}.".strip()
             text = compact_json({k: v for k, v in payload.items() if v != []})
     while len(text) > ERROR_CHARS and max(len(payload["message"]), len(payload["hint"])) > 1:
         key = max(("message", "hint"), key=lambda name: len(payload[name]))
@@ -753,6 +772,13 @@ def _page_notes(spec: Endpoint[Any, Any], page: Page[Any]) -> list[str]:
             f"{rule.cap_hint}".rstrip()
         )
     return notes
+
+
+def _default_fields(agent: AgentInfo, params: BaseModel) -> tuple[str, ...]:
+    symbol: object = getattr(params, "symbol", None)
+    if agent.market_fields is None or not isinstance(symbol, str):
+        return agent.default_fields
+    return agent.market_fields.get(normalize_symbol(symbol).market, agent.default_fields)
 
 
 def _empty_note(agent: AgentInfo, dump: Mapping[str, Any], result: object) -> str:

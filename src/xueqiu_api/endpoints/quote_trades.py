@@ -21,6 +21,7 @@ class QuoteTradesParams(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
     symbol: SymbolCode
+    """Stock code, such as SH600000."""
     count: int = Field(default=50, ge=1, le=COUNT_CAP)
     """How many of the most recent trades to fetch; earlier ones are out of reach."""
 

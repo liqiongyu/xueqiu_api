@@ -54,8 +54,8 @@ class RebalancingChange(UnverifiedModel):
 class Rebalancing(UnverifiedModel):
     """One rebalancing, in the order the upstream sends them.
 
-    The structure is unverified: no real response has been seen, only the keys needed to parse
-    are declared, others are not kept, and this model is outside the semantic versioning promise.
+    The structure is unverified: no real response has been seen, only the keys declared here are
+    kept, and this model is outside the semantic versioning promise.
     """
 
     rebalancing_id: int = Field(validation_alias="id")
@@ -161,5 +161,6 @@ ENDPOINT = Endpoint(
         row_cap=100,
         upstream_cap=PAGE_SIZE_CAP,
         examples=({"cube_symbol": "ZH2567925", "page_size": 20},),
+        empty_hint="no rows: this portfolio has no rebalancings on record.",
     ),
 )

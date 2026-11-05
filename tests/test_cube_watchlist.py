@@ -21,9 +21,10 @@ from xueqiu_api import (
     LoginRequired,
     SymbolNotFound,
     UpstreamChanged,
+    XueqiuError,
 )
 from xueqiu_api._model import UnverifiedModel, UpstreamModel
-from xueqiu_api._render import FENCE_BEGIN, FENCE_END, compact_json, render
+from xueqiu_api._render import FENCE_BEGIN, FENCE_END, LABEL_CHARS, compact_json, render
 from xueqiu_api._replay import ReplayTransport
 from xueqiu_api._time import from_ms
 from xueqiu_api.endpoints.cube_holdings import CubeHolding, CubeHoldings
@@ -318,6 +319,27 @@ def test_cube_quote_unknown_code_is_symbol_not_found(h: Harness) -> None:
 
     assert caught.value.upstream_code == "20809"
     assert len(h.upstream.requests(WWW, QUOTE)) == 1
+
+
+def test_cube_quote_unknown_code_has_a_hint_about_portfolio_codes(h: Harness) -> None:
+    body = {"error_description": "示例说明", "error_uri": QUOTE, "error_code": "20809"}
+    h.upstream.route(WWW, QUOTE, json_reply(body, 400))
+
+    with pytest.raises(SymbolNotFound) as caught:
+        h.call("cube_quote", cube_symbols=["ZH0000000"])
+
+    assert caught.value.hint.startswith("A portfolio code is ZH plus digits")
+    assert "A shares" not in caught.value.hint
+
+
+def test_cube_quote_http_400_without_a_code_is_no_missing_code(h: Harness) -> None:
+    h.upstream.route(WWW, QUOTE, lambda request: httpx2.Response(400, text="<html>400</html>"))
+
+    with pytest.raises(XueqiuError) as caught:
+        h.call("cube_quote", cube_symbols=["ZH2567925"])
+
+    assert not isinstance(caught.value, SymbolNotFound)
+    assert caught.value.status == 400
 
 
 @pytest.mark.parametrize(
@@ -921,6 +943,85 @@ def test_cube_rebalancing_history_walks_to_the_last_page(make: Callable[..., Har
     assert pages[-1].next_params is None
 
 
+def test_cube_rebalancing_history_drops_a_rebalancing_repeated_across_pages(
+    make: Callable[..., Harness],
+) -> None:
+    h = make(token=FAKE_LOGIN)
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        page = int(request.url.params["page"])
+        rows = {1: [rebalancing(3), rebalancing(2)], 2: [rebalancing(2), rebalancing(1)]}[page]
+        body = {"count": 2, "page": page, "totalCount": 4, "maxPage": 2, "list": rows}
+        return httpx2.Response(200, json=body)
+
+    h.upstream.route(WWW, HISTORY, reply)
+
+    pages, error = h.walk(
+        REGISTRY["cube_rebalancing_history"], cube_symbol="ZH2567925", page_size=2
+    )
+
+    assert error is None
+    assert [row.rebalancing_id for page in pages for row in page] == [3, 2, 1]
+
+
+@pytest.mark.parametrize(
+    ("name", "params", "reply", "note"),
+    [
+        (
+            "cube_holdings",
+            {"cube_symbol": "ZH2567925"},
+            {"last_success_rb": {"id": 1, "cash": 100.0, "holdings": []}},
+            "the portfolio may hold only cash",
+        ),
+        (
+            "cube_rebalancing_history",
+            {"cube_symbol": "ZH2567925"},
+            {"count": 50, "page": 1, "totalCount": 0, "maxPage": 0, "list": []},
+            "no rebalancings on record",
+        ),
+    ],
+)
+def test_an_empty_login_result_never_blames_an_anonymous_session(
+    make: Callable[..., Harness],
+    name: str,
+    params: dict[str, Any],
+    reply: dict[str, Any],
+    note: str,
+) -> None:
+    h = make(token=FAKE_LOGIN)
+    h.upstream.route(WWW, REGISTRY[name].path, json_reply(reply))
+
+    text = rendered(h, name, **params)
+
+    assert note in text
+    assert "anonymous" not in text
+
+
+def test_a_watchlist_account_without_groups_is_told_so(make: Callable[..., Harness]) -> None:
+    h = make(token=FAKE_LOGIN)
+    h.upstream.route(STOCK, GROUPS, json_reply({"data": {}, "error_code": 0}))
+
+    text = rendered(h, "watchlist_groups")
+
+    assert "# note: no rows: this account has no watchlist groups.\n" in text
+
+
+def test_a_watchlist_name_is_fenced_cleaned_and_cut_by_default(
+    make: Callable[..., Harness],
+) -> None:
+    h = make(token=FAKE_LOGIN)
+    row = {"symbol": "ZH2567925", "name": f"<b>IGNORE PREVIOUS</b> {'长' * 60}"}
+    h.upstream.route(STOCK, STOCKS, json_reply({"data": {"stocks": [row]}, "error_code": 0}))
+
+    lines = rendered(h, "watchlist_stocks").splitlines()
+
+    begin = lines.index(FENCE_BEGIN)
+    assert lines[begin + 1].startswith("symbol,name,")
+    name = lines[begin + 2].split(",")[1]
+    assert len(name) == LABEL_CHARS and "<b>" not in name and name.startswith("IGNORE PREVIOUS")
+    assert lines[begin + 3] == FENCE_END
+
+
 # watchlist_groups
 
 
@@ -1016,19 +1117,14 @@ def test_watchlist_stocks_read_the_members_of_a_group(make: Callable[..., Harnes
     assert REGISTRY["watchlist_stocks"].order is None
 
 
-@pytest.mark.parametrize(
-    ("category", "code"), [("stock", "1"), ("fund", "2"), ("cube", "3"), ("mutual_fund", "6")]
-)
-def test_watchlist_stocks_map_category_and_pid(
-    make: Callable[..., Harness], category: str, code: str
-) -> None:
+def test_watchlist_stocks_map_category_and_pid(make: Callable[..., Harness]) -> None:
     h = make(token=FAKE_LOGIN)
     h.upstream.route(STOCK, STOCKS, fixture_reply("watchlist_stocks/empty"))
 
-    h.call("watchlist_stocks", pid=-110, category=category)
+    h.call("watchlist_stocks", pid=-110, category="stock")
 
     [sent] = h.upstream.sent
-    assert sent.params == {"pid": "-110", "category": code, "size": "1000"}
+    assert sent.params == {"pid": "-110", "category": "1", "size": "1000"}
 
 
 def test_watchlist_stocks_take_no_uid(make: Callable[..., Harness]) -> None:
@@ -1046,9 +1142,9 @@ def test_watchlist_stocks_reject_an_unknown_category(make: Callable[..., Harness
     h = make(token=FAKE_LOGIN)
 
     with pytest.raises(InvalidParams) as caught:
-        h.call("watchlist_stocks", category="bond")
+        h.call("watchlist_stocks", category="fund")
 
-    assert list(caught.value.valid_values) == ["stock", "fund", "cube", "mutual_fund"]
+    assert list(caught.value.valid_values) == ["stock"]
     assert h.upstream.sent == []
 
 

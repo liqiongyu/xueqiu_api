@@ -87,7 +87,6 @@
       "begin",
       "board",
       "count",
-      "day",
       "end",
       "ind_code",
       "index_code",
@@ -96,6 +95,7 @@
       "order_by",
       "page",
       "page_size",
+      "period",
       "region",
       "symbol",
       "window"

@@ -89,8 +89,8 @@
     "fund_rank_pages": "(self, *, fund_type: 'FundRankType' = '1', order_by: 'FundRankOrder' = '1m', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[FundRankItem]]'",
     "fund_search": "(self, *, query: 'str') -> 'list[FundSearchResult]'",
     "fund_trade_date": "(self, fund_code: 'str') -> 'FundTradeDate'",
-    "index_pb_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
-    "index_pe_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_pb_history": "(self, index_code: 'str', *, period: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_pe_history": "(self, index_code: 'str', *, period: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
     "index_stock_bond_percentile": "(self, *, begin: 'date | None' = None, end: 'date | None' = None) -> 'StockBondPercentile'",
     "index_valuation": "(self, index_code: 'str') -> 'IndexValuation'",
     "index_valuation_list": "(self) -> 'list[IndexValuation]'",
@@ -178,8 +178,8 @@
     "fund_rank_pages": "(self, *, fund_type: 'FundRankType' = '1', order_by: 'FundRankOrder' = '1m', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[FundRankItem]]'",
     "fund_search": "(self, *, query: 'str') -> 'list[FundSearchResult]'",
     "fund_trade_date": "(self, fund_code: 'str') -> 'FundTradeDate'",
-    "index_pb_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
-    "index_pe_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_pb_history": "(self, index_code: 'str', *, period: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_pe_history": "(self, index_code: 'str', *, period: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
     "index_stock_bond_percentile": "(self, *, begin: 'date | None' = None, end: 'date | None' = None) -> 'StockBondPercentile'",
     "index_valuation": "(self, index_code: 'str') -> 'IndexValuation'",
     "index_valuation_list": "(self) -> 'list[IndexValuation]'",
@@ -514,7 +514,7 @@
       "strategy": "str | None",
       "smart_strategy": "str | None",
       "cycle": "str | None",
-      "amount": "float | None",
+      "invest_amount": "float | None",
       "windows": "tuple[FundAutoInvestWindow, ...]"
     },
     "FundAutoInvestWindow": {
@@ -832,6 +832,7 @@
       "index_code": "str",
       "name": "str | None",
       "trade_date": "date | None",
+      "begin_at": "date | None",
       "pe": "float | None",
       "pb": "float | None",
       "pe_percentile": "float | None",
@@ -1332,10 +1333,7 @@
       "5y"
     ],
     "WatchlistCategory": [
-      "stock",
-      "fund",
-      "cube",
-      "mutual_fund"
+      "stock"
     ],
     "WatchlistGroup": {
       "pid": "int",

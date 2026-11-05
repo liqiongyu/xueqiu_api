@@ -12,6 +12,7 @@ from .._f10 import ExchangeDate
 from .._finance import MAX_COUNT, REPORT_DATE_ZONE
 from .._model import UpstreamModel
 from .._values import FractionPoints, Number
+from ..errors import SymbolNotFound
 from ..registry import AgentInfo, Endpoint, Pagination
 from ..symbols import SymbolCode, normalize_symbol
 
@@ -109,6 +110,10 @@ def _build_query(params: BusinessParams, now: datetime) -> dict[str, str]:
 
 
 def _parse(payload: Any, params: BusinessParams) -> RevenueBreakdown:
+    if payload == {}:
+        # What an unknown code gets on the income statement, measured 2026-11-05; this path was
+        # not measured, but shares the family's envelope.
+        raise SymbolNotFound(f"the upstream has no revenue breakdown for {params.symbol}")
     return RevenueBreakdown.model_validate(
         {**payload, "symbol": params.symbol}, context={"tz": REPORT_DATE_ZONE}
     )

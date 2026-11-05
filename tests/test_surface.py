@@ -56,6 +56,15 @@ def load_generator() -> Any:
     return module
 
 
+def test_generated_docstrings_keep_the_params_and_what_the_params_class_says() -> None:
+    history = Client.index_pe_history.__doc__ or ""
+    assort = Client.capital_assort.__doc__ or ""
+
+    assert "One request returns the whole window" in history
+    assert "symbol: Security or index code" in assort
+    assert "take one symbol and nothing else" not in assort
+
+
 def test_generated_files_are_fresh() -> None:
     for path, text in load_generator().generate().items():
         assert path.read_text(encoding="utf-8") == text, f"run {SCRIPT.name}: {path.name} is stale"

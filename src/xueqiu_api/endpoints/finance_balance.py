@@ -16,7 +16,7 @@ ENDPOINT = finance_endpoint(
         title_en="Balance sheet",
         summary=(
             "取 A 股、港股或美股公司的资产负债表，每个科目给期末值和同比，"
-            "可选全部报告期或只取年报。"
+            "可选全部报告期或只取年报，港股键 ta 总资产、tlia 总负债、teqy 总权益、tlia_ta 负债率。"
         ),
         keywords=(
             "资产负债表",
@@ -37,6 +37,10 @@ ENDPOINT = finance_endpoint(
             "total_holders_equity",
             "asset_liab_ratio",
         ),
+        # US statements send the same keys as A-shares.
+        market_fields={
+            "HK": ("report_date", "report_name", "ta", "tlia", "teqy", "tlia_ta"),
+        },
         row_default=MAX_COUNT,
         row_cap=MAX_COUNT,
         upstream_cap=MAX_COUNT,

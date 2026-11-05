@@ -110,6 +110,29 @@ def sent_pages(h: Harness, path: str) -> list[str]:
 # screener_quote_list
 
 
+def test_quote_list_reads_placeholder_zeros_as_no_value() -> None:
+    row = ScreenerQuote.model_validate(
+        {
+            "symbol": "RJD.L",
+            "current": 25.41,
+            "market_capital": 0.0,
+            "total_shares": 0,
+            "pe_ttm": 0.0,
+        }
+    )
+
+    assert (row.market_capital, row.total_shares, row.pe_ttm) == (None, None, None)
+    assert row.current == 25.41
+
+
+def test_quote_list_keeps_the_market_value_of_a_row_with_shares() -> None:
+    row = ScreenerQuote.model_validate(
+        {"symbol": "SH600000", "market_capital": 3.1e11, "total_shares": 3.3e10, "pe_ttm": 6.5}
+    )
+
+    assert (row.market_capital, row.total_shares, row.pe_ttm) == (3.1e11, 3.3e10, 6.5)
+
+
 @pytest.mark.sample("screener_quote_list")
 def test_quote_list_parses_units_dates_and_drops_the_session_flag(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTE_LIST_PATH, fixture_reply("screener_quote_list/cn_kcb_percent"))
@@ -425,7 +448,7 @@ def test_events_render_the_message_only_when_asked_and_fenced(h: Harness) -> Non
 
     assert "event_date,title,subtype" in text
     assert "2026-11-04,大宗交易,16" in text
-    assert "成交均价" not in text
+    assert "示例大宗交易" not in text
     assert text.endswith('# next: {"symbol":"SH600000","page":2,"page_size":3}')
     spec = REGISTRY["screener_events"]
     params = spec.validate({"symbol": "SH600000", "page_size": 3})
@@ -439,7 +462,7 @@ def test_events_render_the_message_only_when_asked_and_fenced(h: Harness) -> Non
         fetched_at=datetime(2026, 11, 5, 2, 0, tzinfo=SHANGHAI),
         next_call=None,
     )
-    assert "# untrusted upstream text begin" in asked and "成交均价" in asked
+    assert "# untrusted upstream text begin" in asked and "示例大宗交易" in asked
 
 
 # screener_popularity_rank
@@ -508,6 +531,36 @@ def test_popularity_rank_walks_every_row_without_a_cap(h: Harness) -> None:
     assert h.upstream.requests(STOCK, POPULARITY_PATH)[0].params["category"] == "US"
 
 
+def test_popularity_rank_walk_drops_a_row_repeated_across_pages(h: Harness) -> None:
+    def page(symbols: list[str]) -> Reply:
+        rows = [{"symbol": symbol, "name": "示例"} for symbol in symbols]
+        return json_reply({"data": {"count": 4, "list": rows}, "error_code": 0})
+
+    h.upstream.route(STOCK, POPULARITY_PATH, page(["AAA", "BBB"]), page(["BBB", "CCC"]))
+
+    pages, error = h.walk(POPULARITY, market="US", page_size=2)
+
+    assert error is None
+    assert [row.symbol for walked in pages for row in walked] == ["AAA", "BBB", "CCC"]
+
+
+def test_popularity_rank_walk_ends_on_a_last_page_of_known_rows(h: Harness) -> None:
+    """Rows tied on follow7d can move between pages, so the last page may hold known rows only:
+    the walk still ends, and the rows missing against count show the list is incomplete."""
+
+    def page(symbols: list[str]) -> Reply:
+        rows = [{"symbol": symbol, "name": "示例"} for symbol in symbols]
+        return json_reply({"data": {"count": 3, "list": rows}, "error_code": 0})
+
+    h.upstream.route(STOCK, POPULARITY_PATH, page(["AAA", "BBB"]), page(["AAA"]))
+
+    pages, error = h.walk(POPULARITY, market="US", page_size=2)
+
+    assert error is None
+    assert [row.symbol for walked in pages for row in walked] == ["AAA", "BBB"]
+    assert pages[-1].total == 3 and pages[-1].next_params is None
+
+
 @pytest.mark.parametrize(
     ("params", "field"),
     [({"page_size": 101}, "page_size"), ({"market": "SH"}, "market"), ({"order": "asc"}, "order")],
@@ -563,7 +616,9 @@ def test_valuation_list_converts_fractions_and_blanks_the_placeholder(h: Harness
     assert (placeholder.index_code, placeholder.pe, placeholder.pb) == ("SZ399393", None, 0.7468)
     assert (placeholder.pe_percentile, placeholder.pe_over_history) == (None, None)
     assert (placeholder.pb_percentile, placeholder.pb_over_history) == (9.28, 90.72)
-    assert (placeholder.peg, placeholder.roe) == (None, 0.0)
+    assert (placeholder.peg, placeholder.roe) == (None, None)
+    assert placeholder.begin_at == date(2016, 7, 20)
+    assert msci_india.begin_at == date(2017, 2, 26)
     assert csi300.index_code == "SH000300"
     assert hsi.trade_date == date(2026, 11, 4)
     assert (msci_india.index_code, msci_india.pe, msci_india.pe_percentile) == (
@@ -574,6 +629,12 @@ def test_valuation_list_converts_fractions_and_blanks_the_placeholder(h: Harness
     assert msci_india.dividend_yield == 0.96
     assert msci_india.bond_yield == 5.0
     assert REGISTRY["index_valuation_list"].order is None
+
+
+def test_valuation_keeps_a_zero_roe_next_to_a_real_pe() -> None:
+    row = IndexValuation.model_validate({"index_code": "SH000300", "pe": 13.6, "roe": 0})
+
+    assert row.roe == 0.0
 
 
 def test_valuation_list_fails_when_one_request_no_longer_holds_every_index(h: Harness) -> None:
@@ -618,7 +679,7 @@ def test_valuation_parses_percent_points_and_shanghai_times(h: Harness) -> None:
     assert row.updated_at is not None and row.updated_at.tzinfo == SHANGHAI
     assert (row.eva_type, row.pb_flag) == ("mid", False)
     dumped = row.model_dump()
-    assert not {"date", "created_at", "begin_at", "ts", "yeild", "bond_yeild"} & set(dumped)
+    assert not {"date", "created_at", "ts", "yeild", "bond_yeild"} & set(dumped)
     assert dumped["eva_type_int"] == 1
     assert REGISTRY["index_valuation"].order is None
 
@@ -707,7 +768,7 @@ def test_history_sorts_a_descending_body(h: Harness, name: str) -> None:
     data = {f"index_eva_{metric}_growths": points, "horizontal_lines": []}
     h.upstream.route(DANJUAN, path, json_reply({"data": data, "result_code": 0}))
 
-    history = h.call(name, index_code="ndx", day="3y")
+    history = h.call(name, index_code="ndx", period="3y")
 
     assert h.upstream.requests(DANJUAN, path)[0].params == {"day": "3y"}
     assert history.dates == (date(2016, 11, 4), date(2026, 11, 4))
@@ -730,8 +791,8 @@ def test_history_keeps_the_rows_between_begin_and_end(h: Harness, name: str) -> 
 @pytest.mark.parametrize(
     ("params", "field"),
     [
-        ({"day": "1y"}, "day"),
-        ({"day": "10y"}, "day"),
+        ({"period": "1y"}, "period"),
+        ({"period": "10y"}, "period"),
         ({"begin": date(2026, 1, 2), "end": date(2026, 1, 1)}, None),
     ],
 )
@@ -775,7 +836,7 @@ def test_history_renders_lines_stats_and_the_latest_rows(h: Harness) -> None:
     assert "# info: 30分位值=11.9876 中位值=12.7218 70分位值=13.7152" in lines
     assert any(line.startswith("# stats: points=6 first_date=2016-11-04") for line in lines)
     assert lines[lines.index("date,pe") + 1 :][:2] == ["2026-10-28,", "2026-11-04,13.6497"]
-    assert lines[-1] == '# next: {"index_code":"SH000300","day":"all"}'
+    assert lines[-1] == '# next: {"index_code":"SH000300","period":"all"}'
 
 
 # index_stock_bond_percentile

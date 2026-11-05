@@ -186,7 +186,7 @@
   {
     "name": "xq_endpoints",
     "title": "端点目录",
-    "description": "端点目录 接口列表 参数说明 字段 行情 K线 资金流向 F10 财报 选股器 榜单 搜索 指数估值 基金 组合 自选股 endpoints catalog category describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时每个类别一行：类别、中文标题、端点数和全部端点名；category 列出该类端点的端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词，行格式相同；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、适用市场、翻页方式和一个示例调用。\n示例：xq_endpoints {\"category\":\"f10\"}；xq_endpoints {\"query\":\"公司资料\"}；xq_endpoints {\"name\":[\"f10_company\"]}\n查到端点后用 xq_call 调用。",
+    "description": "端点目录 接口列表 参数说明 字段 行情 K线 资金流向 F10 财报 选股器 市场概览 搜索 指数估值 基金 组合 自选股 endpoints catalog category describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时每个类别一行：类别、中文标题、端点数和全部端点名；category 列出该类端点的端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词，行格式相同；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、适用市场、翻页方式和一个示例调用。\n示例：xq_endpoints {\"category\":\"f10\"}；xq_endpoints {\"query\":\"公司资料\"}；xq_endpoints {\"name\":[\"f10_company\"]}\n查到端点后用 xq_call 调用。",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -238,7 +238,7 @@
   {
     "name": "xq_call",
     "title": "调用端点",
-    "description": "调用端点 通用调用 行情 K线 资金流向 F10 财报 选股器 榜单 搜索 指数估值 基金 组合 自选股 call endpoint gateway\n按端点名调用任意已启用端点；没有专用工具的数据（公司资料、利润表、分时资金流向等）都走这里。endpoint 必填，取值见枚举；params 按该端点的参数校验，未知参数返回 invalid_params 并列出合法参数和签名；翻页端点的 page 和 page_size 也在 params 里；fields 选择列，财报科目输出本期值和 .yoy（同比，百分点）两列；limit 限制行数；offset 是 params 这一页已经显示的行数，照抄 # next 的值。对同一端点和同一组参数，输出与专用工具相同。\n示例：xq_call {\"endpoint\":\"f10_company\",\"params\":{\"symbol\":\"SH600000\"}}；xq_call {\"endpoint\":\"finance_income\",\"params\":{\"symbol\":\"SH600000\",\"count\":2}}\n不确定端点名或参数时先用 xq_endpoints。",
+    "description": "调用端点 通用调用 行情 K线 资金流向 F10 财报 选股器 市场概览 搜索 指数估值 基金 组合 自选股 call endpoint gateway\n按端点名调用任意已启用端点；没有专用工具的数据（公司资料、利润表、分时资金流向等）都走这里。endpoint 必填，取值见枚举；params 按该端点的参数校验，未知参数返回 invalid_params 并列出合法参数和签名；翻页端点的 page 和可调的 page_size 也在 params 里；fields 选择列，财报科目输出本期值和 .yoy（同比，百分点）两列；limit 限制行数；offset 是 params 这一页已经显示的行数，照抄 # next 的值。对同一端点和同一组参数，输出与专用工具相同。\n示例：xq_call {\"endpoint\":\"f10_company\",\"params\":{\"symbol\":\"SH600000\"}}；xq_call {\"endpoint\":\"finance_income\",\"params\":{\"symbol\":\"SH600000\",\"count\":2}}\n不确定端点名或参数时先用 xq_endpoints。",
     "inputSchema": {
       "type": "object",
       "properties": {

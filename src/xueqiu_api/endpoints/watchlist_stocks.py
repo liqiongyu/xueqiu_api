@@ -13,12 +13,11 @@ from .._cube import PlatformTime
 from .._model import UnverifiedModel
 from ..registry import AgentInfo, Endpoint
 
-WatchlistCategory = Literal["stock", "fund", "cube", "mutual_fund"]
-"""The kind of a watchlist group. Whether the upstream accepts each one is unverified."""
+WatchlistCategory = Literal["stock"]
+"""The kind of a watchlist group. No value was measured; stock is the one the survey sent, without
+a login. Other kinds are added once a login session has measured them."""
 
-_CATEGORY_CODES: Mapping[str, str] = MappingProxyType(
-    {"stock": "1", "fund": "2", "cube": "3", "mutual_fund": "6"}
-)
+_CATEGORY_CODES: Mapping[str, str] = MappingProxyType({"stock": "1"})
 _SIZE = 1000
 """Sent as the page size; no way to page is known, so exactly this many rows may be a cut list."""
 
@@ -38,8 +37,8 @@ class WatchlistStocksParams(BaseModel):
 class WatchlistItem(UnverifiedModel):
     """One member of a group, in the order the upstream sends them.
 
-    The structure is unverified: no real response has been seen, only the keys needed to parse
-    are declared, others are not kept, and this model is outside the semantic versioning promise.
+    The structure is unverified: no real response has been seen, only the keys declared here are
+    kept, and this model is outside the semantic versioning promise.
     """
 
     symbol: str
@@ -91,15 +90,11 @@ ENDPOINT = Endpoint(
         section="stocks",
         title_zh="自选股",
         title_en="Watchlist stocks",
-        summary=(
-            "列出当前登录账号一个自选分组里的证券，默认是全部自选股，"
-            "基金和组合分组要给 category 和 pid，需要登录。"
-        ),
+        summary=("列出当前登录账号一个自选股分组里的证券，默认是全部自选股，需要登录。"),
         keywords=(
             "自选股",
             "我的自选",
             "自选列表",
-            "自选基金",
             "关注的股票",
             "watchlist",
             "watchlist stocks",

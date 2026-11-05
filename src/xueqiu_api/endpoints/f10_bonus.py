@@ -25,7 +25,7 @@ class BonusParams(SymbolParams):
     page: int = Field(default=1, ge=1)
     """Page number, from 1; page 1 holds the latest dividends."""
     page_size: int = Field(default=50, ge=1, le=PAGE_SIZE_CAP)
-    """Dividends per page."""
+    """Dividends per page; a small one also cuts the share issues of page 1."""
 
 
 class Dividend(UpstreamModel):
@@ -93,9 +93,13 @@ class Allotment(UpstreamModel):
 class BonusPage(Page[Dividend]):
     """One page of dividends in ``items``; its length is theirs.
 
-    ``page`` and ``page_size`` apply to the dividends only. An A-share's page 1 also has every
-    share issue and allotment. The upstream repeats them on later pages, measured 2026-11-05, so
-    there they are empty here. Hong Kong and US responses have neither.
+    ``page`` applies to the dividends only. An A-share's page 1 also has its share issues and
+    allotments. The upstream repeats them on later pages, measured 2026-11-05, so there they are
+    empty here. Hong Kong and US responses have neither.
+
+    ``page_size`` limits the share issues too: size=3 gave 3 of SH600000's 6, measured 2026-11-04,
+    and size=100 gave all 6, measured 2026-11-05. No allotment was measured at a small size, so
+    those may be cut alike. A list as long as ``page_size`` may be incomplete.
     """
 
     symbol: str
@@ -105,6 +109,16 @@ class BonusPage(Page[Dividend]):
 
     def header(self) -> Mapping[str, Any]:
         return {}
+
+    def render_notes(self) -> Sequence[str]:
+        cut = [
+            name
+            for name, rows in (("additions", self.additions), ("allotments", self.allotments))
+            if len(rows) >= self.page_size
+        ]
+        if not cut:
+            return ()
+        return (f"{', '.join(cut)} may be cut by page_size; a larger page_size shows the rest.",)
 
     def sections(self) -> Mapping[str, Sequence[BaseModel]]:
         if self.page > 1 or normalize_symbol(self.symbol).market != "CN":
@@ -199,6 +213,6 @@ ENDPOINT = Endpoint(
         row_default=50,
         row_cap=PAGE_SIZE_CAP,
         upstream_cap=PAGE_SIZE_CAP,
-        examples=({"symbol": "SH600000", "page_size": 3},),
+        examples=({"symbol": "SH600000"},),
     ),
 )
