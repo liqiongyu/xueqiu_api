@@ -135,6 +135,44 @@ Python API 默认关的原因：行情类数据过期有实际风险，库返回
   - xq_kline 一次给多只代码时只返回每只一行统计，fields 不起作用。
   - AsyncClient 只支持 asyncio，会话缓存用同步文件读写；Retry-After 只解析秒数。
 
+## 第 3 阶段设计
+
+基于 2026-11-05 的 main。
+
+1. 范围：新增 62 个端点，加第 2 阶段 10 个共 72 个，其中 68 个匿名，4 个只能登录（cube_holdings、cube_rebalancing_history、watchlist_groups、watchlist_stocks）。其余 64 个普查接口不导出：社区帖子、用户资料、热点话题、已下线或返回空的接口；内容过期的 www F10 接口；蛋卷登录接口（客户端没有蛋卷凭证通路）；快讯（路径在 /statuses/ 下，作者离线无法确认）。以后加入属于新增。只能登录的端点用合成夹具，verified_on 为空，字段只声明解析必需的键，不进语义化版本承诺，等小号实测。
+2. 表面：
+   - Client 和 AsyncClient 每个端点一个扁平方法，由 scripts/generate_client.py 从注册表生成，测试在生成文件过期时失败。方法名等于注册表名、xq_call 枚举值、--exclude 模式和回放夹具目录。
+   - 名字以类别开头：quote、capital、f10、finance、screener、market、search、index、fund、cube、watchlist。例外 kline、quotec、batch_quote、suggest_stock。
+   - 代码类参数 symbol、symbols、fund_code、index_code、cube_symbol、cube_symbols 可以位置传参，其余 keyword-only。翻页统一 page、page_size，默认 min(50, 上限)；最近 N 条统一 count。Literal 只放实测过的取值。
+   - 注册表新增 doc、pagination、markets、order、needs_cookies、not_found，AgentInfo 新增 category、group、section、empty_hint、labels。信封新增 danjuan、bare。结果模型继承 UpstreamModel，用户字段在校验前递归删除。所有者写的短文本（组合名）默认渲染，截到 40 字，放进围栏。
+   - 结果模型和公开 Literal 集中在生成的 xueqiu_api.models。FinanceParams.type 改 report_type。子包 mcp 改名 mcp_server，避免遮蔽依赖；命令 `xueqiu mcp` 和 extra 名不变。
+   - 匿名端点始终带匿名 cookie，配置 token 时也一样；配 token 的客户端也会写匿名缓存，登录 cookie 不落盘。只能登录的端点没有凭证时直接抛 LoginRequired，不发请求。查不到的代码按实测形状映射成 symbol_not_found。
+3. 分页：
+   - 页码型端点生成 `<name>_pages`，参数和单页方法相同，另有 max_pages、max_items，逐页产出 Page[T]。Page.next_params 是可存成 JSON 的续跑凭据。每页一次调用，有自己的 30 秒截止时间和限速槽位。
+   - 有总数按总数结束，没有总数只认空页，短页后还有行报 upstream_changed；实测过上限的端点改成短页结束。选股器碰到 5000 时第 1 页后抛 invalid_params，传 max_items 或 max_pages 时照常返回。
+   - kline_history 返回合并好的一个 Kline，永远往回走，满页才发下一次。
+   - MCP 一次调用一个上游页：xq_call 加 offset，语义是这一页已显示的行数，# next 给 page 和 offset。K 线、财报、单条记录不接受 offset。
+4. 数据功能：不进注册表，Client 和 AsyncClient 只加 security_snapshot、trading_calendar、market_state、adjust_factors 四个方法。
+   - 证券列表（xueqiu_api.universe）：A 股按 sha、kcb、sza、bj、shb、szb 走完，每段行数等于上游声明且未封顶就算完整；港股一段；美股用人气榜接口按 category=US 翻完（2026-11-05 实测 9124 行，第 92 页有数据，不受 5000 限制），去重后行数等于 count 才算完整。
+   - 交易日历（xueqiu_api.trading_calendar）：从指数日线推出，只有过去的交易日，未来日期返回 None，不做半日市。market_state 区分交易中和已收盘，今天是否交易是三态。
+   - 复权因子（xueqiu_api.adjust）：后复权价除以不复权价，用 OHLC 舍入区间切段，前复权本地算，和 f10_bonus 对账。每只两次请求。
+   - 质量校验（xueqiu_api.quality）：纯函数，返回报告，不抛异常，不改数据，跳过和通过分开，空值不当 0。覆盖 K 线、财报恒等式（银行、非银行、保险、券商）和快照完整性。
+5. 检索和评测：
+   - xq_endpoints 参数改为 query、name、category。无参数输出按类别摘要，query 走本地检索，name 给详情块。
+   - 检索用标准库实现：字二元组加 ASCII 词，BM25，字段加权，同义词只在查询时展开，最多 10 行，低于最高分 20% 丢弃。
+   - 评测集 evals/，100 条，dev 覆盖每个端点，holdout 22 条由没看过关键词和同义词表的 agent 盲写，约七成中文，期望写在端点参数层，第 4 阶段换工具面不用改。
+   - CI 不用模型：任务 lint、检索不变量、基线门槛、黄金路径回放、发现链路、参数变异。模型跑分在第 4 阶段选工具面时做。不设绝对分数目标，门槛是基线减 1/scored。
+6. 实现：分 3 个 PR，前一个合并后开始下一个，每个 PR 前做审查、修复和门禁。
+   - 基础：改名、注册表、信封、会话拆分、共享类型、分页内核、渲染协议、生成器和方法迁移、3 个管线证明端点、MCP 翻页和目录。
+   - 端点：7 组并行，集成时重新生成共享文件，加路由快照和社区路径负向测试。
+   - 数据功能、检索和评测。
+7. verify：
+   - 每个接口有契约测试和样例测试：样例测试带端点标记，运行时确认真的解析过该端点；路由对照快照，路径写错会失败。
+   - pysnowball 审查 71 条逐条对应到测试、后续阶段或不适用原因，对照表留在本地，open 为 0。
+   - 质量校验在真实样例上通过：只在本机运行，设了 XUEQIU_SAMPLES_DIR 时样例缺失就失败，全量序列数和检查行数都大于 0，CI 跑夹具。
+   - evals/baseline.json 记录离线的 Recall@1、Recall@3、MRR@10，消融、dev 和 holdout 的差距、样本量写进结论。
+   - ruff、pyright strict、全矩阵 CI 通过，生成文件新鲜度和 SDK 表面快照通过。
+
 ## 待观察
 
 - 匿名 cookie 的有效期：2026-11-04 23:27 取得的一组在次日 08:06 仍能取到行情，更长的期限继续观察。
@@ -142,6 +180,7 @@ Python API 默认关的原因：行情类数据过期有实际风险，库返回
 - GitHub Actions 的海外机器能否访问雪球。访问不了的话，巡检改为在本机定时运行 doctor，把结果推到仓库。
 - 各类接口数据的实际更新频率，用来定默认 TTL。
 - report 和 earningforecast 在登录状态下是否有数据。
+- 登录 cookie 在 stock.xueqiu.com 报 400016 的原因、最少 cookie 集合和登录类接口的真实结构，等小号 token。
 
 ## 风险
 
