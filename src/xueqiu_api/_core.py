@@ -430,6 +430,16 @@ class HostLimiter:
         with self._lock:
             return max(0.0, self._paused_until.get(host, now) - now)
 
+    def lease_home(self, deadline: float) -> float | None:
+        """Take the lease on the home-page fetch: 0.0 when taken, else the seconds it stays held.
+
+        None: no other process shares this limiter, so the caller fetches without one.
+        """
+        return None
+
+    def release_home(self) -> None:
+        """Give the home-page lease back; nothing to do without sharing."""
+
 
 class CircuitBreaker:
     """Per-host breaker: a block opens it for ``cooldown_s``, during which calls fail fast."""
