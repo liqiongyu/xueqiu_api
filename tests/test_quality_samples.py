@@ -82,6 +82,27 @@ KNOWN_ERRORS = {
     (".INX day normal", "kline.gaps_vs_calendar", "2012-10-29"),
     (".INX day normal", "kline.gaps_vs_calendar", "2012-10-30"),
     (".INX day normal", "kline.gaps_vs_calendar", "2015-06-20"),
+    # HKHSI has rows on 14 days 00700 has none since 2012-11-01, closed days with volume 0 or 1 and
+    # one on 2015-07-01 with a stray volume (measured 2026-11-05). They keep it from being a source.
+    *(
+        ("HKHSI day normal", "kline.gaps_vs_calendar", day)
+        for day in (
+            "2012-12-26",
+            "2013-02-11",
+            "2013-02-12",
+            "2013-02-13",
+            "2013-04-01",
+            "2013-04-04",
+            "2013-05-01",
+            "2013-05-17",
+            "2013-07-01",
+            "2013-09-20",
+            "2015-04-07",
+            "2015-05-01",
+            "2015-07-01",
+            "2021-10-13",
+        )
+    ),
 }
 """Errors the real samples are known to have: (subject, check, where)."""
 
