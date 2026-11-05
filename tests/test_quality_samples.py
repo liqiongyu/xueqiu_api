@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections import Counter
-from collections.abc import Iterator
+from collections import Counter, defaultdict
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -31,7 +31,7 @@ from .harness import REPLAY_DIR
 
 STATEMENTS: tuple[Statement, ...] = get_args(Statement)
 KLINE_FIXTURES = sorted((REPLAY_DIR / "kline").glob("*.json"))
-STATEMENT_FIXTURES = [
+STATEMENT_FIXTURES: list[tuple[Statement, Path]] = [
     (statement, path)
     for statement in STATEMENTS
     for path in sorted((REPLAY_DIR / f"finance_{statement}").glob("*.json"))
@@ -60,6 +60,22 @@ EVERY_CHECK = {
     "fin.period_dates",
     "fin.currency_present",
 }
+OF_EVERY_KIND_OF_COMPANY = {
+    "fin.balance_identity",
+    "fin.income_identity",
+    "fin.cash_flow_identity",
+    "fin.ratio_units",
+}
+"""Checks a bank, a non-financial company, an insurer and a broker all have the items for."""
+A_SHARE_ORG_TYPES = {1, 2, 3, 4}
+"""Non-financial, bank, insurer and broker (measured 2026-11-05)."""
+LACKING_IN_REPLAY_STATEMENTS = {
+    "fin.balance_subtotals",
+    "fin.equity_split",
+    "fin.income_identity",
+}
+"""The replay statements are cut down to a few line items, and these checks need others. They run
+on synthetic statements in ``test_quality`` and on real ones here when samples are available."""
 KNOWN_ERRORS = {
     # .INX has bars on two days XNYS has no session, 2012-10-29 and 2012-10-30, with chg 0, and on
     # Saturday 2015-06-20 (measured 2026-11-05). These days keep it from being a calendar source.
@@ -70,13 +86,33 @@ KNOWN_ERRORS = {
 """Errors the real samples are known to have: (subject, check, where)."""
 
 
+def replay_bars_report(path: Path) -> QualityReport:
+    """The checks of a replay series, taken as unadjusted unless its params say otherwise, against
+    a calendar of its own days."""
+    case = json.loads(path.read_text(encoding="utf-8"))
+    bars = parse_bars({"type": "normal", **case["params"]}, case["body"]["data"])
+    days = tuple(stamp.date() for stamp in bars.timestamps)
+    market = normalize_symbol(bars.symbol).market
+    calendar = TradingCalendar(market, bars.symbol, days, SAMPLES_FETCHED_AT)
+    return check_kline(bars, calendar=calendar, as_of=SAMPLES_FETCHED_AT)
+
+
 @pytest.mark.parametrize("path", KLINE_FIXTURES, ids=lambda path: path.stem)
 def test_replay_bars_pass(path: Path) -> None:
-    case = json.loads(path.read_text(encoding="utf-8"))
-    report = check_kline(parse_bars(case["params"], case["body"]["data"]), as_of=SAMPLES_FETCHED_AT)
+    report = replay_bars_report(path)
 
     assert {item.status for item in report.results} <= {"pass", "skipped"}, report
     assert report.ok
+
+
+def test_replay_bars_run_every_check_of_bars() -> None:
+    checked: Counter[str] = Counter()
+    for path in KLINE_FIXTURES:
+        for item in replay_bars_report(path).results:
+            checked[item.check] += item.checked
+
+    assert set(checked) == {check for check in EVERY_CHECK if check.startswith("kline.")}
+    assert {check for check, rows in checked.items() if rows <= 0} == set()
 
 
 @pytest.mark.parametrize(
@@ -94,6 +130,20 @@ def test_replay_statements_pass(statement: Statement, path: Path) -> None:
     if statement == "balance":
         checked = next(item for item in report.results if item.check == "fin.balance_identity")
         assert checked.checked > 0
+
+
+def test_replay_statements_run_every_check_they_have_the_items_for() -> None:
+    checked: Counter[str] = Counter()
+    for statement, path in STATEMENT_FIXTURES:
+        case = json.loads(path.read_text(encoding="utf-8"))
+        report = check_financials(
+            parse_statement(statement, case["params"], case["body"]["data"]), statement
+        )
+        for item in report.results:
+            checked[item.check] += item.checked
+
+    assert set(checked) == {check for check in EVERY_CHECK if check.startswith("fin.")}
+    assert {check for check, rows in checked.items() if rows <= 0} <= LACKING_IN_REPLAY_STATEMENTS
 
 
 def parse_bars(query: dict[str, Any], data: Any) -> Kline:
@@ -115,11 +165,12 @@ def parse_statement(statement: Statement, query: dict[str, Any], data: Any) -> F
 def samples_root() -> Path | None:
     """The directory of real samples, or None when ``XUEQIU_SAMPLES_DIR`` is not set."""
     value = os.environ.get("XUEQIU_SAMPLES_DIR")
-    if not value:
+    if value is None:
         return None
-    root = Path(value)
-    assert root.is_dir(), f"XUEQIU_SAMPLES_DIR is set to {value}, which is not a directory"
-    return root
+    assert value and Path(value).is_dir(), (
+        f"XUEQIU_SAMPLES_DIR is set to {value!r}, which is not a directory"
+    )
+    return Path(value)
 
 
 def recorded_responses(root: Path) -> Iterator[tuple[str, dict[str, Any], Any]]:
@@ -142,7 +193,9 @@ def recorded_responses(root: Path) -> Iterator[tuple[str, dict[str, Any], Any]]:
 class SampleRun:
     reports: list[QualityReport] = field(default_factory=list[QualityReport])
     full_series: int = 0
-    org_types: set[int] = field(default_factory=set[int])
+    checked_by_org_type: defaultdict[int, Counter[str]] = field(
+        default_factory=lambda: defaultdict[int, Counter[str]](Counter)
+    )
 
 
 def run_samples(root: Path) -> SampleRun:
@@ -160,9 +213,12 @@ def run_samples(root: Path) -> SampleRun:
         elif (match := STATEMENT_PATH.fullmatch(path)) and fields.get("list"):
             statement = cast(Statement, match[1])
             statements = parse_statement(statement, query, data)
-            run.reports.append(check_financials(statements, statement))
+            report = check_financials(statements, statement)
+            run.reports.append(report)
             if normalize_symbol(statements.symbol).market == "CN":
-                run.org_types.add(statements.extra["org_type"])
+                counts = run.checked_by_org_type[statements.extra["org_type"]]
+                for item in report.results:
+                    counts[item.check] += item.checked
     calendars = source_calendars(bars)
     for kline in bars:
         calendar = calendars[normalize_symbol(kline.symbol).market]
@@ -215,13 +271,46 @@ def test_real_samples_have_only_the_known_errors(real_run: SampleRun) -> None:
     assert errors <= KNOWN_ERRORS
 
 
+def uncovered_company_checks(
+    checked_by_org_type: Mapping[int, Counter[str]],
+) -> set[tuple[int, str]]:
+    """The (org type, check) pairs of ``OF_EVERY_KIND_OF_COMPANY`` that read no row."""
+    return {
+        (org_type, check)
+        for org_type in A_SHARE_ORG_TYPES
+        for check in OF_EVERY_KIND_OF_COMPANY
+        if checked_by_org_type.get(org_type, Counter[str]())[check] <= 0
+    }
+
+
 def test_real_samples_cover_every_kind_of_a_share_company(real_run: SampleRun) -> None:
-    assert real_run.org_types >= {1, 2, 3, 4}
+    assert uncovered_company_checks(real_run.checked_by_org_type) == set()
+
+
+def test_a_kind_of_company_whose_identities_were_all_skipped_is_uncovered() -> None:
+    full = Counter(dict.fromkeys(OF_EVERY_KIND_OF_COMPANY, 2))
+    covered = {org_type: full for org_type in A_SHARE_ORG_TYPES}
+
+    assert uncovered_company_checks(covered) == set()
+    assert uncovered_company_checks({**covered, 3: full - Counter({"fin.ratio_units": 2})}) == {
+        (3, "fin.ratio_units")
+    }
+    assert uncovered_company_checks({1: full, 2: full, 4: full}) == {
+        (3, check) for check in OF_EVERY_KIND_OF_COMPANY
+    }
 
 
 def test_samples_are_skipped_when_the_variable_is_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("XUEQIU_SAMPLES_DIR", raising=False)
     assert samples_root() is None
+
+
+def test_an_empty_variable_fails_and_does_not_read_as_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("XUEQIU_SAMPLES_DIR", "")
+    with pytest.raises(AssertionError, match="not a directory"):
+        samples_root()
 
 
 def test_a_directory_that_does_not_exist_fails(

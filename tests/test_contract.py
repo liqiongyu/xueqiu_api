@@ -50,6 +50,9 @@ ROW_TIME_FIELDS = (
     "ex_date",
     "event_date",
     "date",
+    "listing_ad",
+    "allot_date",
+    "effective_date",
 )
 """Fields that order the rows of a table, whichever one the table has."""
 ROUTE_HOSTS = {

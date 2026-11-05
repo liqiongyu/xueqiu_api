@@ -8,10 +8,12 @@ XUEQIU_UPDATE_SNAPSHOTS=1 to rewrite evals/baseline.json after reviewing a chang
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import re
 from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
 from typing import Any, Self, cast
@@ -40,6 +42,7 @@ from evals.retrieval import (
     pending,
     rank_of,
     render,
+    rounded,
     substring_search,
 )
 from xueqiu_api import REGISTRY
@@ -70,6 +73,8 @@ TAG_FLOORS = {
 """Fewest tasks of a tag over the whole set: dev and holdout make up the numbers together."""
 TAGS = {*TAG_FLOORS, "dedicated"}
 NOW = datetime(2026, 11, 5, 2, 0, tzinfo=UTC)
+CODE_PARAMS = ("symbol", "symbols", "fund_code", "index_code", "cube_symbol", "cube_symbols")
+BATCH_CODE_PARAMS = ("symbols", "cube_symbols")
 MAX_CHARS = McpOptions().max_chars
 REPLAY = ReplayTransport(REPLAY_DIR)
 
@@ -163,8 +168,11 @@ def test_a_task_is_well_formed(task: Task) -> None:
         assert not task.also_ok and not task.expected
     else:
         assert task.target not in task.also_ok
-        assert {call.endpoint for call in task.expected} & {task.target, *task.also_ok}
+        called = {call.endpoint for call in task.expected}
+        assert called & {task.target, *task.also_ok}
         assert not endpoint_only(task.expected[0])
+        if task.split == "dev" and "multi_step" not in task.tags:
+            assert task.target in called
 
 
 @pytest.mark.parametrize("task", TASKS, ids=task_id)
@@ -234,6 +242,15 @@ def test_the_loader_reads_out_of_scope_and_absent_keys(tmp_path: Path) -> None:
     assert not has_own_keyword(task)
 
 
+def test_a_code_is_no_keyword_because_a_keyword_lies_inside_it() -> None:
+    task = next(task for task in DEV if task.id == "cube_quote-zh-1")
+
+    assert "ZH" in REGISTRY["cube_quote"].agent.keywords
+    assert "zh" in task.prompt.casefold()
+    assert not has_own_keyword(task)
+    assert has_own_keyword(replace(task, prompt="这个 ZH 组合现在净值多少"))
+
+
 def test_the_real_holdout_out_of_scope_task_counts_as_one() -> None:
     assert [task.id for task in HOLDOUT if task.target is None] == ["h22"]
     assert sum("out_of_scope" in task.tags for task in TASKS) == 5
@@ -272,20 +289,27 @@ def test_the_baseline_is_rewritten_only_on_request(
 ) -> None:
     path = tmp_path / "baseline.json"
     monkeypatch.setattr(retrieval, "BASELINE", path)
+    monkeypatch.delenv(UPDATE_ENV, raising=False)
 
-    main()
+    assert main() == 0
     assert not path.exists()
 
     monkeypatch.setenv(UPDATE_ENV, "1")
-    main()
+    assert main() == 0
     written = json.loads(path.read_text(encoding="utf-8"))
     assert written["tasks"] == 100
     assert "below the floor" not in capsys.readouterr().out
 
     written["metrics"]["all"]["recall_at_1"] = 1.0
-    path.write_text(json.dumps(written), encoding="utf-8")
-    main()
+    higher = json.dumps(written)
+    path.write_text(higher, encoding="utf-8")
+    assert main() == 1
     assert "below the floor of the baseline: recall_at_1" in capsys.readouterr().out
+    assert path.read_text(encoding="utf-8") == higher
+
+    path.unlink()
+    assert main() == 0
+    assert path.exists()
 
 
 # The baseline
@@ -300,6 +324,25 @@ def test_the_floor_allows_the_loss_of_one_task_and_no_more() -> None:
     assert below_floor(same, old, 100) == []
     assert below_floor(one_lost, old, 100) == []
     assert [line.split()[0] for line in below_floor(two_lost, old, 100)] == ["mrr_at_10"]
+
+
+def test_the_floor_compares_rounded_values_without_counting_the_rounding_as_a_loss(
+    baseline: dict[str, Any],
+) -> None:
+    ranks = list(baseline["ranks"].values())
+    scored = len(ranks)
+    before = rounded(metrics(ranks))
+    for index, rank in enumerate(ranks):
+        if rank is not None:
+            one_lost = rounded(metrics([*ranks[:index], None, *ranks[index + 1 :]]))
+            assert below_floor(one_lost, before, scored) == [], index
+    two_lost = rounded(metrics([None if index < 2 else 1 for index in range(scored)]))
+    all_first = rounded(metrics([1] * scored))
+    assert [line.split()[0] for line in below_floor(two_lost, all_first, scored)] == [
+        "recall_at_1",
+        "recall_at_3",
+        "mrr_at_10",
+    ]
 
 
 def test_the_metrics_stay_above_the_floor_of_the_baseline(
@@ -317,13 +360,22 @@ def test_a_change_of_ranks_rewrites_the_baseline(
     assert not changed, f"{len(changed)} ranks changed; review them, then rewrite the baseline"
 
 
+def test_the_baseline_holds_what_a_run_gives_but_its_date(
+    report: dict[str, Any], baseline: dict[str, Any]
+) -> None:
+    def undated(values: Mapping[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in values.items() if key != "date"}
+
+    assert undated(baseline) == undated(report)
+
+
 def test_the_baseline_describes_this_task_set_and_registry(
     report: dict[str, Any], baseline: dict[str, Any]
 ) -> None:
     for key in ("endpoints", "tasks", "scored", "pending", "out_of_scope"):
         assert baseline[key] == report[key], key
     assert baseline["pending"] == 0
-    assert set(baseline["ranks"]) == {task.id for task in TASKS if task.target is not None}
+    assert set(baseline["ranks"]) == {task.id for task in DEV if task.target is not None}
     assert set(baseline["metrics"]) == set(report["metrics"])
     assert set(baseline["ablation"]) == {"substring", "no_synonyms", "configured"}
     for group in ("all", "strict", "dev", "holdout", "zh", "en"):
@@ -358,6 +410,38 @@ def token_for(*calls: Call) -> str | None:
     return FAKE_LOGIN if required else None
 
 
+def column_of(text: str, name: str) -> list[str]:
+    """The cells of one column in the body of a reply, whose layout is CSV for rows and
+    ``name: value`` lines for a single record."""
+    lines = [line for line in text.splitlines() if line and not line.startswith("#")]
+    record = [line for line in lines if line.startswith(f"{name}:")]
+    if record:
+        return [line.partition(":")[2].strip() for line in record]
+    rows = list(csv.reader(lines))
+    if not rows or name not in rows[0]:
+        return []
+    index = rows[0].index(name)
+    return [row[index] for row in rows[1:]]
+
+
+def codes_of(call: Call) -> list[str]:
+    """The codes a call asks for."""
+    found: list[str] = []
+    for key in CODE_PARAMS:
+        value = call.params.get(key)
+        found += cast(list[str], value) if isinstance(value, list) else [value] if value else []
+    return found
+
+
+def fixture_params(endpoint: str) -> list[str]:
+    """The upstream query values each fixture of an endpoint is keyed on."""
+    cases = (
+        cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8"))).get("params", {})
+        for path in sorted((REPLAY_DIR / endpoint).glob("*.json"))
+    )
+    return [str(value) for params in cases for value in params.values()]
+
+
 @pytest.mark.parametrize("task", [task for task in TASKS if task.expected], ids=task_id)
 def test_the_expected_calls_work_on_the_replay_fixtures(task: Task, tmp_path: Path) -> None:
     calls = filled(task)
@@ -372,19 +456,32 @@ def test_the_expected_calls_work_on_the_replay_fixtures(task: Task, tmp_path: Pa
                 for call in calls
             ]
 
-    for text, is_error in asyncio.run(run()):
+    for call, (text, is_error) in zip(calls, asyncio.run(run()), strict=True):
         assert not is_error, text
         assert len(text) <= MAX_CHARS
+        assert "no data for" not in text, text
+        for code in codes_of(call):
+            assert any(code in value for value in fixture_params(call.endpoint)), code
+        for key in BATCH_CODE_PARAMS:
+            if key in call.params:
+                assert f" rows={len(call.params[key])}\n" in text, text
         for name in task.answer_fields:
-            assert name in text, name
+            assert any(column_of(text, name)), name
 
 
 # The discovery chain
 
 
+def catalog_names(text: str) -> set[str]:
+    """The endpoint names in the rows of an ``xq_endpoints`` search."""
+    return {
+        line.partition(",")[0] for line in text.splitlines() if line and not line.startswith("#")
+    }
+
+
 @pytest.mark.parametrize("task", TASKS, ids=task_id)
 def test_a_prompt_searches_and_the_catalog_describes_the_params_to_send(
-    task: Task, tmp_path: Path
+    task: Task, tmp_path: Path, baseline: dict[str, Any]
 ) -> None:
     async def run() -> tuple[tuple[str, bool], dict[str, tuple[str, bool]]]:
         async with open_toolbox(tmp_path, REPLAY) as box:
@@ -397,12 +494,33 @@ def test_a_prompt_searches_and_the_catalog_describes_the_params_to_send(
 
     assert not is_error, found
     assert len(found) <= MAX_CHARS
+    if baseline["ranks"].get(task.id) is not None:
+        assert catalog_names(found) & {task.target, *task.also_ok}, found
     for name, (text, failed) in described.items():
         assert not failed, text
         assert f"# endpoint {name}:" in text
     for call in task.expected:
         for key in call.params:
             assert f"param {key}:" in described[call.endpoint][0], key
+
+
+def test_the_holdout_prompts_reach_as_many_endpoints_as_the_baseline_says(
+    tmp_path: Path, baseline: dict[str, Any]
+) -> None:
+    """A count only: a failure here names no holdout task to tune for."""
+    scored = [task for task in HOLDOUT if task.target is not None]
+
+    async def run() -> list[str]:
+        async with open_toolbox(tmp_path, REPLAY) as box:
+            return [(await box.call("xq_endpoints", {"query": t.prompt}))[0] for t in scored]
+
+    reached = sum(
+        bool(catalog_names(found) & {task.target, *task.also_ok})
+        for task, found in zip(scored, asyncio.run(run()), strict=True)
+    )
+
+    holdout = baseline["metrics"]["holdout"]
+    assert reached == holdout["n"] - holdout["misses"]
 
 
 # Parameter mutations

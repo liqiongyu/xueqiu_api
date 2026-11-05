@@ -15,7 +15,7 @@ SYNONYMS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "前复权": ("qfq", "forward adjusted", "forward-adjusted"),
         "后复权": ("hfq", "backward adjusted", "backward-adjusted"),
         "实时行情": ("股价", "现价", "多少钱"),
-        "盘口": ("买一", "卖一", "level 2"),
+        "盘口": ("买一价", "卖一价", "买一卖一", "level 2"),
         "分时": ("timeline",),
         "K线": (
             "蜡烛图",
@@ -25,7 +25,6 @@ SYNONYMS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "今年以来",
             "年初至今",
             "candle",
-            "candles",
             "ohlc",
             "historical prices",
         ),

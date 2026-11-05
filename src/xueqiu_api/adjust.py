@@ -43,13 +43,15 @@ _EPSILON = 0.55e-4
 edges of an interval split factors in simulation."""
 _PRICES = ("open", "high", "low", "close")
 _DEPENDS_ON_ADJUSTMENT = ("chg", "percent")
-_RATIO_TOLERANCE = 0.005
-"""The largest gap for SH600000's 26 dividends was 1.7e-7 (measured 2026-11-05), so this is wide."""
+_RATIO_BAND_FLOOR = 1e-5
+"""Least gap the ratio check allows, for steps whose factors are known very closely. The largest gap
+on 52 real steps of SH600000, SH601166 and AAPL was 1.7e-7 (measured 2026-11-05)."""
 _SHARE_RATIO_TOLERANCE = 0.01
 _SHARE_CHANGE_SLACK = timedelta(days=31)
 """How far a share change may lie from its ex-date. Their relation has not been measured."""
 _BONUS_REASONS = ("送", "转增")
-"""Share change reasons that a bonus issue explains. 可转债转股 is not one: it has no step."""
+"""Share change reasons that a bonus issue explains. 可转债转股 is not one: it has no step. It is
+the only reason recorded (measured 2026-11-05), so a bonus row's wording has not been measured."""
 _QUOTE_CURRENCY: Mapping[Market, str] = MappingProxyType({"CN": "CNY", "HK": "HKD", "US": "USD"})
 
 _NUMBER = r"(\d+(?:\.\d+)?)"
@@ -290,8 +292,9 @@ def reconcile_factors(
     An action applies to the first bar on or after its ex-date, so an ex-date during a suspension
     falls on the bar that ends it, and all actions on one bar count as one. Cancelled actions are
     left out, and so are ones that apply to the first bar or after the last, because no step could
-    show them. A step without an action is a warning: SH600000's step of 1.3 on 2006-05-12 has no
-    dividend row, and neither has SH601166's rights issue of 2010-06-02 (measured 2026-11-05).
+    show them; those count as skipped rows of ``factor.action_has_step``, as do undated plans. A
+    step without an action is a warning: SH600000's step of 1.3 on 2006-05-12 has no dividend row,
+    and neither has SH601166's rights issue of 2010-06-02 (measured 2026-11-05).
 
     ``normal`` holds the bars the factors came from. ``before``, if given, is the upstream's
     forward-adjusted series as fetched with them: it ends on the same day and uses the same base.
@@ -389,7 +392,7 @@ def _ratio_matches_action(
             tally.skipped_rows += 1
             continue
         tally.checked += 1
-        if abs(step.ratio / expected - 1) > _RATIO_TOLERANCE:
+        if abs(step.ratio / expected - 1) > _ratio_band(factors, step.date):
             tally.found(
                 "warning",
                 step.date.isoformat(),
@@ -400,6 +403,14 @@ def _ratio_matches_action(
     return tally.result("no step has an action whose amounts are known")
 
 
+def _ratio_band(factors: AdjustFactors, day: date) -> float:
+    """How far a step on ``day`` may lie from its expected ratio: what the factors on both of its
+    sides leave open, since each is known only up to the upstream's rounding."""
+    index = bisect_left(factors.dates, day)
+    relative = sum(factors.errors[i] / factors.factors[i] for i in (index - 1, index))
+    return max(relative, _RATIO_BAND_FLOOR)
+
+
 def _action_has_step(
     factors: AdjustFactors,
     actions: Sequence[CorporateAction],
@@ -408,7 +419,8 @@ def _action_has_step(
     currency: str,
 ) -> CheckResult:
     tally = CheckTally("factor.action_has_step")
-    tally.skipped_rows = sum(action.ex_date is None and not action.cancelled for action in actions)
+    placed = sum(len(group) for group in applied.values())
+    tally.skipped_rows = sum(not action.cancelled for action in actions) - placed
     stepped = {step.date for step in factors.steps}
     closes = {stamp.date(): row[-1] for stamp, row in _price_rows(normal).items()}
     for day, group in applied.items():

@@ -31,6 +31,7 @@ from .test_universe import (
     LIST_PATH,
     RANK_PATH,
     STOCK,
+    check,
     cn_boards,
     cn_symbols,
     hk_symbols,
@@ -185,6 +186,31 @@ def test_an_error_on_a_page_comes_out_as_it_is_and_ends_the_walk(
 
     assert caught.value.endpoint == "screener_quote_list"
     assert [sent.params["page"] for sent in h.upstream.requests(STOCK)] == ["1", "2", "3"]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        error_reply("99999", "synthetic"),
+        text_reply("no", 418),
+        json_reply({"data": {"list": []}, "error_code": 0, "error_description": ""}),
+    ],
+    ids=["upstream-code", "blocked", "no-count"],
+)
+def test_a_failed_ranking_count_leaves_the_snapshot_without_it(h: Harness, failure: Reply) -> None:
+    h.upstream.route(STOCK, LIST_PATH, quote_lists({"CN": cn_boards()}))
+    h.upstream.route(STOCK, RANK_PATH, failure)
+
+    snapshot = h.run("security_snapshot", "CN")
+
+    assert snapshot.complete
+    assert snapshot.screen_total is None
+    assert len(snapshot.securities) == len(cn_symbols())
+    assert h.upstream.requests(STOCK, RANK_PATH)
+    total = check(check_snapshot(snapshot), "snapshot.total_matches_screen")
+    assert total.status == "skipped"
+    assert total.reason is not None
+    assert "can fail" in total.reason
 
 
 def test_a_page_served_again_or_a_capped_list_only_clears_complete(h: Harness) -> None:

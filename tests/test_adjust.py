@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple, cast
@@ -611,6 +611,13 @@ def test_a_dividend_keeps_its_dates_and_its_cancellation() -> None:
             4.0,
             id="hk_uses_the_effective_date",
         ),
+        pytest.param(
+            {"explain": "每2.0股拆为3.0股", "exright_date": on(date(2020, 8, 31), NEW_YORK)},
+            NEW_YORK,
+            date(2020, 8, 31),
+            0.5,
+            id="the_ratio_is_new_over_old",
+        ),
     ],
 )
 def test_a_split_reads_as_added_shares(
@@ -747,15 +754,65 @@ def test_a_ratio_too_far_from_the_action_is_a_warning(
 ) -> None:
     factors, normal, _ = stepped
 
-    near = reconcile_factors(factors, [action(cash=0.42 * 1.04)], normal=normal)
-    far = reconcile_factors(factors, [action(cash=0.42 * 1.2)], normal=normal)
+    near = reconcile_factors(factors, [action(cash=0.42 * (1 + 1e-6))], normal=normal)
+    far = reconcile_factors(factors, [action(cash=0.42 * 1.001)], normal=normal)
 
     assert result(near, "factor.ratio_matches_action").status == "pass"
     check = result(far, "factor.ratio_matches_action")
     assert check.status == "fail"
     assert check.findings[0].severity == "warning"
     assert check.findings[0].where == DAYS[3].isoformat()
-    assert check.findings[0].expected == pytest.approx(9.31 / (9.31 - 0.42 * 1.2))
+    assert check.findings[0].expected == pytest.approx(9.31 / (9.31 - 0.42 * 1.001))
+
+
+@pytest.mark.parametrize("cash", [0.0, 0.54, 1.35])
+def test_a_wrong_amount_of_a_small_dividend_is_a_warning(cash: float) -> None:
+    # AAPL paid 0.27 on a close of 313.33, a step of under 0.1% (measured 2026-11-05).
+    closes = (313.0, 313.2, 313.33, 313.06, 314.0, 315.0)
+    step = 313.33 / (313.33 - 0.27)
+    normal, after = pair(closes, (292.0, 292.0, 292.0, 292.0 * step, 292.0 * step, 292.0 * step))
+    factors = derive_factors(normal, after, fetched_at=FETCHED_AT)
+
+    right = reconcile_factors(factors, [action(cash=0.27)], normal=normal)
+    wrong = reconcile_factors(factors, [action(cash=cash)], normal=normal)
+
+    assert result(right, "factor.ratio_matches_action").status == "pass"
+    assert result(wrong, "factor.ratio_matches_action").status == "fail"
+
+
+@pytest.mark.parametrize(
+    ("seed", "shock_of", "options"),
+    [case for case in generated_cases() if case.id.startswith(("cash", "low_price"))],
+)
+def test_the_ratio_check_tells_the_right_cash_from_twice_as_much(
+    seed: int, shock_of: ShockOf, options: dict[str, Any]
+) -> None:
+    made = simulate(seed, shock_of, **options)
+    factors = derive_factors(made.normal, made.after, fetched_at=FETCHED_AT)
+
+    def ratio_check(scale: float) -> CheckResult:
+        rows = [
+            action(step.day, cash=scale * step.previous_close * (1 - 1 / step.ratio))
+            for step in made.steps
+        ]
+        report = reconcile_factors(factors, rows, normal=made.normal)
+        return result(report, "factor.ratio_matches_action")
+
+    right, doubled = ratio_check(1.0), ratio_check(2.0)
+
+    assert (right.status, right.checked, right.total_findings) == ("pass", len(made.steps), 0)
+    assert doubled.total_findings == len(made.steps)
+
+
+def test_an_action_on_the_second_bar_is_compared() -> None:
+    step = 9.2 / (9.2 - 0.42)
+    normal, after = pair(CLOSES, (1.0, step, step, step, step, step))
+    factors = derive_factors(normal, after, fetched_at=FETCHED_AT)
+
+    report = reconcile_factors(factors, [action(DAYS[1])], normal=normal)
+
+    assert result(report, "factor.ratio_matches_action").checked == 1
+    assert result(report, "factor.action_has_step").checked == 1
 
 
 def test_actions_on_one_bar_count_as_one(stepped: tuple[AdjustFactors, Kline, Kline]) -> None:
@@ -828,6 +885,17 @@ def test_an_action_without_a_step_is_a_warning() -> None:
     assert check.findings[0].expected == pytest.approx(9.31 / 8.89)
 
 
+def test_a_missing_step_is_expected_from_the_close_before() -> None:
+    rows = [[close, close + 1, close - 1, close] for close in CLOSES]
+    normal = series("SH600000", "normal", DAYS, rows)
+    after = series("SH600000", "after", DAYS, [[17.0 * price for price in row] for row in rows])
+    factors = derive_factors(normal, after, fetched_at=FETCHED_AT)
+
+    check = result(reconcile_factors(factors, [action()], normal=normal), "factor.action_has_step")
+
+    assert check.findings[0].expected == pytest.approx(9.31 / 8.89)
+
+
 def test_a_text_that_was_not_read_and_has_no_step_is_a_warning() -> None:
     normal, after = pair(CLOSES, (17.0,) * 6)
     factors = derive_factors(normal, after, fetched_at=FETCHED_AT)
@@ -854,6 +922,22 @@ def test_an_action_below_the_resolution_is_only_info() -> None:
     assert [finding.severity for finding in check.findings] == ["info"]
 
 
+@pytest.mark.parametrize(
+    ("cash", "severity"),
+    [(0.000002, "info"), (0.000008, "warning"), (0.001, "warning")],
+)
+def test_the_resolution_is_relative_to_the_factor(cash: float, severity: str) -> None:
+    # A factor of 17 at a price of 0.05 has an error of 1.1e-3, so a change above 1.3e-4 could show.
+    normal, after = pair((0.05,) * 6, (17.0,) * 6)
+    factors = derive_factors(normal, after, fetched_at=FETCHED_AT)
+
+    check = result(
+        reconcile_factors(factors, [action(cash=cash)], normal=normal), "factor.action_has_step"
+    )
+
+    assert [finding.severity for finding in check.findings] == [severity]
+
+
 def test_future_cancelled_and_undated_actions_are_left_out(
     stepped: tuple[AdjustFactors, Kline, Kline],
 ) -> None:
@@ -874,7 +958,7 @@ def test_future_cancelled_and_undated_actions_are_left_out(
     assert has_step.status == "pass"
     assert has_step.findings == ()
     assert has_step.checked == 1
-    assert has_step.skipped_rows == 1
+    assert has_step.skipped_rows == 4  # after, on and before the first bar, and without a date
     assert result(report, "factor.ratio_matches_action").checked == 1
 
 
@@ -921,7 +1005,7 @@ def test_a_before_series_off_the_local_prices_is_an_error(
     assert check.findings[0].expected == prices[1]
 
 
-@pytest.mark.parametrize(("gap", "status"), [(1e-4, "pass"), (2e-4, "fail")])
+@pytest.mark.parametrize(("gap", "status"), [(1e-4, "pass"), (1.4e-4, "fail"), (2e-4, "fail")])
 def test_a_before_series_may_differ_by_two_epsilon(
     gap: float, status: str, stepped: tuple[AdjustFactors, Kline, Kline]
 ) -> None:
@@ -1281,6 +1365,33 @@ def test_real_us_steps_include_splits_and_cash(real: RealSamples) -> None:
     assert ratios.findings == ()
     # The recorded rows are 3 splits and 2 past dividends; the third has a future ex-date.
     assert ratios.checked == 5
+    assert result(report, "factor.action_has_step").skipped_rows == 1
+
+
+@pytest.mark.parametrize("symbol", ["SH600000", "SH601166", "AAPL"])
+def test_a_wrong_amount_of_a_real_dividend_is_noticed(real: RealSamples, symbol: str) -> None:
+    factors = real.factors(symbol)
+    normal = real.bars[symbol, "normal"]
+    actions = real.actions(symbol)
+    steps = {step.date for step in factors.steps}
+    cash_only = [
+        row
+        for row in actions
+        if row.ex_date in steps and row.cash_per_share and not row.bonus_per_share
+    ]
+    assert cash_only
+
+    def findings(*changed: CorporateAction) -> int:
+        kept = [row for row in actions if row not in cash_only]
+        report = reconcile_factors(factors, [*kept, *changed], normal=normal)
+        return result(report, "factor.ratio_matches_action").total_findings
+
+    assert findings(*cash_only) == 0
+    for row in cash_only:
+        others = [item for item in cash_only if item is not row]
+        for scale in (0.0, 2.0):
+            wrong = replace(row, cash_per_share=cast(float, row.cash_per_share) * scale)
+            assert findings(wrong, *others) == 1, (row.ex_date, scale)
 
 
 def test_real_samples_run_every_check_that_has_rows(real: RealSamples) -> None:
@@ -1289,7 +1400,9 @@ def test_real_samples_run_every_check_that_has_rows(real: RealSamples) -> None:
         for item in real.report(symbol).results:
             checked[item.check] = checked.get(item.check, 0) + item.checked
 
-    # No recorded share change comes from a bonus issue, so that one check has nothing to read.
-    assert checked.pop("factor.shares_match_bonus") == 0
+    # The one exception to every check having rows: the only recorded share changes are 可转债转股
+    # (measured 2026-11-05), so this check has run on no real bonus issue, and it may read any
+    # number of them once one is recorded.
+    checked.pop("factor.shares_match_bonus")
     assert all(count > 0 for count in checked.values()), checked
     assert len(checked) == 5

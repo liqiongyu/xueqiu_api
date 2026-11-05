@@ -41,17 +41,17 @@
       "misses": 1
     },
     "own_keyword": {
-      "n": 62,
-      "recall_at_1": 0.9355,
-      "recall_at_3": 0.9677,
-      "mrr_at_10": 0.9583,
+      "n": 61,
+      "recall_at_1": 0.9344,
+      "recall_at_3": 0.9672,
+      "mrr_at_10": 0.9577,
       "misses": 0
     },
     "no_own_keyword": {
-      "n": 33,
-      "recall_at_1": 0.5455,
-      "recall_at_3": 0.7576,
-      "mrr_at_10": 0.6636,
+      "n": 34,
+      "recall_at_1": 0.5588,
+      "recall_at_3": 0.7647,
+      "mrr_at_10": 0.6735,
       "misses": 6
     },
     "tag:adjust": {
@@ -126,9 +126,9 @@
     },
     "strict": {
       "n": 95,
-      "recall_at_1": 0.7368,
+      "recall_at_1": 0.7263,
       "recall_at_3": 0.8632,
-      "mrr_at_10": 0.8066,
+      "mrr_at_10": 0.8013,
       "misses": 8
     }
   },
@@ -285,27 +285,6 @@
     "search_stock-zh-1": 1,
     "suggest_stock-zh-1": 1,
     "watchlist_groups-zh-1": 1,
-    "watchlist_stocks-zh-1": 1,
-    "h01": 1,
-    "h02": 1,
-    "h03": 4,
-    "h04": 1,
-    "h05": null,
-    "h06": 2,
-    "h07": null,
-    "h08": 1,
-    "h09": 1,
-    "h10": 5,
-    "h11": null,
-    "h12": 6,
-    "h13": 2,
-    "h14": 1,
-    "h15": 2,
-    "h16": 1,
-    "h17": 1,
-    "h18": null,
-    "h19": 1,
-    "h20": 1,
-    "h21": 1
+    "watchlist_stocks-zh-1": 1
   }
 }

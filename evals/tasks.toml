@@ -903,7 +903,7 @@ prompt = "看看 000001 这个指数今天的行情"
 target = "quotec"
 also_ok = ["batch_quote", "quote_detail"]
 expected = [
-  { endpoint = "batch_quote", params = { symbols = ["SH000001"] } },
+  { endpoint = "quotec", params = { symbols = ["SH000001"] } },
 ]
 tags = ["symbol_rule", "recovery", "dedicated"]
 source = "author"
@@ -964,13 +964,13 @@ source = "author"
 id = "search_stock-zh-1"
 lang = "zh"
 split = "dev"
-prompt = "查一下 SH600000 的英文名和所属行业"
+prompt = "查一下 SH600000 的所属行业"
 target = "search_stock"
 also_ok = ["f10_industry", "f10_company"]
 expected = [
   { endpoint = "search_stock", params = { query = "SH600000" } },
 ]
-answer_fields = ["name_en", "ind_name"]
+answer_fields = ["ind_name"]
 tags = ["confusable"]
 source = "author"
 

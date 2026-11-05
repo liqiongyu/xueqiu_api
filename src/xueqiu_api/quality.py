@@ -79,7 +79,8 @@ class CheckResult:
     checked: int
     """Rows or comparisons really checked."""
     skipped_rows: int
-    """Rows left out because a value they need is null."""
+    """Rows left out because a value they need is null or, for a corporate action, because its
+    ex-date lies outside the bars."""
     reason: str | None
     """Why the check was skipped."""
     findings: tuple[Finding, ...]

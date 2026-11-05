@@ -22,9 +22,12 @@ SECRET_VALUE = re.compile(r"[0-9a-f]{32,}|eyJ[\w-]+\.[\w-]+", re.IGNORECASE)
 """Long hex strings and JWTs, the shapes of tokens and request ids."""
 REPLAY_KEYS = {"params", "status", "body"}
 PERSON_KEY = re.compile(
-    r"^(personal_name|manage_name|manager_name|chairman|legal_representative|general_manager)$"
+    r"^(personal_name|manage_name|manager_name|chairman|legal_representative|general_manager"
+    r"|actual_controller|shhname_ogdis|reporter_name)$"
 )
 """Keys holding a natural person's name, whose values are placeholders starting with 示例."""
+ORGANIZATION = re.compile(r"公司|集团|基金|银行|信托|计划")
+"""A holder is a person or an organization; only a word like these shows it is not a person."""
 
 
 def walk(value: Any) -> Iterator[tuple[str | None, Any]]:
@@ -55,6 +58,8 @@ def check(name: str, text: str) -> None:
             assert not USER_KEY.search(key), key
             person = PERSON_KEY.match(key) or (key == "name" and "/fund_manager/" in name)
             assert not (person and value and not str(value).startswith("示例")), value
+            if key == "holder_name" and value:
+                assert str(value).startswith("示例") or ORGANIZATION.search(str(value)), value
         if isinstance(value, list):
             assert len(cast(list[Any], value)) <= 10, key
         if isinstance(value, str):
@@ -83,6 +88,10 @@ def test_fixture_is_small_and_sanitized(path: Path) -> None:
         ("replay/quotec/probe.json", '{"body": {"reply_screenName": "someone"}}'),
         ("replay/f10_executives/x.json", '{"body": {"personal_name": "张三"}}'),
         ("replay/fund_manager/x.json", '{"body": {"name": "张三"}}'),
+        ("replay/f10_top_holders/x.json", '{"body": {"holder_name": "张三"}}'),
+        ("replay/f10_company/x.json", '{"body": {"actual_controller": "张三"}}'),
+        ("replay/f10_holders/x.json", '{"body": {"shhname_ogdis": "张三"}}'),
+        ("replay/f10_holders/x.json", '{"body": {"reporter_name": "张三"}}'),
         ("replay/quotec/probe.json", '{"body": {"query_id": "' + "0123456789abcdef" * 2 + '"}}'),
         ("page.html", "Cookie: something"),
         ("page.html", "xq_r_token=fake"),
@@ -93,3 +102,8 @@ def test_fixture_is_small_and_sanitized(path: Path) -> None:
 def test_the_scan_rejects_headers_user_data_and_token_shapes(name: str, text: str) -> None:
     with pytest.raises(AssertionError):
         check(name, text)
+
+
+@pytest.mark.parametrize("holder", ["上海国际集团有限公司", "示例股东一", ""])
+def test_the_scan_keeps_organizations_and_placeholders_as_holders(holder: str) -> None:
+    check("replay/f10_top_holders/x.json", json.dumps({"body": {"holder_name": holder}}))

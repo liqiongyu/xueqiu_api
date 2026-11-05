@@ -9,7 +9,8 @@ A snapshot covers what is listed now. History built from snapshots lacks whateve
 before the first one, so it has survivorship bias.
 
 Nothing here sends: the clients loop over ``SnapshotWalk.next_request`` and ``SnapshotWalk.feed``,
-with one call per page. A failed call leaves no snapshot.
+with one call per page. A failed page leaves no snapshot; only the ranking's count after a walk of
+all of CN may fail, because no verdict on the rows depends on it.
 """
 
 from __future__ import annotations
@@ -96,16 +97,21 @@ class SegmentCoverage:
     between pages, and a listing moves the rows behind it, so a repeat usually hides another row."""
     capped: bool
     """The count reached the most rows the list serves, so the rest cannot be fetched."""
+    count_fell: bool = False
+    """The count fell between two pages. A row that left a page already walked moves a later row
+    onto that page, unseen, and the row that left still fills its place in ``fetched``."""
 
     @property
     def complete(self) -> bool:
-        """Unique rows equal a count above 0, with no repeat and no cap. A count of 0 proves
-        nothing: an unknown industry filter gets count 0 and no rows (measured 2026-11-05)."""
+        """Unique rows equal a count above 0, with no repeat, no fall of the count and no cap. A
+        count of 0 proves nothing: an unknown industry filter gets count 0 and no rows (measured
+        2026-11-05)."""
         return (
             bool(self.declared)
             and self.fetched == self.declared
             and not self.repeated
             and not self.capped
+            and not self.count_fell
         )
 
 
@@ -118,8 +124,8 @@ class SecuritySnapshot:
     ``check_snapshot`` to report."""
     coverage: tuple[SegmentCoverage, ...]
     screen_total: int | None
-    """The popularity ranking's count, from a walk of all of CN only. The two lists may differ on
-    a listing day, so this does not decide ``complete``."""
+    """The popularity ranking's count, from a walk of all of CN only, and None when that request
+    failed. The two lists may differ on a listing day, so this does not decide ``complete``."""
 
     @property
     def complete(self) -> bool:
@@ -133,6 +139,8 @@ class SnapshotRequest:
 
     endpoint: str
     params: Mapping[str, Any]
+    optional: bool = False
+    """The walk can do without it: when the call fails, ``SnapshotWalk.skip`` it."""
 
 
 class SnapshotWalk:
@@ -167,6 +175,8 @@ class SnapshotWalk:
         self._coverage: list[SegmentCoverage] = []
         self._seen: set[str] = set()
         self._repeated = 0
+        self._highest_count = 0
+        self._count_fell = False
         self._screen_total: int | None = None
         self._request: SnapshotRequest | None = self._first_page()
 
@@ -181,6 +191,9 @@ class SnapshotWalk:
             self._request = None
             return
         segment = self._waiting[0]
+        if page.total is not None:
+            self._count_fell = self._count_fell or page.total < self._highest_count
+            self._highest_count = max(self._highest_count, page.total)
         for row in page:
             if row.symbol in self._seen:
                 self._repeated += 1
@@ -191,17 +204,31 @@ class SnapshotWalk:
             self._request = SnapshotRequest(self._list_name, page.next_params)
             return
         self._coverage.append(
-            SegmentCoverage(segment, page.total, len(self._seen), self._repeated, page.capped)
+            SegmentCoverage(
+                segment,
+                page.total,
+                len(self._seen),
+                self._repeated,
+                page.capped,
+                self._count_fell,
+            )
         )
         self._seen, self._repeated = set(), 0
+        self._highest_count, self._count_fell = 0, False
         del self._waiting[0]
         if self._waiting:
             self._request = self._first_page()
         elif self._wants_total:
             params = {"market": self._market, "page": 1, "page_size": 1}
-            self._request = SnapshotRequest(POPULARITY_RANK.name, params)
+            self._request = SnapshotRequest(POPULARITY_RANK.name, params, optional=True)
         else:
             self._request = None
+
+    def skip(self) -> None:
+        """Do without the request ``next_request`` gave, which must be optional."""
+        if self._request is None or not self._request.optional:
+            raise ValueError("only an optional request can be skipped")
+        self._request = None
 
     def result(self) -> SecuritySnapshot:
         """The snapshot of a finished walk; ``ValueError`` before that, since a part of a walk
@@ -271,11 +298,12 @@ def _segment_complete(snapshot: SecuritySnapshot) -> CheckResult:
         tally.checked += 1
         if not coverage.complete:
             capped = " and reached the cap" if coverage.capped else ""
+            fell = ", and the count fell during the walk" if coverage.count_fell else ""
             tally.found(
                 "error",
                 coverage.segment,
                 f"the walk has {coverage.fetched} unique rows of the upstream's count, "
-                f"{coverage.repeated} repeated{capped}",
+                f"{coverage.repeated} repeated{capped}{fell}",
                 observed=coverage.fetched,
                 expected=coverage.declared,
             )
@@ -285,7 +313,7 @@ def _segment_complete(snapshot: SecuritySnapshot) -> CheckResult:
 def _total_matches_screen(snapshot: SecuritySnapshot) -> CheckResult:
     tally = CheckTally("snapshot.total_matches_screen")
     if snapshot.screen_total is None:
-        return tally.result("no ranking count: only a walk of all of CN has one")
+        return tally.result("no ranking count: only a walk of all of CN asks, and it can fail")
     tally.checked += 1
     total = sum(coverage.fetched for coverage in snapshot.coverage)
     if total != snapshot.screen_total:

@@ -2,13 +2,16 @@
 
 ``uv run python -m evals.retrieval`` prints an ablation over three search configurations, the
 groups of the configured search and the dev tasks that miss the first rank. Holdout tasks show in
-aggregate only. With ``XUEQIU_UPDATE_SNAPSHOTS=1`` it also rewrites ``evals/baseline.json``.
+aggregate only, here and in the baseline. With ``XUEQIU_UPDATE_SNAPSHOTS=1`` it also rewrites
+``evals/baseline.json``. Below the floor of that baseline it exits 1 and rewrites nothing: to accept
+such a drop, delete the file first, and the review sees all of it change.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 import tomllib
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -17,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from xueqiu_api import REGISTRY
-from xueqiu_api._search import RESULT_CAP, EndpointIndex
+from xueqiu_api._search import RESULT_CAP, EndpointIndex, word_pattern
 from xueqiu_api._synonyms import SYNONYMS
 from xueqiu_api.registry import Endpoint
 
@@ -169,13 +172,15 @@ def substring_search(specs: Iterable[Endpoint[Any, Any]]) -> Search:
 
 
 def has_own_keyword(task: Task) -> bool:
-    """Whether the prompt holds a keyword or title of the task's target word for word."""
+    """Whether the prompt holds a keyword or title of the task's target word for word: ZH is no
+    word of ZH2567925."""
     if task.target is None:
         return False
     agent = REGISTRY[task.target].agent
     prompt = task.prompt.casefold()
     return any(
-        word.casefold() in prompt for word in (agent.title_zh, agent.title_en, *agent.keywords)
+        word_pattern(word.casefold()).search(prompt)
+        for word in (agent.title_zh, agent.title_en, *agent.keywords)
     )
 
 
@@ -189,7 +194,7 @@ def own_keywords_in_top_3(search: Search) -> tuple[int, int]:
     return sum(found), len(found)
 
 
-def _rounded(values: Metrics) -> dict[str, float | int]:
+def rounded(values: Metrics) -> dict[str, float | int]:
     return {
         key: round(value, DIGITS) if isinstance(value, float) else value
         for key, value in asdict(values).items()
@@ -216,7 +221,8 @@ def _groups(tasks: Sequence[Task], ranks: Mapping[str, int | None]) -> dict[str,
 
 
 def build_report(tasks: Sequence[Task]) -> dict[str, Any]:
-    """Everything ``evals/baseline.json`` holds, from a real run over the registry."""
+    """Everything ``evals/baseline.json`` holds, from a real run over the registry. Ranks are of
+    dev tasks only, so a rewrite's diff names no holdout task to tune for."""
     specs = list(REGISTRY.values())
     configured = bm25_search(specs)
     searches = {
@@ -226,6 +232,7 @@ def build_report(tasks: Sequence[Task]) -> dict[str, Any]:
     }
     splits = {"all": tasks, **{s: [t for t in tasks if t.split == s] for s in ("dev", "holdout")}}
     ranks = evaluate(configured, tasks)
+    dev = {task.id for task in splits["dev"]}
     outside = [task for task in tasks if task.target is None]
     return {
         "date": date.today().isoformat(),
@@ -234,12 +241,12 @@ def build_report(tasks: Sequence[Task]) -> dict[str, Any]:
         "scored": len(ranks),
         "pending": len(pending(tasks)),
         "metrics": {
-            **{key: _rounded(value) for key, value in _groups(tasks, ranks).items()},
-            "strict": _rounded(metrics(list(evaluate(configured, tasks, strict=True).values()))),
+            **{key: rounded(value) for key, value in _groups(tasks, ranks).items()},
+            "strict": rounded(metrics(list(evaluate(configured, tasks, strict=True).values()))),
         },
         "ablation": {
             config: {
-                split: _rounded(metrics(list(evaluate(search, chosen).values())))
+                split: rounded(metrics(list(evaluate(search, chosen).values())))
                 for split, chosen in splits.items()
             }
             for config, search in searches.items()
@@ -249,15 +256,16 @@ def build_report(tasks: Sequence[Task]) -> dict[str, Any]:
             "zero_rows": sum(not configured(task.prompt) for task in outside),
         },
         "own_keyword_top3": list(own_keywords_in_top_3(configured)),
-        "ranks": ranks,
+        "ranks": {key: rank for key, rank in ranks.items() if key in dev},
     }
 
 
 def below_floor(
     current: Mapping[str, float], baseline: Mapping[str, float], scored: int
 ) -> list[str]:
-    """The gated metrics that fell by more than one task of ``scored``."""
-    tolerance = 1 / scored
+    """The gated metrics that fell by more than one task of ``scored``. The values are rounded to
+    ``DIGITS``, so each side may be off by half a unit of that."""
+    tolerance = 1 / scored + 10**-DIGITS
     return [
         f"{key} {current[key]} is under {baseline[key]} minus 1/{scored}"
         for key in GATED_METRICS
@@ -308,18 +316,22 @@ def render(report: Mapping[str, Any], tasks: Sequence[Task]) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
+def main() -> int:
     tasks = load_tasks()
     report = build_report(tasks)
     print(render(report, tasks))
     if BASELINE.is_file():
         old = json.loads(BASELINE.read_text(encoding="utf-8"))
-        for problem in below_floor(report["metrics"]["all"], old["metrics"]["all"], old["scored"]):
+        problems = below_floor(report["metrics"]["all"], old["metrics"]["all"], old["scored"])
+        for problem in problems:
             print(f"below the floor of the baseline: {problem}")
+        if problems:
+            return 1
     if os.environ.get(UPDATE_ENV) == "1":
         text = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         BASELINE.write_text(text, encoding="utf-8", newline="\n")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

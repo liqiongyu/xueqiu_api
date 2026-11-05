@@ -116,6 +116,7 @@ def test_one_changed_cell_fails_its_check(
     ("check", "shift"),
     [
         ("kline.timestamps_increasing", timedelta(days=5)),
+        ("kline.timestamps_increasing", timedelta(days=1)),
         ("kline.no_duplicate_day", timedelta(days=1, hours=1)),
         ("kline.daily_at_midnight", timedelta(hours=1)),
     ],
@@ -155,6 +156,55 @@ def test_price_positive_is_only_an_error_on_unadjusted_prices(
 
     assert checked.status == "fail"
     assert checked.findings[0].severity == severity
+
+
+def test_a_price_under_one_is_still_positive(stock: Kline) -> None:
+    checked = result(check_kline(with_cell(stock, "low", 0, 0.5)), "kline.price_positive")
+
+    assert checked.status == "pass"
+
+
+@pytest.mark.parametrize("column", ["volume", "amount"])
+def test_a_volume_or_amount_of_zero_is_not_negative(stock: Kline, column: str) -> None:
+    checked = result(check_kline(with_cell(stock, column, 0, 0)), "kline.volume_nonneg")
+
+    assert checked.status == "pass"
+
+
+@pytest.mark.parametrize(("share", "status"), [(1.009, "pass"), (1.011, "fail")])
+def test_vwap_may_lie_a_percent_outside_the_range(stock: Kline, share: float, status: str) -> None:
+    high = stock.columns["high"][0]
+    volume = stock.columns["volume"][0]
+    assert high is not None
+    assert volume is not None
+    amount = with_cell(stock, "amount", 0, high * share * volume)
+
+    assert result(check_kline(amount), "kline.vwap_in_range").status == status
+
+
+@pytest.mark.parametrize(("gap", "status"), [(0.005, "pass"), (0.006, "fail")])
+def test_chg_may_differ_from_the_closes_by_half_a_cent(
+    stock: Kline, gap: float, status: str
+) -> None:
+    # 10.09 - 10.06 is 0.03.
+    checked = result(check_kline(with_cell(stock, "chg", 1, 0.03 + gap)), "kline.chg_matches_close")
+
+    assert checked.status == status
+
+
+@pytest.mark.parametrize(("gap", "status"), [(0.01, "pass"), (0.011, "fail")])
+def test_percent_may_differ_from_the_closes_by_a_hundredth(
+    stock: Kline, gap: float, status: str
+) -> None:
+    close, previous = stock.columns["close"][1], stock.columns["close"][0]
+    assert close is not None
+    assert previous is not None
+    percent = 100 * (close - previous) / previous + gap
+    checked = result(
+        check_kline(with_cell(stock, "percent", 1, percent)), "kline.chg_matches_close"
+    )
+
+    assert checked.status == status
 
 
 def test_vwap_stays_a_warning_and_skips_what_it_cannot_read(stock: Kline) -> None:
@@ -724,6 +774,24 @@ def test_identities_allow_a_small_relative_difference() -> None:
         result(check_financials(financials("AAPL", off), "income"), "fin.income_identity").status
         == "fail"
     )
+
+
+@pytest.mark.parametrize(("share", "status"), [(0.9e-4, "pass"), (1.1e-4, "fail")])
+def test_identities_allow_a_relative_difference_of_one_in_ten_thousand(
+    share: float, status: str
+) -> None:
+    items = {**INCOME_US, "revenue": 100.0, "sales_cost": 0.0, "gross_profit": 100.0 / (1 - share)}
+    report = check_financials(financials("AAPL", items), "income")
+
+    assert result(report, "fin.income_identity").status == status
+
+
+@pytest.mark.parametrize(("gap", "status"), [(0.009, "pass"), (0.011, "fail")])
+def test_the_debt_ratio_may_differ_by_a_hundredth_of_a_point(gap: float, status: str) -> None:
+    items = {**TOTALS_CN, "asset_liab_ratio": 60.0 + gap}
+    report = check_financials(financials("SH600000", items), "balance")
+
+    assert result(report, "fin.ratio_units").status == status
 
 
 def test_a_ratio_read_as_a_fraction_fails() -> None:

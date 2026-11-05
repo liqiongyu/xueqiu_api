@@ -180,6 +180,24 @@ def test_scores_under_a_fifth_of_the_best_are_dropped() -> None:
     assert [hit.name for hit in index.search("rare common", only=others)] == others
 
 
+@pytest.mark.parametrize(("size", "holders", "kept"), [(12, 7, True), (16, 9, False)])
+def test_the_floor_is_a_fifth_of_the_best_score(size: int, holders: int, kept: bool) -> None:
+    index = EndpointIndex(
+        [
+            document("best", "rare", "common"),
+            *(document(f"holder{i}", "common") for i in range(holders - 1)),
+            *(document(f"filler{i}", "other") for i in range(size - holders)),
+        ],
+        synonyms={},
+    )
+    best = index.search("rare common")[0].score
+    share = index.search("rare common", only=("holder0",))[0].score / best
+
+    assert 0.19 < share < 0.21
+    assert (share >= 0.2) is kept
+    assert ("holder0" in names("rare common", index)) is kept
+
+
 def test_a_search_returns_at_most_the_cap_with_ties_ordered_by_name() -> None:
     specs = [document(f"same{i:02d}", "widget") for i in reversed(range(13))]
 
@@ -213,10 +231,40 @@ def test_an_ascii_alias_needs_word_boundaries_and_a_cjk_one_does_not() -> None:
     assert set(names("这个股票多少钱了")) >= {"batch_quote", "quotec"}
 
 
+@pytest.mark.parametrize(
+    ("plural", "singular"),
+    [
+        ("rebalances", "rebalance"),
+        ("institutions", "institution"),
+        ("percentiles", "percentile"),
+        ("leaderboards", "leaderboard"),
+        ("timelines", "timeline"),
+        ("candles", "candle"),
+        ("historical price", "historical prices"),
+    ],
+)
+def test_an_ascii_alias_fires_on_either_form_of_its_words(plural: str, singular: str) -> None:
+    assert names(plural) == names(singular) != []
+
+
+@pytest.mark.parametrize("query", ["我想买一只消费基金", "买一点茅台", "卖一半茅台"])
+def test_buying_one_of_something_does_not_mean_the_order_book(query: str) -> None:
+    assert "quote_order_book" not in names(query)
+
+
+@pytest.mark.parametrize("query", ["茅台买一价", "茅台卖一价", "茅台的买一卖一"])
+def test_the_best_bid_and_ask_still_mean_the_order_book(query: str) -> None:
+    assert names(query)[0] == "quote_order_book"
+
+
 def test_a_category_filter_applies_before_the_floor_and_the_cap() -> None:
     assert "f10_executive_trades" not in names("block trade")
     found = INDEX.search("block trade", only=("f10_executive_trades", "kline"))
     assert [hit.name for hit in found] == ["f10_executive_trades"]
+
+
+def test_an_exact_name_outside_the_filter_is_not_found() -> None:
+    assert INDEX.search("kline", only=("fund_info",)) == []
 
 
 def test_ranks_do_not_depend_on_the_hash_seed() -> None:

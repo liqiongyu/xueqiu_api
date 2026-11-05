@@ -45,6 +45,11 @@ def _stem(word: str) -> str:
     return word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
 
 
+def _stem_words(text: str) -> str:
+    """Normalized ``text`` with its ASCII words stemmed, keeping everything between them."""
+    return re.sub(r"[a-z0-9]+", lambda word: _stem(word[0]), text)
+
+
 _STOP_WORDS = (
     "a an the of for to in on at by is are was were be do does did what which who whom when how "
     "much many me my i you it its this that and or with from get show list please can give about "
@@ -76,11 +81,11 @@ def terms(text: str, *, query: bool = False) -> list[str]:
     return [term for term in found if not (query and term in _QUERY_STOP)]
 
 
-def _alias_pattern(alias: str) -> re.Pattern[str]:
-    """A CJK alias matches anywhere in a query, an ASCII one only as whole words."""
-    if alias.isascii():
-        return re.compile(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])")
-    return re.compile(re.escape(alias))
+def word_pattern(word: str) -> re.Pattern[str]:
+    """A CJK word matches anywhere in a text, an ASCII one only as whole words."""
+    if word.isascii():
+        return re.compile(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])")
+    return re.compile(re.escape(word))
 
 
 def _weighted_fields(spec: Endpoint[Any, Any]) -> Iterable[tuple[float, str]]:
@@ -131,7 +136,7 @@ class EndpointIndex:
         }
         self._average_length = sum(self._lengths.values()) / max(count, 1)
         self._aliases = [
-            (_alias_pattern(alias), terms(canonical))
+            (word_pattern(_stem_words(alias)), terms(canonical))
             for canonical, aliases in synonyms.items()
             for alias in aliases
         ]
@@ -157,7 +162,7 @@ class EndpointIndex:
 
     def _weights(self, query: str) -> dict[str, float]:
         weights = dict.fromkeys(terms(query, query=True), 1.0)
-        text = _normal(query)
+        text = _stem_words(_normal(query))
         for pattern, canonical in self._aliases:
             if pattern.search(text):
                 for term in canonical:

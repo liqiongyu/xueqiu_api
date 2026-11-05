@@ -134,12 +134,19 @@ class Client(ClientBase, SyncEndpoints):
 
         One request per page at the host's minimum interval, so a walk takes minutes: 61 requests
         for CN, 29 for HK and 92 for US at the sizes measured on 2026-11-04 and 2026-11-05. An
-        error on any page raises and leaves no snapshot. ``SecuritySnapshot.complete`` says whether
-        all rows came; ``xueqiu_api.universe.check_snapshot`` checks the rest.
+        error on any page of a list raises and leaves no snapshot; an error on the last request of
+        a CN walk, for the ranking's count, only leaves ``screen_total`` None.
+        ``SecuritySnapshot.complete`` says whether all rows came;
+        ``xueqiu_api.universe.check_snapshot`` checks the rest.
         """
         walk = SnapshotWalk(market, segments=segments, fetched_at=datetime.now(UTC))
         while (request := walk.next_request()) is not None:
-            walk.feed(self.call(request.endpoint, **request.params))
+            try:
+                walk.feed(self.call(request.endpoint, **request.params))
+            except XueqiuError:
+                if not request.optional:
+                    raise
+                walk.skip()
         return walk.result()
 
     def trading_calendar(self, market: Market) -> TradingCalendar:

@@ -280,6 +280,71 @@ def test_a_list_ending_well_before_its_count_fails_the_page_call(
         walk(h, "US")
 
 
+def test_a_row_leaving_a_walked_page_clears_complete_though_the_rows_equal_the_count(
+    h: Harness, upstream: FakeUpstream
+) -> None:
+    symbols = us_symbols(250)
+    gone, hidden = symbols[10], symbols[100]
+
+    def leave() -> None:
+        symbols.remove(gone)
+
+    upstream.route(STOCK, RANK_PATH, after_page(1, ranking({"US": symbols}), leave))
+
+    snapshot = walk(h, "US")
+
+    assert snapshot.coverage == (SegmentCoverage("us", 249, 249, 0, False, True),)
+    assert not snapshot.complete
+    found = [item.symbol for item in snapshot.securities]
+    assert gone in found
+    assert hidden not in found
+    failed = check(check_snapshot(snapshot), "snapshot.segment_complete")
+    assert "the count fell" in failed.findings[0].message
+
+
+def test_a_row_leaving_a_walked_page_of_a_list_by_symbol_clears_complete(
+    h: Harness, upstream: FakeUpstream
+) -> None:
+    symbols = hk_symbols(250)
+
+    def leave() -> None:
+        del symbols[10]
+
+    upstream.route(STOCK, LIST_PATH, after_page(1, quote_lists({"HK": {"hk": symbols}}), leave))
+
+    snapshot = walk(h, "HK")
+
+    assert snapshot.coverage == (SegmentCoverage("hk", 249, 249, 0, False, True),)
+    assert not snapshot.complete
+
+
+def test_a_row_joining_behind_the_walk_keeps_it_complete(
+    h: Harness, upstream: FakeUpstream
+) -> None:
+    symbols = us_symbols(250)
+
+    def join() -> None:
+        symbols.append("ZZZZ")
+
+    upstream.route(STOCK, RANK_PATH, after_page(1, ranking({"US": symbols}), join))
+
+    snapshot = walk(h, "US")
+
+    assert snapshot.complete
+    assert snapshot.coverage == (SegmentCoverage("us", 251, 251, 0, False),)
+
+
+def test_each_segment_watches_its_own_count() -> None:
+    first, second = (ScreenerQuote.model_validate(quote_row(s)) for s in ("SH600000", "SH688001"))
+    state = SnapshotWalk("CN", segments=("sha", "kcb"), fetched_at=FETCHED_AT)
+
+    state.feed(Page((first,), page=1, page_size=100, total=5, next_params={"page": 2}))
+    state.feed(Page((first,), page=2, page_size=100, total=4))
+    state.feed(Page((second,), page=1, page_size=100, total=1))
+
+    assert [item.count_fell for item in state.result().coverage] == [True, False]
+
+
 def test_tied_rows_moving_between_pages_make_a_walk_incomplete_without_raising(
     h: Harness, upstream: FakeUpstream
 ) -> None:
@@ -416,6 +481,25 @@ def test_a_ranking_without_a_count_fails_the_page_call(h: Harness, upstream: Fak
 
     with pytest.raises(UpstreamChanged, match="screener_popularity_rank"):
         walk(h, "US")
+
+
+def test_only_an_optional_request_can_be_skipped() -> None:
+    state = SnapshotWalk("CN", segments=("sha",), fetched_at=FETCHED_AT)
+    with pytest.raises(ValueError, match="optional"):
+        state.skip()
+
+    whole = SnapshotWalk("CN", fetched_at=FETCHED_AT)
+    for _ in SEGMENTS["CN"]:
+        whole.feed(Page((), page=1, page_size=100, total=0))
+    request = whole.next_request()
+    assert request is not None
+    assert request.endpoint == POPULARITY_RANK.name
+    assert request.optional
+
+    whole.skip()
+
+    assert whole.next_request() is None
+    assert whole.result().screen_total is None
 
 
 def test_a_page_without_a_count_ends_the_segment_incomplete() -> None:
@@ -571,6 +655,7 @@ def test_the_request_stays_until_fed_and_the_result_waits_for_the_end() -> None:
         (SegmentCoverage("hk", 5000, 5000, 0, True), False),
         (SegmentCoverage("hk", None, 3, 0, False), False),
         (SegmentCoverage("hk", 0, 0, 0, False), False),
+        (SegmentCoverage("hk", 3, 3, 0, False, True), False),
     ],
 )
 def test_the_segment_check_agrees_with_complete(coverage: SegmentCoverage, complete: bool) -> None:
