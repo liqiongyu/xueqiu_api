@@ -1,0 +1,24 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "sell_large": 56353711.0,
+      "sell_medium": 209906514.0,
+      "sell_small": 78218567.0,
+      "sell_total": 344478792.0,
+      "buy_large": 60527756.0,
+      "buy_medium": 285413119.0,
+      "buy_small": 132930193.0,
+      "buy_total": 478871068.0,
+      "timestamp": 1793721600000,
+      "created_at": null,
+      "updated_at": null,
+      "sell_xlarge": null,
+      "buy_xlarge": null
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

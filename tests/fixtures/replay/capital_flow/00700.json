@@ -1,0 +1,44 @@
+{
+  "params": {
+    "symbol": "00700"
+  },
+  "body": {
+    "data": {
+      "symbol": "00700",
+      "items": [
+        {
+          "timestamp": 1793755800000,
+          "amount": -16683145.52000001,
+          "type": null
+        },
+        {
+          "timestamp": 1793755860000,
+          "amount": -28823036.52000001,
+          "type": null
+        },
+        {
+          "timestamp": 1793755920000,
+          "amount": -28995860.119999975,
+          "type": null
+        },
+        {
+          "timestamp": 1793764800000,
+          "amount": -41200000.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793768400000,
+          "amount": -40800000.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793779200000,
+          "amount": -95600000.0,
+          "type": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "margin_trading_amt_balance": 3115099316.0,
+          "short_selling_amt_balance": 27549736.0,
+          "margin_trading_net_buy_amt": -25272130.0,
+          "margin_trading_balance": 3087549580.0,
+          "margin_trading_buy_amt": 46801189.0,
+          "td_date": 1793721600000
+        },
+        {
+          "margin_trading_amt_balance": 3140383554.0,
+          "short_selling_amt_balance": 27561844.0,
+          "margin_trading_net_buy_amt": -71427171.0,
+          "margin_trading_balance": 3112821710.0,
+          "margin_trading_buy_amt": 44590373.0,
+          "td_date": 1793635200000
+        },
+        {
+          "margin_trading_amt_balance": 3212212661.0,
+          "short_selling_amt_balance": 27963782.0,
+          "margin_trading_net_buy_amt": -1665017.0,
+          "margin_trading_balance": 3184248879.0,
+          "margin_trading_buy_amt": 79758828.0,
+          "td_date": 1793548800000
+        },
+        {
+          "margin_trading_amt_balance": 3213592142.0,
+          "short_selling_amt_balance": 27678246.0,
+          "margin_trading_net_buy_amt": -29394829.0,
+          "margin_trading_balance": 3185913896.0,
+          "margin_trading_buy_amt": 23017561.0,
+          "td_date": 1793289600000
+        },
+        {
+          "margin_trading_amt_balance": 3242106899.0,
+          "short_selling_amt_balance": 26798175.0,
+          "margin_trading_net_buy_amt": 3270181.0,
+          "margin_trading_balance": 3215308724.0,
+          "margin_trading_buy_amt": 40539280.0,
+          "td_date": 1793203200000
+        }
+      ],
+      "inclusion_date": 1269964800000
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
