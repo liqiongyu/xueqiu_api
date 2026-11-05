@@ -73,7 +73,9 @@ def _flatten(point: Mapping[str, Any]) -> dict[str, Any]:
     for key, value in point.items():
         if isinstance(value, dict):
             nested = cast(dict[str, Any], value)
-            cells.update({f"{key}.{name}": cell for name, cell in nested.items()})
+            cells.update(
+                {f"{key}.{name}": cell for name, cell in nested.items() if cell is not None}
+            )
         elif value is not None:
             cells[key] = value
     return cells

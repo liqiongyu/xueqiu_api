@@ -298,7 +298,12 @@ def test_quote_minute_average_is_the_upstream_own_outside_a_shares(h: Harness) -
 def test_quote_minute_fills_a_nested_value_that_only_some_points_have(h: Harness) -> None:
     points = [
         {"timestamp": 1793755800000, "current": 1, "capital": None},
-        {"timestamp": 1793755860000, "current": "2.5", "capital": {"small": 1.5}, "macd": None},
+        {
+            "timestamp": 1793755860000,
+            "current": "2.5",
+            "capital": {"small": 1.5, "large": None},
+            "macd": None,
+        },
     ]
     answer(h.upstream, "quote_minute", xueqiu({"last_close": 1, "after": [1], "items": points}))
 
