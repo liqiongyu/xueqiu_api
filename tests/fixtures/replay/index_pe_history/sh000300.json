@@ -1,0 +1,57 @@
+{
+  "params": {
+    "index_code": "SH000300",
+    "day": "all"
+  },
+  "body": {
+    "data": {
+      "index_eva_pe_growths": [
+        {
+          "pe": 13.1303,
+          "ts": 1478188800000
+        },
+        {
+          "pe": 12.9404,
+          "ts": 1478620800000
+        },
+        {
+          "pe": 13.2521,
+          "ts": 1479052800000
+        },
+        {
+          "pe": 13.5171,
+          "ts": 1792512000000
+        },
+        {
+          "pe": 0,
+          "ts": 1793116800000
+        },
+        {
+          "pe": 13.6497,
+          "ts": 1793721600000
+        }
+      ],
+      "horizontal_lines": [
+        {
+          "line_name": "30分位值",
+          "line_value": 11.9876,
+          "line_color": "#07AA31",
+          "line_type": 1
+        },
+        {
+          "line_name": "中位值",
+          "line_value": 12.7218,
+          "line_color": "#666666",
+          "line_type": 2
+        },
+        {
+          "line_name": "70分位值",
+          "line_value": 13.7152,
+          "line_color": "#F0191D",
+          "line_type": 3
+        }
+      ]
+    },
+    "result_code": 0
+  }
+}

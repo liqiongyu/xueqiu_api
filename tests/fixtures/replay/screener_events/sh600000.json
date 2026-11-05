@@ -1,0 +1,49 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "count": 467,
+      "items": [
+        {
+          "ext": null,
+          "symbol": "SH600000",
+          "subtype": 36,
+          "title": "除权除息",
+          "message": "示例除权除息",
+          "priority": 25,
+          "timestamp": 1793808000000,
+          "tags": [
+            {
+              "description": "利好",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "ext": null,
+          "symbol": "SH600000",
+          "subtype": 16,
+          "title": "大宗交易",
+          "message": "大宗交易成交均价10.09元，成交金额4492.98万元",
+          "priority": 17,
+          "timestamp": 1793721600000,
+          "tags": null
+        },
+        {
+          "ext": null,
+          "symbol": "SH600000",
+          "subtype": 30,
+          "title": "财报发布",
+          "message": "2026年三季报营收同比增长4.42%",
+          "priority": 13,
+          "timestamp": 1793376000000,
+          "tags": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
