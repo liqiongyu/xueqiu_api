@@ -1,0 +1,126 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "quote_name": "苹果",
+      "product_type": null,
+      "main_operation_business": "合成主营业务",
+      "currency": "USD",
+      "industry": {
+        "ind_name": "可选消费",
+        "ind_code": "BK1073"
+      },
+      "list": [
+        {
+          "class_list": [
+            {
+              "class_standard": 2,
+              "business_list": [
+                {
+                  "project_announced_name": "美洲",
+                  "prime_operating_income": 198083000000.0,
+                  "income_ratio": 0.4137
+                },
+                {
+                  "project_announced_name": "欧洲",
+                  "prime_operating_income": 127604000000.0,
+                  "income_ratio": 0.2665
+                },
+                {
+                  "project_announced_name": "大中华区",
+                  "prime_operating_income": 82378000000.0,
+                  "income_ratio": 0.172
+                }
+              ]
+            },
+            {
+              "class_standard": 1,
+              "business_list": [
+                {
+                  "project_announced_name": "iPhone产品",
+                  "prime_operating_income": 254098000000.0,
+                  "income_ratio": 0.5307
+                },
+                {
+                  "project_announced_name": "服务",
+                  "prime_operating_income": 123301000000.0,
+                  "income_ratio": 0.2575
+                },
+                {
+                  "project_announced_name": "Mac产品",
+                  "prime_operating_income": 37929000000.0,
+                  "income_ratio": 0.0792
+                }
+              ]
+            }
+          ],
+          "ctime": null,
+          "ed": "1790352000006",
+          "report_annual": 2026,
+          "report_date": 1790352000006,
+          "report_name": "2026年FY",
+          "report_type_code": 596001,
+          "sd": null
+        },
+        {
+          "class_list": [
+            {
+              "class_standard": 2,
+              "business_list": [
+                {
+                  "project_announced_name": "美洲",
+                  "prime_operating_income": 48680000000.0,
+                  "income_ratio": 0.4252
+                },
+                {
+                  "project_announced_name": "欧洲",
+                  "prime_operating_income": 32008000000.0,
+                  "income_ratio": 0.2796
+                },
+                {
+                  "project_announced_name": "大中华区",
+                  "prime_operating_income": 17539000000.0,
+                  "income_ratio": 0.1532
+                }
+              ]
+            },
+            {
+              "class_standard": 1,
+              "business_list": [
+                {
+                  "project_announced_name": "iPhone产品",
+                  "prime_operating_income": 57583000000.0,
+                  "income_ratio": 0.503
+                },
+                {
+                  "project_announced_name": "服务",
+                  "prime_operating_income": 31573000000.0,
+                  "income_ratio": 0.2758
+                },
+                {
+                  "project_announced_name": "Mac产品",
+                  "prime_operating_income": 10792000000.0,
+                  "income_ratio": 0.0943
+                }
+              ]
+            }
+          ],
+          "ctime": null,
+          "ed": "1790352000000",
+          "report_annual": 2026,
+          "report_date": 1790352000000,
+          "report_name": "2026年Q4",
+          "report_type_code": 596006,
+          "sd": null
+        }
+      ],
+      "operation_range": "合成经营范围",
+      "product_name": null,
+      "currency_code": "美元"
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "quote_name": "浦发银行",
+      "product_type": "相关金融服务",
+      "main_operation_business": "合成主营业务",
+      "currency": "CNY",
+      "industry": {
+        "ind_name": "银行",
+        "ind_code": "BK0055"
+      },
+      "list": [
+        {
+          "class_list": [
+            {
+              "class_standard": 1,
+              "business_list": [
+                {
+                  "project_announced_name": "贷款利息收入",
+                  "prime_operating_income": 90819000000.0,
+                  "income_ratio": 0.5575,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "投资利息收入",
+                  "prime_operating_income": 28589000000.0,
+                  "income_ratio": 0.1755,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "其他收入",
+                  "prime_operating_income": 17222000000.0,
+                  "income_ratio": 0.1056,
+                  "gross_profit_rate": null
+                }
+              ]
+            },
+            {
+              "class_standard": 2,
+              "business_list": [
+                {
+                  "project_announced_name": "利息收入",
+                  "prime_operating_income": 130420000000.0,
+                  "income_ratio": 0.8005,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "投资损益",
+                  "prime_operating_income": 20144000000.0,
+                  "income_ratio": 0.1236,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "手续费及佣金收入",
+                  "prime_operating_income": 15274000000.0,
+                  "income_ratio": 0.0939,
+                  "gross_profit_rate": null
+                }
+              ]
+            },
+            {
+              "class_standard": 3,
+              "business_list": [
+                {
+                  "project_announced_name": "总行",
+                  "prime_operating_income": 29190000000.0,
+                  "income_ratio": 0.3113,
+                  "gross_profit_rate": 0.5884206920178143
+                },
+                {
+                  "project_announced_name": "长三角地区",
+                  "prime_operating_income": 23730000000.0,
+                  "income_ratio": 0.253,
+                  "gross_profit_rate": 0.3846186262115466
+                },
+                {
+                  "project_announced_name": "境外及附属机构",
+                  "prime_operating_income": 9259000000.0,
+                  "income_ratio": 0.0987,
+                  "gross_profit_rate": 0.5338589480505455
+                }
+              ]
+            }
+          ],
+          "ctime": null,
+          "report_date": 1782748800000,
+          "report_name": "2026中报"
+        },
+        {
+          "class_list": [
+            {
+              "class_standard": 1,
+              "business_list": [
+                {
+                  "project_announced_name": "贷款利息收入",
+                  "prime_operating_income": 186233000000.0,
+                  "income_ratio": 1.0705,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "投资利息收入",
+                  "prime_operating_income": 57139000000.0,
+                  "income_ratio": 0.3285,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "其他收入",
+                  "prime_operating_income": 30756000000.0,
+                  "income_ratio": 0.1768,
+                  "gross_profit_rate": null
+                }
+              ]
+            },
+            {
+              "class_standard": 2,
+              "business_list": [
+                {
+                  "project_announced_name": "利息收入",
+                  "prime_operating_income": 265116000000.0,
+                  "income_ratio": 0.8151,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "手续费及佣金收入",
+                  "prime_operating_income": 29397000000.0,
+                  "income_ratio": 0.0904,
+                  "gross_profit_rate": null
+                },
+                {
+                  "project_announced_name": "投资损益",
+                  "prime_operating_income": 19393000000.0,
+                  "income_ratio": 0.0596,
+                  "gross_profit_rate": null
+                }
+              ]
+            },
+            {
+              "class_standard": 3,
+              "business_list": [
+                {
+                  "project_announced_name": "总行",
+                  "prime_operating_income": 56629000000.0,
+                  "income_ratio": 0.3255,
+                  "gross_profit_rate": 0.3007293083049321
+                },
+                {
+                  "project_announced_name": "长三角地区",
+                  "prime_operating_income": 43995000000.0,
+                  "income_ratio": 0.2529,
+                  "gross_profit_rate": 0.5395840436413228
+                },
+                {
+                  "project_announced_name": "境外及附属机构",
+                  "prime_operating_income": 16492000000.0,
+                  "income_ratio": 0.0948,
+                  "gross_profit_rate": 0.36193305845258306
+                }
+              ]
+            }
+          ],
+          "ctime": null,
+          "report_date": 1767110400000,
+          "report_name": "2025年报"
+        }
+      ],
+      "operation_range": "合成经营范围",
+      "product_name": "相关金融服务",
+      "currency_code": "人民币"
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
