@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "visitors": 84,
+      "total": 32035,
+      "rank_string": "1111",
+      "award": {
+        "symbol": null,
+        "symbol_name": null,
+        "award_name": null,
+        "award_link": null,
+        "weight": null,
+        "state": null
+      },
+      "rank_change": 47,
+      "discussions": 58,
+      "rank": 1111,
+      "rank_history": [
+        {
+          "rank": "2810",
+          "time": "20261006"
+        },
+        {
+          "rank": "920",
+          "time": "20261101"
+        },
+        {
+          "rank": "1640",
+          "time": "20261103"
+        }
+      ],
+      "rank_tag": [
+        {
+          "code": "industryHot",
+          "tag": "银行行业热议 top20"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

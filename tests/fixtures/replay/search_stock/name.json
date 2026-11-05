@@ -1,0 +1,40 @@
+{
+  "params": {
+    "code": "浦发银行"
+  },
+  "body": {
+    "q": "浦发银行",
+    "page": 1,
+    "size": 10,
+    "stocks": [
+      {
+        "code": "SH600000",
+        "name": "浦发银行",
+        "enName": "",
+        "hasexist": "false",
+        "indId": 0,
+        "flag": 1,
+        "type": 11,
+        "subType": "ASH",
+        "current": "9.89",
+        "percentage": -1.98,
+        "state": 1,
+        "sort": null,
+        "label": "11",
+        "exchange": "SH",
+        "tradeStatus": 0,
+        "extension": null,
+        "stock_id": 1000000,
+        "ind_name": "银行",
+        "ind_color": null,
+        "_source": "sc_1:1:%E6%B5%A6%E5%8F%",
+        "short_company_name": null,
+        "market_status": 5,
+        "promotion_reason": null,
+        "extension_type": null,
+        "highlight_name": null,
+        "ai_result": []
+      }
+    ]
+  }
+}
