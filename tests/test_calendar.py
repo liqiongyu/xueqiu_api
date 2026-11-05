@@ -207,7 +207,8 @@ DAY_CN = datetime(2026, 11, 5, 15, 0, tzinfo=SHANGHAI)
 
 
 @pytest.mark.parametrize(
-    ("status", "phase"), [(5, "trading"), (7, "closed"), (9, "unknown"), (None, "unknown")]
+    ("status", "phase"),
+    [(1, "pre_open"), (5, "trading"), (7, "closed"), (9, "unknown"), (None, "unknown")],
 )
 def test_status_id_gives_the_phase_and_unknown_values_are_kept(
     status: int | None, phase: str

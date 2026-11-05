@@ -245,7 +245,9 @@ class SnapshotWalk:
 
     def _first_page(self) -> SnapshotRequest:
         params: dict[str, Any] = {"market": self._market, "page": 1, "page_size": _PAGE_SIZE}
-        if self._market != "US":
+        if self._market == "US":
+            params["order_by"] = "symbol"
+        else:
             params |= {"order_by": "symbol", "order": "asc"}
         if self._market == "CN":
             params["board"] = self._waiting[0]

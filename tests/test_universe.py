@@ -256,6 +256,7 @@ def test_us_walks_the_ranking_and_is_complete_when_unique_rows_equal_its_count(
     assert [item.params["page"] for item in sent] == [str(page) for page in range(1, pages + 1)]
     assert {item.params["size"] for item in sent} == {"100"}
     assert {item.params["category"] for item in sent} == {"US"}
+    assert {(item.params["order_by"], item.params["order"]) for item in sent} == {("symbol", "asc")}
     assert upstream.requests(STOCK, LIST_PATH) == []
 
 

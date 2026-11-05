@@ -135,7 +135,7 @@ from .endpoints.screener_events import StockEvent
 from .endpoints.screener_industries import ENDPOINT as SCREENER_INDUSTRIES
 from .endpoints.screener_industries import ScreenerIndustry
 from .endpoints.screener_popularity_rank import ENDPOINT as SCREENER_POPULARITY_RANK
-from .endpoints.screener_popularity_rank import PopularStock, RankMarket
+from .endpoints.screener_popularity_rank import PopularStock, RankMarket, RankOrder
 from .endpoints.screener_quote_list import ENDPOINT as SCREENER_QUOTE_LIST
 from .endpoints.screener_quote_list import (
     Board,
@@ -1343,6 +1343,7 @@ class SyncEndpoints:
         self,
         *,
         market: RankMarket = "CN",
+        order_by: RankOrder = "follow7d",
         page: int = 1,
         page_size: int = 50,
     ) -> Page[PopularStock]:
@@ -1350,6 +1351,8 @@ class SyncEndpoints:
 
         Args:
             market: CN, HK or US.
+            order_by: follow7d, most followed first; or symbol, ascending, whose order holds
+                across a walk of every page. Most rows have no follow7d, and those move between pages.
             page: Page number, from 1.
             page_size: Rows per page.
 
@@ -1357,13 +1360,14 @@ class SyncEndpoints:
         """
         return self._call(
             SCREENER_POPULARITY_RANK,
-            {"market": market, "page": page, "page_size": page_size},
+            {"market": market, "order_by": order_by, "page": page, "page_size": page_size},
         )
 
     def screener_popularity_rank_pages(
         self,
         *,
         market: RankMarket = "CN",
+        order_by: RankOrder = "follow7d",
         page: int = 1,
         page_size: int | None = None,
         max_pages: int | None = None,
@@ -1374,6 +1378,8 @@ class SyncEndpoints:
 
         Args:
             market: CN, HK or US.
+            order_by: follow7d, most followed first; or symbol, ascending, whose order holds
+                across a walk of every page. Most rows have no follow7d, and those move between pages.
             page: Page number, from 1.
             page_size: Rows per page; by default the largest, 100.
             max_pages: Stop after this many pages.
@@ -1383,7 +1389,7 @@ class SyncEndpoints:
         """
         return self._pages(
             SCREENER_POPULARITY_RANK,
-            {"market": market, "page": page, "page_size": page_size},
+            {"market": market, "order_by": order_by, "page": page, "page_size": page_size},
             max_pages=max_pages,
             max_items=max_items,
         )

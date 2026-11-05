@@ -102,6 +102,14 @@
     ],
     "over_8_params": true,
     "mixed_types": {
+      "order_by": {
+        "{\"enum\":[\"follow7d\",\"symbol\"],\"type\":\"string\"}": [
+          "screener_popularity_rank"
+        ],
+        "{\"enum\":[\"symbol\",\"percent\"],\"type\":\"string\"}": [
+          "screener_quote_list"
+        ]
+      },
       "page_size": {
         "{\"maximum\":50,\"minimum\":1,\"type\":\"integer\"}": [
           "screener_events"

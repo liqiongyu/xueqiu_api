@@ -112,8 +112,8 @@
     "screener_events": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[StockEvent]'",
     "screener_events_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[StockEvent]]'",
     "screener_industries": "(self) -> 'list[ScreenerIndustry]'",
-    "screener_popularity_rank": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[PopularStock]'",
-    "screener_popularity_rank_pages": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[PopularStock]]'",
+    "screener_popularity_rank": "(self, *, market: 'RankMarket' = 'CN', order_by: 'RankOrder' = 'follow7d', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[PopularStock]'",
+    "screener_popularity_rank_pages": "(self, *, market: 'RankMarket' = 'CN', order_by: 'RankOrder' = 'follow7d', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[PopularStock]]'",
     "screener_quote_list": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[ScreenerQuote]'",
     "screener_quote_list_pages": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[ScreenerQuote]]'",
     "search_stock": "(self, *, query: 'str') -> 'list[StockHit]'",
@@ -205,8 +205,8 @@
     "screener_events": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[StockEvent]'",
     "screener_events_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[StockEvent]]'",
     "screener_industries": "(self) -> 'list[ScreenerIndustry]'",
-    "screener_popularity_rank": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[PopularStock]'",
-    "screener_popularity_rank_pages": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[PopularStock]]'",
+    "screener_popularity_rank": "(self, *, market: 'RankMarket' = 'CN', order_by: 'RankOrder' = 'follow7d', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[PopularStock]'",
+    "screener_popularity_rank_pages": "(self, *, market: 'RankMarket' = 'CN', order_by: 'RankOrder' = 'follow7d', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[PopularStock]]'",
     "screener_quote_list": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[ScreenerQuote]'",
     "screener_quote_list_pages": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[ScreenerQuote]]'",
     "search_stock": "(self, *, query: 'str') -> 'list[StockHit]'",
@@ -1120,6 +1120,10 @@
       "CN",
       "HK",
       "US"
+    ],
+    "RankOrder": [
+      "follow7d",
+      "symbol"
     ],
     "RankPoint": {
       "day": "date",

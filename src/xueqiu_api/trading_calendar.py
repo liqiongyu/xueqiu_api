@@ -29,10 +29,10 @@ __all__ = [
     "market_state_from_quote",
 ]
 
-Phase = Literal["trading", "closed", "unknown"]
+Phase = Literal["trading", "closed", "pre_open", "unknown"]
 
 _ONE_DAY = timedelta(days=1)
-_PHASES: Mapping[int, Phase] = MappingProxyType({5: "trading", 7: "closed"})
+_PHASES: Mapping[int, Phase] = MappingProxyType({1: "pre_open", 5: "trading", 7: "closed"})
 _DAY_OVER: Mapping[Market, time] = MappingProxyType(
     {"CN": time(15, 30), "HK": time(16, 30), "US": time(16, 30)}
 )
@@ -147,7 +147,8 @@ class MarketState:
 
     market: Market
     status_id: int | None
-    """Upstream ``market.status_id``: 5 (trading) and 7 (closed) were measured on 2026-11-04."""
+    """Upstream ``market.status_id``: 5 (交易中) and 7 (已收盘) were measured on 2026-11-04, and 1
+    (未开盘) at 02:00 Shanghai time on 2026-11-06 for CN and HK. Other values give unknown."""
     phase: Phase
     """trading for status 5, closed for 7, unknown for anything else."""
     quote_time: datetime | None

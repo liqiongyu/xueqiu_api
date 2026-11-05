@@ -16,6 +16,7 @@ PAGE_SIZE_CAP = 100
 """size=100 gave full pages, measured 2026-11-05."""
 
 RankMarket = Literal["CN", "HK", "US"]
+RankOrder = Literal["follow7d", "symbol"]
 """Markets of the ranking; the generated methods import this name from this module."""
 
 
@@ -24,6 +25,9 @@ class PopularityRankParams(BaseModel):
 
     market: RankMarket = "CN"
     """CN, HK or US."""
+    order_by: RankOrder = "follow7d"
+    """follow7d, most followed first; or symbol, ascending, whose order holds across a walk of
+    every page. Most rows have no follow7d, and those move between pages."""
     page: int = Field(default=1, ge=1)
     """Page number, from 1."""
     page_size: int = Field(default=50, ge=1, le=PAGE_SIZE_CAP)
@@ -60,8 +64,8 @@ class _Payload(UpstreamModel):
 def _build_query(params: PopularityRankParams, now: datetime) -> dict[str, str]:
     return {
         "category": params.market,
-        "order_by": "follow7d",  # the only value measured
-        "order": "desc",  # the only value measured
+        "order_by": params.order_by,
+        "order": "asc" if params.order_by == "symbol" else "desc",
         "only_count": "0",
         "page": str(params.page),
         "size": str(params.page_size),
@@ -86,7 +90,8 @@ ENDPOINT = Endpoint(
     envelope="xueqiu",
     verified_on=date(2026, 11, 5),
     # Not capped at 5000: CN page 51 at size 100 had full rows of 5656 and US page 92 had the last
-    # 24 of 9124, measured 2026-11-05. Rows tied on follow7d can move between pages.
+    # 24 of 9124, measured 2026-11-05. Rows tied on follow7d can move between pages: one walk of
+    # the US list repeated 793 rows, measured 2026-11-06.
     pagination=Pagination(
         style="page", end="total", size_cap=PAGE_SIZE_CAP, key=lambda row: row.symbol
     ),

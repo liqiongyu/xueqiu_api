@@ -83,7 +83,7 @@ from .endpoints.quote_trades import TradeTick
 from .endpoints.quotec import Quote
 from .endpoints.screener_events import StockEvent
 from .endpoints.screener_industries import ScreenerIndustry
-from .endpoints.screener_popularity_rank import PopularStock, RankMarket
+from .endpoints.screener_popularity_rank import PopularStock, RankMarket, RankOrder
 from .endpoints.screener_quote_list import (
     Board,
     Order,
@@ -193,6 +193,7 @@ __all__ = [
     "QuoteListMarket",
     "QuoteListOrderBy",
     "RankMarket",
+    "RankOrder",
     "RankPoint",
     "RankTag",
     "Rebalancing",
