@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import stat
 import subprocess
 import sys
-from collections.abc import Callable
+import threading
+import time
+from collections.abc import Callable, Mapping
+from contextlib import closing
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import httpx2
 import pytest
@@ -25,13 +29,17 @@ from xueqiu_api import (
     UpstreamChanged,
     UpstreamError,
 )
-from xueqiu_api._async import AsyncRuntime
+from xueqiu_api._async import AsyncClient, AsyncRuntime
 from xueqiu_api._paths import cache_dir, data_dir
 from xueqiu_api._session import default_session_path, parse_credentials
+from xueqiu_api._shared import LEASE_POLL_S, STATE_FILE, SharedState, default_state_path
+from xueqiu_api._sqlite import open_db
 from xueqiu_api._sync import SyncRuntime
 
 from .harness import (
     ANON_COOKIES,
+    FakeClock,
+    FakeUpstream,
     Harness,
     Register,
     error_reply,
@@ -51,6 +59,20 @@ SUGGEST = "/query/v1/suggest_stock.json"
 LOGIN_TOKEN = "fake-login-token-9f3a"
 LOGIN_U = "fake-login-u-77812"
 TOKEN = f"xq_a_token={LOGIN_TOKEN}; u={LOGIN_U}"
+SAVED_AT = 1_790_000_000.0
+STALE = {"xq_a_token": "fake-stale-token-0001", "u": "fake-stale-u-0001"}
+OTHER = {"xq_a_token": "fake-other-token-0001", "u": "fake-other-u-0001"}
+
+
+def save_session(path: Path, cookies: Mapping[str, str], saved_at: float) -> None:
+    """Write the session file as another process would."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"version": 1, "saved_at": saved_at, "cookies": dict(cookies)}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def header(cookies: Mapping[str, str]) -> str:
+    return "; ".join(f"{name}={value}" for name, value in cookies.items())
 
 
 def test_bootstrap_follows_the_apex_redirect_and_caches_the_cookies(
@@ -613,3 +635,152 @@ def test_a_cookie_value_starting_with_another_leaves_no_tail_in_errors(
 
     assert "SECRETTAIL" not in caught.value.message
     assert "abcdefgh" not in caught.value.message
+
+
+@pytest.mark.parametrize(
+    ("offset", "adopted"),
+    [(1.0, True), (0.0, False), (-1.0, False)],
+    ids=["newer", "equal", "older"],
+)
+def test_a_refresh_adopts_only_a_set_saved_after_the_one_it_holds(
+    make: Callable[..., Harness], session_path: Path, offset: float, adopted: bool
+) -> None:
+    save_session(session_path, STALE, SAVED_AT)
+    h = make()
+    save_session(session_path, OTHER, SAVED_AT + offset)
+    h.upstream.route(
+        STOCK,
+        KLINE,
+        error_reply(60201, "synthetic login error"),
+        fixture_reply("kline/sh600000_day"),
+    )
+
+    assert len(h.kline("SH600000")) == 3
+
+    first, retry = h.upstream.requests(STOCK, KLINE)
+    assert first.headers["cookie"] == header(STALE)
+    assert retry.headers["cookie"] == header(OTHER if adopted else ANON_COOKIES)
+    assert len(h.upstream.requests("xueqiu.com", "/")) == (0 if adopted else 1)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="needs POSIX permissions that apply to the user",
+)
+def test_a_session_that_cannot_save_never_adopts_the_stale_set_again(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    save_session(session_path, STALE, SAVED_AT)
+    session_path.parent.chmod(0o500)
+    fresh = {"xq_a_token": "fake-anon-token-0002", "u": "fake-anon-u-0002"}
+    try:
+        h = make()
+        h.upstream.route(WWW, "/", home_page(), home_page(fresh))
+        rejected = error_reply(60201, "synthetic login error")
+        bars = fixture_reply("kline/sh600000_day")
+        h.upstream.route(STOCK, KLINE, rejected, bars, rejected, bars)
+
+        # Each call spends its one refresh on a home page fetch, though the file keeps STALE.
+        assert len(h.kline("SH600000")) == 3
+        assert len(h.kline("SH600000")) == 3
+
+        assert json.loads(session_path.read_text(encoding="utf-8"))["cookies"] == STALE
+    finally:
+        session_path.parent.chmod(0o700)
+    sent = [request.headers["cookie"] for request in h.upstream.requests(STOCK, KLINE)]
+    refetched = {"acw_tc": ANON_COOKIES["acw_tc"], **fresh}
+    assert sent == [header(STALE), header(ANON_COOKIES), header(ANON_COOKIES), header(refetched)]
+    assert len(h.upstream.requests("xueqiu.com", "/")) == 2
+
+
+def test_a_call_waiting_on_the_home_lease_adopts_the_set_its_holder_saves(
+    make: Callable[..., Harness],
+    clock: FakeClock,
+    session_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleep = clock.sleep
+
+    def holder_saves(seconds: float) -> None:
+        sleep(seconds)
+        save_session(session_path, OTHER, SAVED_AT)
+
+    monkeypatch.setattr(clock, "sleep", holder_saves)
+    with closing(SharedState(default_state_path(), clock=clock.now, wall=clock.now)) as other:
+        assert other.lease("home", clock.now() + 10) == 0.0
+        h = make(shared=True)
+        h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+        assert len(h.kline("SH600000")) == 3
+
+    assert h.upstream.requests("xueqiu.com", "/") == []
+    assert h.upstream.requests(STOCK, KLINE)[0].headers["cookie"] == header(OTHER)
+    assert clock.sleeps == [LEASE_POLL_S]
+
+
+def test_a_call_takes_over_a_home_lease_that_expires_while_it_waits(
+    make: Callable[..., Harness], clock: FakeClock
+) -> None:
+    with closing(SharedState(default_state_path(), clock=clock.now, wall=clock.now)) as other:
+        assert other.lease("home", clock.now() + 2 * LEASE_POLL_S) == 0.0
+        h = make(shared=True)
+        h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+        assert len(h.kline("SH600000")) == 3
+
+        assert clock.sleeps == [LEASE_POLL_S, LEASE_POLL_S]
+        assert len(h.upstream.requests("xueqiu.com", "/")) == 1
+        # The fetch gave the lease back.
+        assert other.lease("home", clock.now() + 10) == 0.0
+
+
+def test_a_failed_home_fetch_gives_the_home_lease_back(
+    make: Callable[..., Harness], clock: FakeClock
+) -> None:
+    h = make(shared=True)
+    h.upstream.route(WWW, "/", waf_reply())
+
+    with pytest.raises(Blocked):
+        h.kline("SH600000")
+
+    with closing(SharedState(default_state_path(), clock=clock.now, wall=clock.now)) as other:
+        assert other.lease("home", clock.now() + 10) == 0.0
+
+
+def test_a_bootstrap_cancelled_while_taking_the_home_lease_gives_it_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "state" / STATE_FILE
+    upstream = FakeUpstream(FakeClock())
+    runtime = AsyncRuntime(transport=upstream.transport, state_path=path)
+    entered, go = threading.Event(), threading.Event()
+
+    async def main() -> None:
+        async with AsyncClient(session_path=tmp_path / "session.json", _runtime=runtime) as client:
+            limiter = client._limiter  # pyright: ignore[reportPrivateUsage]
+            lease_home = limiter.lease_home
+
+            def held(deadline: float) -> float | None:
+                entered.set()
+                go.wait(10)
+                return lease_home(deadline)
+
+            monkeypatch.setattr(limiter, "lease_home", held)
+            task = asyncio.create_task(client.kline("SH600000"))
+            assert await asyncio.to_thread(entered.wait, 10)
+            task.cancel()
+            go.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(main())
+
+    conn = open_db(path, busy_timeout_s=1, readonly=True)
+    try:
+        leases: list[Any] = conn.execute("SELECT * FROM leases").fetchall()
+    finally:
+        conn.close()
+    assert leases == []
+    with closing(SharedState(path, clock=time.monotonic, wall=time.time)) as other:
+        assert other.lease("home", time.monotonic() + 10) == 0.0
+    assert upstream.sent == []

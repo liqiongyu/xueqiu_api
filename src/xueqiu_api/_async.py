@@ -7,7 +7,8 @@ import time
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Self, TypeVar
+from pathlib import Path
+from typing import Any, ParamSpec, Self, TypeVar
 
 import httpx2
 from pydantic import BaseModel
@@ -33,6 +34,8 @@ from ._core import (
 )
 from ._endpoints_async import AsyncEndpoints
 from ._pages import PageT, PageWalk, start_walk
+from ._shared import LEASE_POLL_S, default_state_path
+from ._status import ClientStatus
 from .adjust import AdjustFactors, derive_factors
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import MAX_COUNT, Adjust, BarWalk, Kline, Period
@@ -51,6 +54,7 @@ from .universe import SecuritySnapshot, Segment, SnapshotWalk
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
+A = ParamSpec("A")
 
 
 def _wall() -> float:
@@ -60,15 +64,18 @@ def _wall() -> float:
 
 @dataclass(frozen=True)
 class AsyncRuntime:
-    """Private injection point for tests and replay: transport, clocks and sleep.
+    """Private injection point for tests and replay: transport, clocks, sleep and state file.
 
     ``clock`` is monotonic and times waits; ``wall`` is seconds since the epoch.
+    ``state_path`` is the file limits are shared through with other processes; None keeps
+    them in process.
     """
 
     transport: httpx2.AsyncBaseTransport | None = None
     clock: Callable[[], float] = time.monotonic
     wall: Callable[[], float] = _wall
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+    state_path: Path | None = None
 
 
 class AsyncClient(ClientBase, AsyncEndpoints):
@@ -76,6 +83,8 @@ class AsyncClient(ClientBase, AsyncEndpoints):
 
     Concurrent tasks share one per-host limiter, circuit breaker and session. Arguments are
     the same as for ``Client``; the deadline also bounds a response that is still arriving.
+    While the shared state file is in use, it and the session file are read and written in
+    worker threads.
     """
 
     def __init__(
@@ -95,6 +104,7 @@ class AsyncClient(ClientBase, AsyncEndpoints):
             deadline=deadline,
             clock=runtime.clock,
             wall=runtime.wall,
+            state_path=default_state_path() if _runtime is None else runtime.state_path,
         )
         self._sleep = runtime.sleep
         self._http = httpx2.AsyncClient(
@@ -187,8 +197,15 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         call = self._raw_call(host, path, params)
         return await self._run(call, self._clock() + self._deadline_s)
 
+    async def status(self) -> ClientStatus:
+        """What this client knows locally: credentials, the last login error, the limits of
+        each host and the shared state file. Sends no request."""
+        return await self._offload(self._state is not None, self._status)
+
     async def close(self) -> None:
         await self._http.aclose()
+        if self._state is not None:
+            await asyncio.to_thread(self._state.close)
 
     async def __aenter__(self) -> Self:
         return self
@@ -218,20 +235,24 @@ class AsyncClient(ClientBase, AsyncEndpoints):
             yield walk.accept(await self._call(spec, walk.params))
 
     async def _run(self, call: Call, deadline: float) -> Any:
+        thread = self._state is not None
         attempt, refreshed, last = 0, False, None
         earliest = self._clock()
         while True:
             if call.cookies:
                 await self._ensure_session(call, deadline)
             generation = self._session.generation
-            wait = self._book(call, earliest=earliest, deadline=deadline, last=last)
+            wait = await self._offload(
+                thread, self._book, call, earliest=earliest, deadline=deadline, last=last
+            )
             if wait > 0:
                 await self._sleep(wait)
-            self._check_host(call)
+                # Another call or process may have paused the host or opened its breaker.
+                await self._offload(thread, self._check_host, call)
             outcome = await self._attempt(call, deadline)
             if isinstance(outcome, Ok):
                 return outcome.value
-            self._note_failure(call, outcome)
+            await self._offload(thread, self._note_failure, call, outcome)
             step = next_step(outcome, call=call, attempt=attempt, refreshed=refreshed)
             if isinstance(step, XueqiuError):
                 raise step
@@ -265,14 +286,14 @@ class AsyncClient(ClientBase, AsyncEndpoints):
             return
         async with self._session_locked(call, deadline):
             if self._session.generation == seen:
-                await self._bootstrap(deadline)
+                await self._bootstrap(call, deadline)
         if not self._session.ready(call):
             raise self._cookie_error(call)
 
     async def _refresh(self, call: Call, seen: int, deadline: float) -> None:
         async with self._session_locked(call, deadline):
             if self._session.generation == seen:
-                await self._bootstrap(deadline)
+                await self._bootstrap(call, deadline)
         if not self._session.ready(call):
             raise self._cookie_error(call)
 
@@ -289,5 +310,66 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         finally:
             self._session_lock.release()
 
-    async def _bootstrap(self, deadline: float) -> None:
-        self._session.set_anonymous(await self._run(HOME_CALL, deadline))
+    async def _bootstrap(self, call: Call, deadline: float) -> None:
+        """Take a newer anonymous set another process saved, or fetch the home page for one.
+
+        One process at a time fetches, under the home lease; the others look for its set
+        every ``LEASE_POLL_S`` until the deadline.
+        """
+        thread = self._state is not None
+        while not await self._offload(thread, self._session.adopt_saved):
+            left = await self._lease_home(deadline)
+            if not left:
+                try:
+                    if not await self._offload(thread, self._session.adopt_saved):
+                        cookies = await self._run(HOME_CALL, deadline)
+                        await self._offload(thread, self._session.set_anonymous, cookies)
+                finally:
+                    await self._release_home()
+                return
+            pause = min(LEASE_POLL_S, left)
+            if self._clock() + pause > deadline:
+                raise self._session_wait_error(call)
+            await self._sleep(pause)
+
+    async def _lease_home(self, deadline: float) -> float | None:
+        """Take the home lease in a thread; a cancellation meanwhile waits for the attempt and
+        gives back a lease it took."""
+        if self._state is None:
+            return self._limiter.lease_home(deadline)
+        taking = asyncio.ensure_future(asyncio.to_thread(self._limiter.lease_home, deadline))
+        try:
+            return await asyncio.shield(taking)
+        except asyncio.CancelledError:
+            await _wait_out(taking)
+            if taking.exception() is None and taking.result() == 0.0:
+                await self._release_home()
+            raise
+
+    async def _release_home(self) -> None:
+        """Give the home lease back in a thread, to the end even when cancelled meanwhile."""
+        if self._state is None:
+            self._limiter.release_home()
+            return
+        releasing = asyncio.ensure_future(asyncio.to_thread(self._limiter.release_home))
+        try:
+            await asyncio.shield(releasing)
+        except asyncio.CancelledError:
+            await _wait_out(releasing)
+            raise
+
+    async def _offload(
+        self, thread: bool, fn: Callable[A, R], /, *args: A.args, **kwargs: A.kwargs
+    ) -> R:
+        """Call ``fn`` in a worker thread when ``thread``, else right here on the loop."""
+        if thread:
+            return await asyncio.to_thread(fn, *args, **kwargs)
+        return fn(*args, **kwargs)
+
+
+async def _wait_out(task: asyncio.Future[Any]) -> None:
+    """Wait for ``task`` while the caller is being cancelled; further cancellations change
+    nothing, as the caller raises the first one afterwards."""
+    while not task.done():
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.wait([task])

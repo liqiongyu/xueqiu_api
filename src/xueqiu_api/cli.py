@@ -21,6 +21,7 @@ from typing import Any, Literal, NoReturn, get_args
 from . import __version__
 from ._replay import ReplayTransport
 from ._session import TOKEN_ENV, default_session_path
+from ._shared import default_state_path
 from ._sync import Client, SyncRuntime
 from .endpoints import REGISTRY
 from .errors import (
@@ -221,6 +222,8 @@ def _doctor(args: argparse.Namespace) -> int:
     credentials = "env" if os.environ.get(TOKEN_ENV) else "none"
     cache_exists = cache.exists()
     client = Client(session_path=cache, _runtime=runtime)
+    # Reading the status opens the shared state file, so its facts say whether it works.
+    shared = client.status().shared
     # Every JSON object carries the run's facts, so the output stays a flat list of objects.
     facts = {
         "package_version": __version__,
@@ -228,6 +231,8 @@ def _doctor(args: argparse.Namespace) -> int:
         "credentials": credentials,
         "session_cache": str(cache),
         "session_cache_exists": cache_exists,
+        "shared_state": None if shared is None else shared.path,
+        "shared_state_reason": "in-process only" if shared is None else shared.reason,
     }
     text = args.format == "text"
     width = max(len(name) for name in ["endpoint", *names])
@@ -235,6 +240,9 @@ def _doctor(args: argparse.Namespace) -> int:
         print(f"xueqiu-api {__version__}, Python {platform.python_version()}")
         print(f"credentials: {credentials}")
         print(f"session cache: {cache} ({'exists' if cache_exists else 'missing'})")
+        reason = facts["shared_state_reason"]
+        state = "none" if shared is None else shared.path
+        print(f"shared state: {state}" + ("" if reason is None else f" ({reason})"))
         print(_row(width, "endpoint", "status", "elapsed", "detail"), flush=True)
     rows: list[dict[str, Any]] = []
     failures: list[XueqiuError] = []
@@ -295,8 +303,9 @@ def _row(width: int, endpoint: str, status: str, elapsed: str, detail: str) -> s
 
 
 def _runtime() -> SyncRuntime:
-    """Transport, clock and sleep of the doctor's client; tests replace this."""
-    return SyncRuntime()
+    """Transport, clocks, sleep and shared state file of the doctor's client; tests replace
+    this."""
+    return SyncRuntime(state_path=default_state_path())
 
 
 def _mcp(args: argparse.Namespace) -> int:

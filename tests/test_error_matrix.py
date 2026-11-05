@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -48,6 +49,17 @@ WEB_PATH = "/cubes/rebalancing/history.json"
 FUND_PATH = "/djapi/fund/base/008975"
 TOKEN = "xq_a_token=fake-login-token-0001; u=fake-login-u-0001"
 SYNTHETIC = "/v5/synthetic.json"
+
+
+@pytest.fixture(params=["memory", "shared"])
+def mode(request: pytest.FixtureRequest) -> str:
+    """Limits kept in process, or in the state file shared with other processes."""
+    return request.param
+
+
+@pytest.fixture
+def make(make: Callable[..., Harness], mode: str) -> Callable[..., Harness]:
+    return functools.partial(make, shared=mode == "shared")
 
 
 def paths(h: Harness) -> list[str]:

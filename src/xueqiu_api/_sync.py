@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any, Self, TypeVar
 
 import httpx2
@@ -33,6 +34,8 @@ from ._core import (
 )
 from ._endpoints_sync import SyncEndpoints
 from ._pages import PageT, PageWalk, start_walk
+from ._shared import LEASE_POLL_S, default_state_path
+from ._status import ClientStatus
 from .adjust import AdjustFactors, derive_factors
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import MAX_COUNT, Adjust, BarWalk, Kline, Period
@@ -60,15 +63,18 @@ def _wall() -> float:
 
 @dataclass(frozen=True)
 class SyncRuntime:
-    """Private injection point for tests and replay: transport, clocks and sleep.
+    """Private injection point for tests and replay: transport, clocks, sleep and state file.
 
     ``clock`` is monotonic and times waits; ``wall`` is seconds since the epoch.
+    ``state_path`` is the file limits are shared through with other processes; None keeps
+    them in process.
     """
 
     transport: httpx2.BaseTransport | None = None
     clock: Callable[[], float] = time.monotonic
     wall: Callable[[], float] = _wall
     sleep: Callable[[float], None] = time.sleep
+    state_path: Path | None = None
 
 
 class Client(ClientBase, SyncEndpoints):
@@ -89,7 +95,10 @@ class Client(ClientBase, SyncEndpoints):
             is sent only to endpoints registered as needing a login and by ``request()``; every
             other endpoint sends the anonymous cookies, with or without a token.
         session_path: where the anonymous cookies are cached; defaults to the user cache
-            directory. Login cookies are never written.
+            directory. Login cookies are never written. Request spacing, rate-limit pauses and
+            open circuit breakers are shared with the user's other processes through
+            ``state-v1.sqlite3`` in the user cache directory, also when ``session_path`` points
+            elsewhere; constructing a client creates no file.
         min_intervals: longer minimum intervals between requests per host, in seconds.
         deadline: seconds a call may take, queueing and retries included. A response that
             keeps arriving after the deadline is given up when its next chunk comes, which
@@ -113,6 +122,7 @@ class Client(ClientBase, SyncEndpoints):
             deadline=deadline,
             clock=runtime.clock,
             wall=runtime.wall,
+            state_path=default_state_path() if _runtime is None else runtime.state_path,
         )
         self._sleep = runtime.sleep
         self._http = httpx2.Client(
@@ -205,8 +215,15 @@ class Client(ClientBase, SyncEndpoints):
         call = self._raw_call(host, path, params)
         return self._run(call, self._clock() + self._deadline_s)
 
+    def status(self) -> ClientStatus:
+        """What this client knows locally: credentials, the last login error, the limits of
+        each host and the shared state file. Sends no request."""
+        return self._status()
+
     def close(self) -> None:
         self._http.close()
+        if self._state is not None:
+            self._state.close()
 
     def __enter__(self) -> Self:
         return self
@@ -245,7 +262,8 @@ class Client(ClientBase, SyncEndpoints):
             wait = self._book(call, earliest=earliest, deadline=deadline, last=last)
             if wait > 0:
                 self._sleep(wait)
-            self._check_host(call)
+                # Another call or process may have paused the host or opened its breaker.
+                self._check_host(call)
             outcome = self._attempt(call, deadline)
             if isinstance(outcome, Ok):
                 return outcome.value
@@ -291,14 +309,14 @@ class Client(ClientBase, SyncEndpoints):
             return
         with self._session_locked(call, deadline):
             if self._session.generation == seen:
-                self._bootstrap(deadline)
+                self._bootstrap(call, deadline)
         if not self._session.ready(call):
             raise self._cookie_error(call)
 
     def _refresh(self, call: Call, seen: int, deadline: float) -> None:
         with self._session_locked(call, deadline):
             if self._session.generation == seen:
-                self._bootstrap(deadline)
+                self._bootstrap(call, deadline)
         if not self._session.ready(call):
             raise self._cookie_error(call)
 
@@ -313,5 +331,22 @@ class Client(ClientBase, SyncEndpoints):
         finally:
             self._session_lock.release()
 
-    def _bootstrap(self, deadline: float) -> None:
-        self._session.set_anonymous(self._run(HOME_CALL, deadline))
+    def _bootstrap(self, call: Call, deadline: float) -> None:
+        """Take a newer anonymous set another process saved, or fetch the home page for one.
+
+        One process at a time fetches, under the home lease; the others look for its set
+        every ``LEASE_POLL_S`` until the deadline.
+        """
+        while not self._session.adopt_saved():
+            left = self._limiter.lease_home(deadline)
+            if not left:
+                try:
+                    if not self._session.adopt_saved():
+                        self._session.set_anonymous(self._run(HOME_CALL, deadline))
+                finally:
+                    self._limiter.release_home()
+                return
+            pause = min(LEASE_POLL_S, left)
+            if self._clock() + pause > deadline:
+                raise self._session_wait_error(call)
+            self._sleep(pause)

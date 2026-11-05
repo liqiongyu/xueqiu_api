@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import math
 import os
 import string
 from collections.abc import Callable, Mapping
@@ -30,6 +31,8 @@ from ._core import (
 )
 from ._pages import Page, finish
 from ._session import TOKEN_ENV, Session, SessionStore, default_session_path, parse_credentials
+from ._shared import SharedBreaker, SharedLimiter, SharedState
+from ._status import AuthError, ClientStatus, HostStatus
 from .endpoints import REGISTRY
 from .endpoints.kline import ENDPOINT as KLINE
 from .errors import (
@@ -62,6 +65,7 @@ class ClientBase:
         deadline: float,
         clock: Callable[[], float],
         wall: Callable[[], float],
+        state_path: Path | None,
     ) -> None:
         if not deadline > 0:
             raise ValueError("deadline must be a positive number of seconds")
@@ -77,8 +81,18 @@ class ClientBase:
             ) from None
         path = default_session_path() if session_path is None else Path(session_path)
         self._session = Session(credentials=credentials, store=SessionStore(path))
-        self._limiter = HostLimiter(_intervals(min_intervals))
-        self._breaker = CircuitBreaker(BREAKER_COOLDOWN_S)
+        self._intervals = _intervals(min_intervals)
+        # SharedState opens its file on first use, so constructing a client creates nothing.
+        self._state = (
+            None if state_path is None else SharedState(state_path, clock=clock, wall=wall)
+        )
+        if self._state is None:
+            self._limiter = HostLimiter(self._intervals)
+            self._breaker = CircuitBreaker(BREAKER_COOLDOWN_S)
+        else:
+            self._limiter = SharedLimiter(self._intervals, self._state)
+            self._breaker = SharedBreaker(BREAKER_COOLDOWN_S, self._state)
+        self._last_auth_error: AuthError | None = None
         self._clock = clock
         self._wall = wall
         self._deadline_s = float(deadline)
@@ -242,8 +256,31 @@ class ClientBase:
     def _timeout(self, deadline: float) -> float:
         return max(0.001, min(ATTEMPT_TIMEOUT_S, deadline - self._clock()))
 
+    def _status(self) -> ClientStatus:
+        now = self._clock()
+        hosts = tuple(
+            HostStatus(
+                host=host,
+                interval_s=interval,
+                # A deadline no slot can meet books nothing and still gives the wait.
+                wait_s=self._limiter.reserve(host, now=now, earliest=now, deadline=-math.inf)[1],
+                paused_s=self._limiter.paused(host, now),
+                open_s=self._breaker.remaining(host, now),
+            )
+            for host, interval in self._intervals.items()
+        )
+        return ClientStatus(
+            credentials="token" if self._session.has_credentials else "none",
+            last_auth_error=self._last_auth_error,
+            hosts=hosts,
+            shared=None if self._state is None else self._state.status(),
+        )
+
     def _note_failure(self, call: Call, failure: Failure) -> None:
         log.debug("GET %s failed: %s", call.url, failure.message)
+        if failure.login and failure.upstream_code is not None:
+            at = datetime.fromtimestamp(self._wall(), UTC)
+            self._last_auth_error = AuthError(failure.upstream_code, at)
         if failure.code == "rate_limited" and failure.retry_after_s:
             self._limiter.pause(call.site.host, self._clock() + failure.retry_after_s)
         if failure.trips_breaker:

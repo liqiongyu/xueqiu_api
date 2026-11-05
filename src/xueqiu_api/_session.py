@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import tempfile
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -54,13 +56,22 @@ def default_session_path() -> Path:
     return cache_dir() / "session.json"
 
 
+@dataclass(frozen=True)
+class Saved:
+    """An anonymous cookie set read from the store."""
+
+    cookies: dict[str, str]
+    saved_at: float
+    """Seconds since the epoch when it was written; 0.0 when the file does not say."""
+
+
 class SessionStore:
     """Anonymous cookies persisted as JSON, written atomically with mode 0600."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def load(self) -> dict[str, str] | None:
+    def load(self) -> Saved | None:
         try:
             data: Any = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -75,10 +86,14 @@ class SessionStore:
             isinstance(k, str) and isinstance(v, str) and usable_cookie(k, v) for k, v in items
         ):
             return None
-        return cast(dict[str, str], cookies)
+        stamp: Any = cast(dict[str, Any], data).get("saved_at")
+        known = isinstance(stamp, int | float) and not isinstance(stamp, bool)
+        return Saved(
+            cast(dict[str, str], cookies), float(stamp) if known and math.isfinite(stamp) else 0.0
+        )
 
-    def save(self, cookies: Mapping[str, str]) -> None:
-        payload = {"version": _VERSION, "saved_at": time.time(), "cookies": dict(cookies)}
+    def save(self, cookies: Mapping[str, str], saved_at: float) -> None:
+        payload = {"version": _VERSION, "saved_at": saved_at, "cookies": dict(cookies)}
         directory = self.path.parent
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=directory, prefix=".session-", suffix=".tmp")
@@ -106,7 +121,9 @@ class Session:
     def __init__(self, *, credentials: dict[str, str] | None, store: SessionStore) -> None:
         self._credentials = credentials
         self._store = store
-        self._anonymous = store.load()
+        saved = store.load()
+        self._anonymous = None if saved is None else saved.cookies
+        self._saved_at = 0.0 if saved is None else saved.saved_at
         self.generation = 0
 
     @property
@@ -133,11 +150,25 @@ class Session:
         values = [*(self._credentials or {}).values(), *(self._anonymous or {}).values()]
         return [value for value in values if len(value) >= 6]
 
+    def adopt_saved(self) -> bool:
+        """Take the anonymous set in the store when it was saved after the one held here.
+
+        Compared by ``saved_at``, so that when this session could not write its own set, the
+        older one the store still holds does not come back.
+        """
+        saved = self._store.load()
+        if saved is None or saved.saved_at <= self._saved_at:
+            return False
+        self._anonymous, self._saved_at = saved.cookies, saved.saved_at
+        self.generation += 1
+        return True
+
     def set_anonymous(self, cookies: Mapping[str, str]) -> None:
         self._anonymous = dict(cookies)
+        self._saved_at = time.time()
         self.generation += 1
         try:
-            self._store.save(cookies)
+            self._store.save(cookies, self._saved_at)
         except OSError as exc:
             log.warning("could not write the session cache %s: %s", self._store.path, exc.strerror)
 

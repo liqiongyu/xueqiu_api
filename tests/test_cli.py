@@ -23,8 +23,10 @@ import httpx2
 import pytest
 
 import xueqiu_api
-from xueqiu_api import ERROR_TABLE, REGISTRY, cli
+from xueqiu_api import ERROR_TABLE, REGISTRY, AsyncClient, Client, cli
+from xueqiu_api._paths import cache_dir
 from xueqiu_api._replay import ReplayTransport
+from xueqiu_api._shared import STATE_FILE, default_state_path
 from xueqiu_api._sync import SyncRuntime
 from xueqiu_api.mcp_server import McpOptions
 from xueqiu_api.sites import SITES, Host
@@ -34,20 +36,27 @@ from .harness import (
     FakeClock,
     FakeUpstream,
     Register,
+    fixture_reply,
     home_page,
     synthetic_endpoint,
 )
 
 LOGIN_ERROR = {"body": {"error_code": 60201, "error_description": "synthetic login error"}}
 TOKEN_REJECTED = {"status": 400, "body": {"error_code": "400016", "error_description": ""}}
+REAL_RUNTIME = cli._runtime  # pyright: ignore[reportPrivateUsage]
 
 
-def replay_runtime(directory: Path) -> Callable[[], SyncRuntime]:
+def replay_runtime(directory: Path, state_path: Path | None = None) -> Callable[[], SyncRuntime]:
     """A runtime factory for doctor: the replay directory on a fresh virtual clock each run."""
 
     def runtime() -> SyncRuntime:
         clock = FakeClock()
-        return SyncRuntime(transport=ReplayTransport(directory), clock=clock.now, sleep=clock.sleep)
+        return SyncRuntime(
+            transport=ReplayTransport(directory),
+            clock=clock.now,
+            sleep=clock.sleep,
+            state_path=state_path,
+        )
 
     return runtime
 
@@ -86,7 +95,7 @@ def error_json(err: str) -> dict[str, Any]:
 
 def table(out: str) -> list[list[str]]:
     """Endpoint rows of the doctor text output, split on whitespace."""
-    return [line.split() for line in out.splitlines()[4:]]
+    return [line.split() for line in out.splitlines()[5:]]
 
 
 def replay_with(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **cases: dict[str, Any]) -> None:
@@ -184,12 +193,13 @@ def test_doctor_checks_every_endpoint_once_spaced_by_the_limiter(
 
     lines = out.splitlines()
     assert (code, err) == (0, "")
-    assert lines[:3] == [
+    assert lines[:4] == [
         f"xueqiu-api {xueqiu_api.__version__}, Python {platform.python_version()}",
         "credentials: none",
         f"session cache: {session_cache} (missing)",
+        "shared state: none (in-process only)",
     ]
-    assert lines[3].split() == ["endpoint", "status", "elapsed", "detail"]
+    assert lines[4].split() == ["endpoint", "status", "elapsed", "detail"]
     assert [row[:3] for row in table(out)] == expected_rows()
 
 
@@ -232,6 +242,8 @@ def test_doctor_json_is_a_list_of_objects_in_the_order_given(
         "credentials": "none",
         "session_cache": str(session_cache),
         "session_cache_exists": False,
+        "shared_state": None,
+        "shared_state_reason": "in-process only",
     }
     assert (code, err) == (0, "")
     assert json.loads(out) == [
@@ -248,7 +260,7 @@ def test_doctor_counts_empty_results_as_success(
     code, out, err = run(capsys, "doctor", "--endpoint", "kline")
 
     assert (code, err) == (0, "")
-    assert out.splitlines()[3:] == [
+    assert out.splitlines()[4:] == [
         "endpoint  status        elapsed  detail",
         "kline     empty           0.00s",
     ]
@@ -685,3 +697,58 @@ def test_invalid_mcp_environment_values_are_usage_errors(
 
     assert (code, out, served) == (2, "", [])
     assert error_json(err)["error_code"] == "invalid_params"
+
+
+def test_doctor_reports_the_shared_state_file_and_why_it_is_unavailable(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "state" / STATE_FILE
+    monkeypatch.setattr(cli, "_runtime", replay_runtime(REPLAY_DIR, path))
+
+    code, out, _ = run(capsys, "--format", "json", "doctor", "--endpoint", "quotec")
+    [row] = json.loads(out)
+    assert code == 0
+    assert (row["shared_state"], row["shared_state_reason"]) == (str(path), None)
+    code, out, _ = run(capsys, "doctor", "--endpoint", "quotec")
+    assert out.splitlines()[3] == f"shared state: {path}"
+
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("", encoding="utf-8")
+    unusable = blocker / STATE_FILE
+    monkeypatch.setattr(cli, "_runtime", replay_runtime(REPLAY_DIR, unusable))
+    code, out, _ = run(capsys, "--format", "json", "doctor", "--endpoint", "quotec")
+    [row] = json.loads(out)
+    # The limits stay in process, so the run still passes.
+    assert code == 0
+    assert row["shared_state"] == str(unusable)
+    assert row["shared_state_reason"]
+
+
+def test_doctor_shares_the_state_file_and_a_replay_run_creates_none(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert REAL_RUNTIME().state_path == default_state_path()
+
+    code, _, _ = run(capsys, "doctor")
+
+    assert code == 0
+    assert not default_state_path().exists()
+
+
+def test_constructing_a_client_creates_no_file_before_its_first_request() -> None:
+    Client().close()
+    asyncio.run(AsyncClient().close())
+    assert not cache_dir().exists()
+
+    upstream = FakeUpstream(FakeClock())
+    upstream.route(
+        "stock.xueqiu.com", "/v5/stock/realtime/quotec.json", fixture_reply("quotec/cn_hk_us")
+    )
+    runtime = SyncRuntime(transport=upstream.transport, state_path=default_state_path())
+    with Client(_runtime=runtime) as client:
+        assert not cache_dir().exists()
+        client.quotec("SH600000")
+        assert default_state_path().is_file()
+    with Client() as client:
+        shared = client.status().shared
+    assert shared is not None and shared.path == str(default_state_path())
