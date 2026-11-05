@@ -61,6 +61,7 @@ class ClientBase:
         min_intervals: Mapping[str, float] | None,
         deadline: float,
         clock: Callable[[], float],
+        wall: Callable[[], float],
     ) -> None:
         if not deadline > 0:
             raise ValueError("deadline must be a positive number of seconds")
@@ -79,6 +80,7 @@ class ClientBase:
         self._limiter = HostLimiter(_intervals(min_intervals))
         self._breaker = CircuitBreaker(BREAKER_COOLDOWN_S)
         self._clock = clock
+        self._wall = wall
         self._deadline_s = float(deadline)
         self._attempt_budget_s = min(MIN_ATTEMPT_S, self._deadline_s / 2)
 

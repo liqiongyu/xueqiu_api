@@ -7,7 +7,7 @@ import contextvars
 import json
 import threading
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -207,9 +207,13 @@ class Harness:
         upstream: FakeUpstream,
         clock: FakeClock,
         transport: ReplayTransport | None = None,
+        wall: Callable[[], float] | None = None,
         **options: Any,
     ) -> None:
-        """``transport`` replaces the fake upstream, for example with a replay transport."""
+        """``transport`` replaces the fake upstream, for example with a replay transport.
+
+        ``wall`` replaces the runtime's default wall clock only when given.
+        """
         self.kind: Kind = kind
         self.upstream = upstream
         self.clock = clock
@@ -219,6 +223,8 @@ class Harness:
             runtime = SyncRuntime(
                 transport=transport or upstream.transport, clock=clock.now, sleep=clock.sleep
             )
+            if wall is not None:
+                runtime = replace(runtime, wall=wall)
             self.client = Client(_runtime=runtime, **options)
         else:
             self._runner = asyncio.Runner()
@@ -227,6 +233,8 @@ class Harness:
                 clock=clock.now,
                 sleep=clock.async_sleep,
             )
+            if wall is not None:
+                async_runtime = replace(async_runtime, wall=wall)
             self.client = AsyncClient(_runtime=async_runtime, **options)
 
     def run(self, method: str, *args: Any, **kwargs: Any) -> Any:

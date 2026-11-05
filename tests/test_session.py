@@ -6,9 +6,12 @@ import json
 import logging
 import os
 import stat
+import subprocess
 import sys
 from collections.abc import Callable
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
+from typing import Self
 
 import httpx2
 import pytest
@@ -22,7 +25,10 @@ from xueqiu_api import (
     UpstreamChanged,
     UpstreamError,
 )
+from xueqiu_api._async import AsyncRuntime
+from xueqiu_api._paths import cache_dir, data_dir
 from xueqiu_api._session import default_session_path, parse_credentials
+from xueqiu_api._sync import SyncRuntime
 
 from .harness import (
     ANON_COOKIES,
@@ -382,12 +388,75 @@ def test_default_session_path_follows_platform_conventions(
     assert default_session_path() == tmp_path / "xueqiu-api" / "session.json"
     monkeypatch.setenv("XDG_CACHE_HOME", "relative/path")
     assert default_session_path() == Path.home() / ".cache" / "xueqiu-api" / "session.json"
+    monkeypatch.delenv("XDG_CACHE_HOME")
+    assert default_session_path() == Path.home() / ".cache" / "xueqiu-api" / "session.json"
     monkeypatch.setattr(sys, "platform", "darwin")
     expected = Path.home() / "Library" / "Caches" / "xueqiu-api" / "session.json"
     assert default_session_path() == expected
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     assert default_session_path() == tmp_path / "xueqiu-api" / "Cache" / "session.json"
+    monkeypatch.delenv("LOCALAPPDATA")
+    local = Path.home() / "AppData" / "Local"
+    assert default_session_path() == local / "xueqiu-api" / "Cache" / "session.json"
+    assert default_session_path() == cache_dir() / "session.json"
+
+
+def test_data_dir_follows_platform_conventions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert data_dir() == tmp_path / "xueqiu-api"
+    monkeypatch.setenv("XDG_DATA_HOME", "relative/path")
+    assert data_dir() == Path.home() / ".local" / "share" / "xueqiu-api"
+    monkeypatch.delenv("XDG_DATA_HOME")
+    assert data_dir() == Path.home() / ".local" / "share" / "xueqiu-api"
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert data_dir() == Path.home() / "Library" / "Application Support" / "xueqiu-api"
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert data_dir() == tmp_path / "xueqiu-api" / "Data"
+    monkeypatch.delenv("LOCALAPPDATA")
+    assert data_dir() == Path.home() / "AppData" / "Local" / "xueqiu-api" / "Data"
+
+
+def test_offline_tests_and_their_subprocesses_use_private_user_directories(
+    tmp_path: Path,
+) -> None:
+    code = (
+        "from xueqiu_api._paths import cache_dir, data_dir\nprint(cache_dir())\nprint(data_dir())\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    for path in (Path.home(), cache_dir(), data_dir(), *map(Path, done.stdout.splitlines())):
+        assert path.is_relative_to(tmp_path)
+    assert os.environ["PYTHON_KEYRING_BACKEND"] == "keyring.backends.null.Keyring"
+
+
+@pytest.mark.parametrize("module", ["_sync", "_async"])
+def test_the_default_wall_clock_reads_the_patched_module_datetime(
+    monkeypatch: pytest.MonkeyPatch, module: str
+) -> None:
+    moment = datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> Self:
+            return cls.fromtimestamp(moment.timestamp(), tz)
+
+    monkeypatch.setattr(f"xueqiu_api.{module}.datetime", Frozen)
+    runtime = SyncRuntime() if module == "_sync" else AsyncRuntime()
+    assert runtime.wall() == moment.timestamp()
+
+
+def test_the_harness_replaces_the_wall_clock_only_when_given(
+    make: Callable[..., Harness],
+) -> None:
+    given = make(wall=lambda: 1234.5).client
+    default = make().client
+    assert given._wall() == 1234.5  # pyright: ignore[reportPrivateUsage]
+    runtime = SyncRuntime() if isinstance(default, Client) else AsyncRuntime()
+    assert default._wall is runtime.wall  # pyright: ignore[reportPrivateUsage]
 
 
 def test_home_page_without_a_needed_cookie_fails_only_the_endpoints_that_need_it(

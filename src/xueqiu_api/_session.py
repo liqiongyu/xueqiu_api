@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import sys
 import tempfile
 import time
 from collections.abc import Mapping
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ._core import COOKIE_NAME, COOKIE_VALUE, Call, log, usable_cookie
+from ._paths import cache_dir
 
 TOKEN_ENV = "XUEQIU_TOKEN"
 _VERSION = 1
@@ -51,14 +51,7 @@ def parse_credentials(token: str) -> dict[str, str]:
 
 def default_session_path() -> Path:
     """``session.json`` in the per-user cache directory of ``xueqiu-api``."""
-    if sys.platform == "win32":
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-        return base / "xueqiu-api" / "Cache" / "session.json"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Caches" / "xueqiu-api" / "session.json"
-    xdg = os.environ.get("XDG_CACHE_HOME", "")
-    base = Path(xdg) if os.path.isabs(xdg) else Path.home() / ".cache"
-    return base / "xueqiu-api" / "session.json"
+    return cache_dir() / "session.json"
 
 
 class SessionStore:

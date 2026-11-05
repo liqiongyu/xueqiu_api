@@ -24,6 +24,29 @@ def _no_ambient_token(request: pytest.FixtureRequest, monkeypatch: pytest.Monkey
 
 
 @pytest.fixture(autouse=True)
+def _private_user_dirs(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Point the home, cache and data directories of offline tests at ``tmp_path``.
+
+    Set in the environment, so subprocesses inherit them, together with keyring's null
+    backend.
+    """
+    if request.node.get_closest_marker("live") is not None:
+        return
+    home = tmp_path / "home"
+    for name, path in (
+        ("HOME", home),
+        ("USERPROFILE", home),
+        ("XDG_CACHE_HOME", tmp_path / "xdg-cache"),
+        ("XDG_DATA_HOME", tmp_path / "xdg-data"),
+        ("LOCALAPPDATA", tmp_path / "local-app-data"),
+    ):
+        monkeypatch.setenv(name, str(path))
+    monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.null.Keyring")
+
+
+@pytest.fixture(autouse=True)
 def _no_real_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail an offline test that reaches a real HTTP transport, before anything is sent.
 
@@ -81,7 +104,7 @@ def register_endpoint(monkeypatch: pytest.MonkeyPatch) -> Register:
     def register(spec: Endpoint[Any, Any]) -> Endpoint[Any, Any]:
         added[spec.name] = spec
         merged = MappingProxyType(dict(sorted({**REGISTRY, **added}.items())))
-        for module in ("_base", "_replay", "cli", "mcp_server.tools"):
+        for module in ("_base", "_replay", "cli", "endpoints", "mcp_server.tools"):
             monkeypatch.setattr(f"xueqiu_api.{module}.REGISTRY", merged)
         return spec
 

@@ -53,12 +53,21 @@ P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
 
 
+def _wall() -> float:
+    """Seconds since the epoch, read through this module's ``datetime`` at call time."""
+    return datetime.now(UTC).timestamp()
+
+
 @dataclass(frozen=True)
 class SyncRuntime:
-    """Private injection point for tests and replay: transport, clock and sleep."""
+    """Private injection point for tests and replay: transport, clocks and sleep.
+
+    ``clock`` is monotonic and times waits; ``wall`` is seconds since the epoch.
+    """
 
     transport: httpx2.BaseTransport | None = None
     clock: Callable[[], float] = time.monotonic
+    wall: Callable[[], float] = _wall
     sleep: Callable[[float], None] = time.sleep
 
 
@@ -103,6 +112,7 @@ class Client(ClientBase, SyncEndpoints):
             min_intervals=min_intervals,
             deadline=deadline,
             clock=runtime.clock,
+            wall=runtime.wall,
         )
         self._sleep = runtime.sleep
         self._http = httpx2.Client(
