@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ._time import from_ms
-from .registry import AgentInfo, Endpoint
+from .registry import AgentInfo, Endpoint, Pagination
 from .symbols import SymbolCode, normalize_symbol
 
 ReportType = Literal["all", "annual"]
@@ -32,7 +32,7 @@ class FinanceParams(BaseModel):
 
     symbol: SymbolCode
     """A-share, Hong Kong or US stock; the request goes to the region of its market."""
-    type: ReportType = "all"
+    report_type: ReportType = "all"
     """all (quarterly, half-year and annual reports) or annual (annual reports only)."""
     is_detail: bool = True
     """Every line item, or only the upstream's short list (8 items for A-share indicators)."""
@@ -99,7 +99,7 @@ def _build_query(params: FinanceParams, now: datetime) -> dict[str, str]:
     return {
         "region": normalize_symbol(params.symbol).region,
         "symbol": params.symbol,
-        "type": _UPSTREAM_TYPES[params.type],
+        "type": _UPSTREAM_TYPES[params.report_type],
         "is_detail": "true" if params.is_detail else "false",
         "count": str(params.count),
     }
@@ -150,7 +150,7 @@ def _period(row: Any, tz: ZoneInfo, items: ItemFixes) -> ReportPeriod:
 
 
 def finance_endpoint(
-    statement: str, *, agent: AgentInfo, items: ItemFixes = MappingProxyType({})
+    statement: str, *, doc: str, agent: AgentInfo, items: ItemFixes = MappingProxyType({})
 ) -> Endpoint[FinanceParams, Financials]:
     """Spec of ``/v5/stock/finance/{region}/<statement>.json``, named ``finance_<statement>``.
 
@@ -163,6 +163,7 @@ def finance_endpoint(
 
     return Endpoint(
         name=f"finance_{statement}",
+        doc=doc,
         host="stock.xueqiu.com",
         path=f"/v5/stock/finance/{{region}}/{statement}.json",
         params=FinanceParams,
@@ -172,5 +173,8 @@ def finance_endpoint(
         freshness="daily",
         envelope="xueqiu",
         verified_on=date(2026, 11, 4),
+        pagination=Pagination(style="latest"),
+        markets=("CN", "HK", "US"),
+        order="newest_first",
         agent=agent,
     )

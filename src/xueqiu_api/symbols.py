@@ -1,4 +1,5 @@
-"""Normalization of user input into Xueqiu symbols.
+"""Normalization of user input into Xueqiu symbols, and the code types of funds, portfolios
+and index valuations, which are not symbols.
 
 Accepted forms (case-insensitive, surrounding spaces ignored):
 
@@ -23,7 +24,7 @@ from types import MappingProxyType
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import AfterValidator, BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, StringConstraints
 
 from .errors import SymbolNotFound
 
@@ -115,6 +116,25 @@ def _normalized_code(value: str) -> str:
 
 SymbolCode = Annotated[str, AfterValidator(_normalized_code)]
 """Pydantic field type: a symbol string normalized to its Xueqiu code."""
+
+
+def _upper(value: Any) -> Any:
+    return value.strip().upper() if isinstance(value, str) else value
+
+
+FundCode = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[0-9]{6}$")]
+"""A fund: six digits, such as 008975. Not a symbol: as a symbol the same digits would mean a
+stock."""
+CubeCode = Annotated[str, StringConstraints(pattern=r"^ZH[0-9]{1,10}$"), BeforeValidator(_upper)]
+"""A portfolio: ZH plus digits, such as ZH2567925. Case-insensitive."""
+IndexCode = Annotated[
+    str,
+    StringConstraints(pattern=r"^(?:[A-Z][A-Z0-9]{1,15}|935600)$"),
+    BeforeValidator(_upper),
+]
+"""An index of the valuation endpoints, such as SH000300, CSIH30269, HKHSI or NDX. Case-insensitive.
+Bare digits are ambiguous and rejected, except 935600, the one index the upstream lists that way
+(measured 2026-11-05)."""
 
 
 def split_list(text: str) -> list[str]:

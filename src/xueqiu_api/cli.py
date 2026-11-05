@@ -33,7 +33,7 @@ from .errors import (
     UnknownEndpoint,
     XueqiuError,
 )
-from .mcp import MAX_MAX_CHARS, MIN_MAX_CHARS, LogLevel, McpOptions
+from .mcp_server import MAX_MAX_CHARS, MIN_MAX_CHARS, LogLevel, McpOptions
 
 log = logging.getLogger("xueqiu_api.cli")
 
@@ -110,10 +110,12 @@ def _parser() -> argparse.ArgumentParser:
         description="Report the versions, the credential source and the session cache, then "
         "call every endpoint once with its first registry example, serially through one "
         "client, so the per-host limiter spaces the requests.",
-        epilog="Statuses: ok, empty, needs_login, blocked, rate_limited, error. The exit code "
-        "is 0 when every checked endpoint is ok or empty. Otherwise the most severe failure "
-        "is also printed to stderr as the error JSON and its code is the exit code, from most "
-        f"to least severe: {', '.join(SEVERITY)}.",
+        epilog="Statuses: ok, empty, needs_login, blocked, rate_limited, error. Endpoints no "
+        "real response was ever seen from are marked unverified. The exit code is 0 when every "
+        "checked endpoint is ok or empty; unverified endpoints, and endpoints that need a login "
+        "when no credentials are set, do not count. Otherwise the most severe failure is also "
+        "printed to stderr as the error JSON and its code is the exit code, from most to least "
+        f"severe: {', '.join(SEVERITY)}.",
     )
     doctor.add_argument(
         "--endpoint",
@@ -239,17 +241,22 @@ def _doctor(args: argparse.Namespace) -> int:
     with client:
         for name in names:
             status, elapsed, error = _check(client, runtime, name)
-            if error is not None:
+            spec = REGISTRY[name]
+            unverified = spec.verified_on is None
+            needs_login = spec.auth == "required" and credentials == "none"
+            if error is not None and not unverified and not needs_login:
                 failures.append(error)
             if text:
                 detail = "" if error is None else f"{error.code}: {error.message}"
-                print(_row(width, name, status, f"{elapsed:.2f}s", detail), flush=True)
+                mark = "unverified " if unverified else ""
+                print(_row(width, name, status, f"{elapsed:.2f}s", mark + detail), flush=True)
             rows.append(
                 {
                     "endpoint": name,
                     "status": status,
                     "elapsed_s": round(elapsed, 3),
                     "error": None if error is None else error.to_dict(),
+                    **({"unverified": True} if unverified else {}),
                     **facts,
                 }
             )
@@ -300,7 +307,7 @@ def _mcp(args: argparse.Namespace) -> int:
         log_level=args.log_level,
     )
     try:
-        server = importlib.import_module("xueqiu_api.mcp.server")
+        server = importlib.import_module("xueqiu_api.mcp_server.server")
     except ModuleNotFoundError as exc:
         if (exc.name or "").partition(".")[0] != "mcp":
             raise

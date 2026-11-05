@@ -3,12 +3,16 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, NoReturn
 
 import httpx2
 import pytest
 
-from .harness import FakeClock, FakeUpstream, Harness, Kind
+from xueqiu_api import REGISTRY
+from xueqiu_api.registry import Endpoint
+
+from .harness import FakeClock, FakeUpstream, Harness, Kind, Register
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +45,19 @@ def _no_ambient_mcp_options(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in list(os.environ):
         if name.startswith("XUEQIU_MCP_"):
             monkeypatch.delenv(name)
+
+
+@pytest.fixture
+def register_endpoint(monkeypatch: pytest.MonkeyPatch) -> Register:
+    """Add a synthetic endpoint to the module-level registries for one test."""
+
+    def register(spec: Endpoint[Any, Any]) -> Endpoint[Any, Any]:
+        merged = MappingProxyType(dict(sorted({**REGISTRY, spec.name: spec}.items())))
+        for module in ("_base", "_replay", "cli", "mcp_server.tools"):
+            monkeypatch.setattr(f"xueqiu_api.{module}.REGISTRY", merged)
+        return spec
+
+    return register
 
 
 @pytest.fixture

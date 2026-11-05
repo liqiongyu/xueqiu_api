@@ -230,6 +230,7 @@ def test_empty_kline_shape_is_a_success(h: Harness) -> None:
 
     assert len(bars) == 0
     assert bars.columns == {}
+    assert "u=fake-anon-u-0001" in h.upstream.requests(STOCK, KLINE)[0].headers["cookie"]
 
 
 def test_errors_from_the_upstream_keep_their_code(h: Harness) -> None:

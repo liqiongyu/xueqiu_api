@@ -25,10 +25,11 @@ from .errors import (
     AuthExpired,
     ErrorCode,
     LoginRequired,
+    SymbolNotFound,
     UpstreamChanged,
     XueqiuError,
 )
-from .registry import Auth, Envelope
+from .registry import Auth, Envelope, NotFound
 from .sites import HOME_HOST, HOME_URL, SITES, Site
 
 log = logging.getLogger("xueqiu_api")
@@ -77,9 +78,15 @@ class Call:
     auth: Auth | None
     """Registered auth class; None when unknown (raw requests)."""
     cookies: bool
-    """Whether the request carries the session cookies."""
+    """Whether the request carries session cookies."""
     params: Mapping[str, Any]
     """Caller-facing params for error payloads; credential-like keys are redacted later."""
+    credentials: bool = False
+    """Whether those cookies are the configured login cookies; otherwise the anonymous set."""
+    needs_cookies: tuple[str, ...] = ()
+    """Cookies that must be in the set for the request to be worth sending."""
+    not_found: NotFound | None = None
+    """Upstream errors of this endpoint that mean the requested code does not exist."""
     home: bool = False
     """The anonymous cookie bootstrap: follow redirects, expect HTML and cookies."""
 
@@ -303,11 +310,24 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
     return Ok(body)
 
 
-def unwrap(envelope: Envelope, body: Any) -> Any:
-    """Payload of a successful response; ``ValueError`` when the envelope does not match."""
-    if not isinstance(body, dict) or "data" not in body:
+def unwrap(envelope: Envelope, body: Any, *, may_lack_data: bool = False) -> Any:
+    """Payload of a successful response; ``ValueError`` when the envelope does not match.
+
+    With ``may_lack_data``, a danjuan envelope without a data key gives None: the upstream
+    answers unknown codes that way, and ``parse`` raises ``SymbolNotFound``.
+    """
+    if envelope == "bare":
+        return body
+    if not isinstance(body, dict):
         raise ValueError(f"expected the {envelope} envelope with a data key")
     fields = cast(dict[str, Any], body)
+    if envelope == "danjuan":
+        if fields.get("result_code") not in (0, "0"):
+            raise ValueError("expected the danjuan envelope with result_code 0")
+        if may_lack_data:
+            return fields.get("data")
+    if "data" not in fields:
+        raise ValueError(f"expected the {envelope} envelope with a data key")
     if envelope == "query" and fields.get("success") is not True:
         raise ValueError("expected the query envelope with success true")
     return fields["data"]
@@ -323,11 +343,12 @@ def _retry_after(headers: Mapping[str, str], default: float) -> float:
 
 
 def next_step(
-    failure: Failure, *, call: Call, attempt: int, refreshed: bool, credentials: bool
+    failure: Failure, *, call: Call, attempt: int, refreshed: bool
 ) -> Retry | XueqiuError:
     """Decide whether a failed attempt is retried, refreshes the session, or raises.
 
     Retries back off exponentially, and wait at least as long as a Retry-After header asks.
+    Errors the endpoint declares as ``not_found`` raise ``symbol_not_found``.
     Login-class codes: a request that carried the configured credentials raises
     ``auth_expired``; one that carried anonymous cookies refreshes them once and retries. When
     that does not help, or no cookies were sent, the error is ``login_required`` if the
@@ -337,9 +358,11 @@ def next_step(
     """
     if failure.code == "upstream_unavailable" and attempt < MAX_RETRIES:
         return Retry(max(BACKOFF_BASE_S * 2**attempt, failure.wait_s))
+    if call.not_found is not None and _means_not_found(failure, call.not_found):
+        return failure.error(call, SymbolNotFound)
     if not failure.login:
         return failure.error(call)
-    if call.cookies and credentials:
+    if call.credentials:
         return failure.error(call, AuthExpired)
     if call.cookies and not refreshed:
         return Retry(0.0, refresh=True)
@@ -353,9 +376,15 @@ def next_step(
     else:
         hint = (
             f"{call.endpoint} was verified to work without login and now returns a login "
-            f"error. Setting XUEQIU_TOKEN may help; please report it at {ISSUES_URL}."
+            f"error; please report it at {ISSUES_URL}."
         )
     return failure.error(call, UpstreamChanged, hint=hint)
+
+
+def _means_not_found(failure: Failure, rule: NotFound) -> bool:
+    if failure.upstream_code is not None:
+        return failure.upstream_code in rule.codes
+    return failure.status in rule.statuses
 
 
 class HostLimiter:

@@ -7,7 +7,11 @@ from ..registry import AgentInfo
 
 ENDPOINT = finance_endpoint(
     "balance",
+    doc="Balance sheet, latest report period first; see ``FinanceParams``.",
     agent=AgentInfo(
+        category="finance",
+        group="xq_financials",
+        section="balance",
         title_zh="资产负债表",
         title_en="Balance sheet",
         summary=(

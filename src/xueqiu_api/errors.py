@@ -142,7 +142,7 @@ class UnknownEndpoint(XueqiuError):
 
 
 class SymbolNotFound(XueqiuError):
-    """The symbol does not match any supported market code format."""
+    """The code does not match a supported format, or the upstream has no such security."""
 
     code = "symbol_not_found"
 
@@ -231,7 +231,8 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorInfo] = MappingProxyType(
             4,
             "A shares are SH, SZ or BJ plus 6 digits, Hong Kong stocks 5 digits, US stocks "
             "their ticker. Indexes need a prefix: SH000001 is the Shanghai index, 000001 is "
-            "SZ000001. Bonds and repos such as 113xxx or 204xxx need the prefix too.",
+            "SZ000001. Bonds and repos such as 113xxx or 204xxx need the prefix too. A code "
+            "that was never listed and a delisted one get the same upstream answer.",
         ),
         "login_required": ErrorInfo(
             LoginRequired, "reauth", 5, "This data needs a logged-in session. " + _REAUTH_HINT

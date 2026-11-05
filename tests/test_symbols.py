@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from xueqiu_api import SymbolNotFound, normalize_symbol
+from xueqiu_api.symbols import CubeCode, FundCode, IndexCode
 
 CASES = [
     # A shares with an explicit market
@@ -97,3 +100,43 @@ def test_unrecognized_symbols(text: str) -> None:
         normalize_symbol(text)
     assert caught.value.code == "symbol_not_found"
     assert caught.value.recoverable == "fix_params"
+
+
+@pytest.mark.parametrize(
+    ("code_type", "text", "expected"),
+    [
+        (FundCode, "008975", "008975"),
+        (FundCode, " 008975 ", "008975"),
+        (CubeCode, "ZH2567925", "ZH2567925"),
+        (CubeCode, " zh2567925 ", "ZH2567925"),
+        (IndexCode, "SH000300", "SH000300"),
+        (IndexCode, "sz399006", "SZ399006"),
+        (IndexCode, "CSIH30269", "CSIH30269"),
+        (IndexCode, "hkhsi", "HKHSI"),
+        (IndexCode, "NDX", "NDX"),
+        (IndexCode, "935600", "935600"),
+    ],
+)
+def test_code_types_accept(code_type: Any, text: str, expected: str) -> None:
+    assert TypeAdapter(code_type).validate_python(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("code_type", "value"),
+    [
+        (FundCode, "8975"),
+        (FundCode, "SH008975"),
+        (FundCode, 8975),
+        (CubeCode, "ZH"),
+        (CubeCode, "SH600000"),
+        (CubeCode, 2567925),
+        # Bare digits are ambiguous: 000300 is both a stock and an index number.
+        (IndexCode, "000300"),
+        (IndexCode, ".INX"),
+        (IndexCode, "N"),
+        (IndexCode, 935600),
+    ],
+)
+def test_code_types_reject(code_type: Any, value: object) -> None:
+    with pytest.raises(ValidationError):
+        TypeAdapter(code_type).validate_python(value)

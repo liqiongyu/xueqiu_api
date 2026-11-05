@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, cast
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from .._time import from_ms
+from .._f10 import region_query
+from .._time import date_from_ms
 from ..registry import AgentInfo, Endpoint
-from ..symbols import SymbolParams, exchange_timezone, normalize_symbol
+from ..symbols import SymbolParams, exchange_timezone
 
 
 def _named(name: str, hong_kong: str) -> Any:
@@ -49,13 +50,7 @@ class Company(BaseModel):
     @field_validator("established_date", "listed_date", mode="before")
     @classmethod
     def _exchange_date(cls, value: Any, info: ValidationInfo) -> Any:
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return from_ms(value, exchange_timezone(info.data.get("symbol"))).date()
-        return value
-
-
-def _build_query(params: SymbolParams, now: datetime) -> dict[str, str]:
-    return {"region": normalize_symbol(params.symbol).region, "symbol": params.symbol}
+        return date_from_ms(value, exchange_timezone(info.data.get("symbol")))
 
 
 def _parse(payload: Any, params: SymbolParams) -> Company:
@@ -69,16 +64,21 @@ def _parse(payload: Any, params: SymbolParams) -> Company:
 
 ENDPOINT = Endpoint(
     name="f10_company",
+    doc="Company profile of one listed company.",
     host="stock.xueqiu.com",
     path="/v5/stock/f10/{region}/company.json",
     params=SymbolParams,
-    build_query=_build_query,
+    build_query=region_query,
     parse=_parse,
     auth="anonymous",
     freshness="static",
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
+    markets=("CN", "HK", "US"),
     agent=AgentInfo(
+        category="f10",
+        group="xq_company",
+        section="company",
         title_zh="公司资料",
         title_en="Company profile",
         summary=(

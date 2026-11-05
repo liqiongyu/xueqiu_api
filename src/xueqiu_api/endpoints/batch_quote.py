@@ -42,6 +42,7 @@ def _parse(payload: Any, params: BatchQuoteParams) -> list[QuoteDetail]:
 
 ENDPOINT = Endpoint(
     name="batch_quote",
+    doc="Quotes of up to 20 symbols in one request, with names and market status.",
     host="stock.xueqiu.com",
     path="/v5/stock/batch/quote.json",
     params=BatchQuoteParams,
@@ -51,7 +52,9 @@ ENDPOINT = Endpoint(
     freshness="realtime",
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
+    markets=("CN", "HK", "US"),
     agent=AgentInfo(
+        category="quote",
         title_zh="批量行情",
         title_en="Batch quotes",
         summary="一次请求取多只股票或指数的名称、最新价、涨跌幅、成交额、市值和市场交易状态。",

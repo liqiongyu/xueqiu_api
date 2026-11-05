@@ -7,32 +7,108 @@ package collects them into ``xueqiu_api.endpoints.REGISTRY``.
 from __future__ import annotations
 
 import difflib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from types import MappingProxyType
 from typing import Any, Generic, Literal, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
 from .errors import InvalidParams
 from .sites import Host
+from .symbols import Market, normalize_symbol
 
 Auth = Literal["anonymous", "optional", "required"]
 Freshness = Literal["realtime", "intraday", "daily", "static"]
-Envelope = Literal["xueqiu", "query"]
+Envelope = Literal["xueqiu", "query", "danjuan", "bare"]
 """``xueqiu``: ``{"data": ..., "error_code": 0, "error_description": ...}``.
 
-``query`` (``/query/v1/`` on www.xueqiu.com): ``{"code": 200, "success": true, "data": ...}``.
+``query`` (most of ``/query/v1/`` on www.xueqiu.com):
+``{"code": 200, "success": true, "data": ...}``.
+
+``danjuan``: ``{"data": ..., "result_code": 0}``; ``result_code`` is 0 or ``"0"``.
+
+``bare``: the body itself is the payload. Upstream error codes are still recognized.
 """
+Category = Literal[
+    "quote",
+    "kline",
+    "capital",
+    "f10",
+    "finance",
+    "screener",
+    "market",
+    "search",
+    "index",
+    "fund",
+    "cube",
+    "watchlist",
+]
+"""Endpoint groups in display order; an endpoint name starts with its category."""
+CATEGORY_TITLES: Mapping[Category, str] = MappingProxyType(
+    {
+        "quote": "行情",
+        "kline": "K线",
+        "capital": "资金流向",
+        "f10": "F10",
+        "finance": "财报",
+        "screener": "选股器",
+        "market": "榜单",
+        "search": "搜索",
+        "index": "指数估值",
+        "fund": "基金",
+        "cube": "组合",
+        "watchlist": "自选股",
+    }
+)
+RowOrder = Literal["oldest_first", "newest_first", "rank"]
+"""Order of the rows of a result: by time, or as the upstream ranks them."""
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
 
 
 @dataclass(frozen=True, kw_only=True)
+class Pagination:
+    """How the rows of an endpoint are reached beyond one request."""
+
+    style: Literal["page", "latest", "bars"]
+    """``page``: numbered pages. ``latest``: the most recent ``count`` rows, with no way to older
+    ones. ``bars``: candlestick windows that page back in time."""
+    end: Literal["total", "short", "empty"] = "empty"
+    """What ends the walk: the upstream's total, a short page, or an empty page."""
+    size_cap: int | None = None
+    """Largest page size the upstream honours."""
+    total_cap: int | None = None
+    """Most rows the upstream serves across all pages."""
+    key: Callable[[Any], Hashable] | None = None
+    """Identity of a row, to drop rows repeated across pages."""
+    guard_short: bool = True
+    """Whether rows after a short page mean the upstream ignored the page size."""
+    cap_hint: str = ""
+    """How to get all rows when ``total_cap`` is reached."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class NotFound:
+    """Upstream errors of an endpoint that mean the requested code does not exist."""
+
+    statuses: tuple[int, ...] = ()
+    """HTTP statuses that mean it when the body carries no upstream error code."""
+    codes: tuple[str, ...] = ()
+    """Upstream error codes that mean it, at any HTTP status."""
+
+
+@dataclass(frozen=True, kw_only=True)
 class AgentInfo:
     """What the MCP server and the CLI need to present an endpoint."""
 
+    category: Category
+    group: str | None = None
+    """Grouped MCP tool of this endpoint, if any; set together with ``section``."""
+    section: str | None = None
+    """Value of the grouped tool's ``section``, unique within the group."""
     title_zh: str
     title_en: str
     summary: str
@@ -53,6 +129,10 @@ class AgentInfo:
     """Decimal places of rendered floats; trailing zeros are dropped."""
     free_text: tuple[str, ...] = ()
     """Fields holding upstream prose: never rendered by default, cleaned and fenced on request."""
+    labels: tuple[str, ...] = ()
+    """Short text fields written by an owner, such as a portfolio name."""
+    empty_hint: str | None = None
+    """What an empty result means, when that is not obvious."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -62,10 +142,12 @@ class Endpoint(Generic[P, R]):
     ``build_query`` maps validated params and the current time to upstream query values; values
     whose names appear as ``{name}`` in ``path`` fill the path template instead. ``parse`` turns
     the unwrapped envelope payload into the result and raises ``ValueError`` or ``TypeError`` on
-    a shape mismatch.
+    a shape mismatch, or ``SymbolNotFound`` on the shape an unknown code gets.
     """
 
     name: str
+    doc: str
+    """One English sentence for the method's docstring."""
     host: Host
     path: str
     params: type[P]
@@ -74,15 +156,24 @@ class Endpoint(Generic[P, R]):
     auth: Auth
     freshness: Freshness
     envelope: Envelope
-    verified_on: date
+    verified_on: date | None
+    """Date of the last live check; None when no real response was ever seen."""
     agent: AgentInfo
     cookies: bool = True
     """False when the endpoint was measured to work without cookies; then none are sent."""
+    pagination: Pagination | None = None
+    markets: tuple[Market, ...] | None = None
+    """Markets measured to work; a ``symbol`` param of any other market is rejected before a
+    request. None when the endpoint does not depend on a market."""
+    order: RowOrder | None = None
+    needs_cookies: tuple[str, ...] = ()
+    """Cookies without which the upstream answers wrongly instead of with an error."""
+    not_found: NotFound | None = None
 
     def validate(self, params: Mapping[str, Any]) -> P:
         """Validate caller params; raise ``InvalidParams`` listing every problem."""
         try:
-            return self.params.model_validate(dict(params))
+            validated = self.params.model_validate(dict(params))
         except ValidationError as exc:
             raise invalid_params(
                 self.params,
@@ -91,6 +182,24 @@ class Endpoint(Generic[P, R]):
                 endpoint=self.name,
                 params={key: value for key, value in params.items() if value is not None},
             ) from None
+        self._check_market(validated)
+        return validated
+
+    def _check_market(self, validated: P) -> None:
+        symbol = getattr(validated, "symbol", None)
+        if self.markets is None or not isinstance(symbol, str):
+            return
+        market = normalize_symbol(symbol).market
+        if market not in self.markets:
+            allowed = ", ".join(self.markets)
+            raise InvalidParams(
+                f"{self.name} has no data for {symbol}, a {market} symbol",
+                endpoint=self.name,
+                params={"symbol": symbol},
+                field="symbol",
+                valid_values=self.markets,
+                hint=f"Use a symbol of these markets: {allowed}.",
+            )
 
 
 def invalid_params(

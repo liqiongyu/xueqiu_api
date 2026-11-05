@@ -39,11 +39,11 @@ from xueqiu_api._async import AsyncClient, AsyncRuntime
 from xueqiu_api._render import STATS_COLUMNS
 from xueqiu_api._replay import ReplayTransport
 from xueqiu_api._time import to_ms
-from xueqiu_api.mcp import McpOptions
-from xueqiu_api.mcp import server as mcp_server
-from xueqiu_api.mcp import tools as mcp_tools
-from xueqiu_api.mcp.server import build_server
-from xueqiu_api.mcp.tools import (
+from xueqiu_api.mcp_server import McpOptions
+from xueqiu_api.mcp_server import server as mcp_server
+from xueqiu_api.mcp_server import tools as mcp_tools
+from xueqiu_api.mcp_server.server import build_server
+from xueqiu_api.mcp_server.tools import (
     DEDICATED,
     DESCRIBE_NAMES,
     DISCLAIMER,
@@ -57,11 +57,13 @@ from .harness import (
     REPLAY_DIR,
     FakeClock,
     FakeUpstream,
+    Register,
     Reply,
     error_reply,
     json_reply,
     raise_reply,
     replay_body,
+    synthetic_endpoint,
     text_reply,
     waf_reply,
 )
@@ -737,7 +739,7 @@ async def test_concurrent_tool_calls_share_the_per_host_limiter(
 async def test_an_exclude_pattern_that_matches_nothing_is_logged(
     connect: Connect, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING, logger="xueqiu_api.mcp"):
+    with caplog.at_level(logging.WARNING, logger="xueqiu_api.mcp_server"):
         async with connect(exclude=("klien",)) as client:
             names = [tool.name for tool in (await client.list_tools()).tools]
 
@@ -1028,8 +1030,8 @@ MATRIX = [
         KLINE,
         error_reply(60201, "用户id无效"),
         TOKEN,
-        "auth_expired",
-        "reauth",
+        "upstream_changed",
+        "none",
         None,
     ),
     (
@@ -1048,8 +1050,8 @@ MATRIX = [
         SUGGEST,
         error_reply("21101", "用户id无效", 400),
         TOKEN,
-        "auth_expired",
-        "reauth",
+        "upstream_changed",
+        "none",
         None,
     ),
     (
@@ -1068,8 +1070,8 @@ MATRIX = [
         SUGGEST,
         error_reply("400016", "", 400),
         TOKEN,
-        "auth_expired",
-        "reauth",
+        "upstream_changed",
+        "none",
         None,
     ),
     (
@@ -1196,15 +1198,15 @@ async def test_upstream_failures_become_error_results(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    ("path", "reply", "reauth"),
+    ("path", "reply"),
     [
-        (KLINE, error_reply(60201, "用户id无效"), True),
-        (QUOTEC, error_reply(60201, "用户id无效"), False),
+        (KLINE, error_reply(60201, "用户id无效")),
+        (QUOTEC, error_reply(60201, "用户id无效")),
     ],
     ids=["cookies", "no-cookies"],
 )
-async def test_login_codes_on_anonymous_calls_point_to_a_token_only_where_cookies_go(
-    connect: Connect, upstream: FakeUpstream, path: str, reply: Reply, reauth: bool
+async def test_login_codes_on_anonymous_calls_do_not_ask_for_a_token(
+    connect: Connect, upstream: FakeUpstream, path: str, reply: Reply
 ) -> None:
     upstream.route(STOCK, path, reply)
     tool, arguments = TOOL_FOR_PATH[path]
@@ -1212,7 +1214,32 @@ async def test_login_codes_on_anonymous_calls_point_to_a_token_only_where_cookie
         payload = await fail(client, tool, arguments)
 
     assert (payload["error_code"], payload["recoverable"]) == ("upstream_changed", "none")
-    assert (REAUTH_HINT in payload["hint"]) is reauth
+    assert REAUTH_HINT not in payload["hint"]
+    assert "XUEQIU_TOKEN" not in payload["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("token", "code"), [(None, "login_required"), (TOKEN, "auth_expired")], ids=["none", "token"]
+)
+async def test_login_only_endpoints_ask_for_a_token_in_the_server_configuration(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    token: str | None,
+    code: str,
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(auth="required"))
+    upstream.route(STOCK, spec.path, error_reply(60201, "用户id无效"))
+    async with connect(replay=False, token=token) as client:
+        payload = await fail(
+            client, "xq_call", {"endpoint": spec.name, "params": {"symbol": "SH600000"}}
+        )
+
+    assert (payload["error_code"], payload["recoverable"]) == (code, "reauth")
+    assert payload["hint"] == REAUTH_HINT
+    assert len(upstream.requests(STOCK, spec.path)) == (0 if token is None else 1)
+    assert TOKEN not in json.dumps(payload)
 
 
 @pytest.mark.anyio
@@ -1266,9 +1293,9 @@ async def test_unknown_and_excluded_tools_are_protocol_errors(connect: Connect) 
         ),
         (
             "xq_call",
-            {"endpoint": "finance_income", "params": {"symbol": "SH600000", "type": "Q1"}},
+            {"endpoint": "finance_income", "params": {"symbol": "SH600000", "report_type": "Q1"}},
             "invalid_params",
-            "type",
+            "report_type",
             "annual",
             None,
         ),
@@ -1424,7 +1451,7 @@ async def test_unexpected_exceptions_become_internal_errors_with_an_event_id(
         raise RuntimeError("secret internals")
 
     monkeypatch.setattr(mcp_tools, "render", broken)
-    with caplog.at_level(logging.ERROR, logger="xueqiu_api.mcp"):
+    with caplog.at_level(logging.ERROR, logger="xueqiu_api.mcp_server"):
         async with connect() as client:
             payload = await fail(client, "xq_quote", {"symbols": ["SH600000"]})
 

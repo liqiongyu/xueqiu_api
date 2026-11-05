@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from xueqiu_api import (
-    AuthExpired,
     Company,
     Financials,
     InvalidParams,
@@ -229,24 +228,25 @@ def test_suggest_stock_login_codes_refresh_the_cookies_once(h: Harness, reply: R
         h.run("suggest_stock", query="pfyh")
 
     assert (caught.value.upstream_code, caught.value.endpoint) == ("400016", "suggest_stock")
-    assert "XUEQIU_TOKEN" in caught.value.hint
+    assert "XUEQIU_TOKEN" not in caught.value.hint
     home = ["xueqiu.com/", f"{WWW}/"]
     assert paths(h) == [*home, f"{WWW}{SUGGEST}", *home, f"{WWW}{SUGGEST}"]
 
 
 @pytest.mark.parametrize("reply", LOGIN_REPLIES, ids=["error_code", "query_envelope"])
-def test_suggest_stock_login_codes_with_a_token_are_auth_expired(
+def test_suggest_stock_login_codes_are_upstream_changed_with_a_token_too(
     make: Callable[..., Harness], reply: Reply
 ) -> None:
     h = make(token=TOKEN)
     h.upstream.route(WWW, SUGGEST, reply)
 
-    with pytest.raises(AuthExpired) as caught:
+    with pytest.raises(UpstreamChanged) as caught:
         h.run("suggest_stock", query="pfyh")
 
-    assert (caught.value.upstream_code, caught.value.recoverable) == ("400016", "reauth")
-    assert paths(h) == [f"{WWW}{SUGGEST}"]
-    assert h.upstream.sent[0].headers["cookie"] == TOKEN
+    assert (caught.value.upstream_code, caught.value.recoverable) == ("400016", "none")
+    home = ["xueqiu.com/", f"{WWW}/"]
+    assert paths(h) == [*home, f"{WWW}{SUGGEST}", *home, f"{WWW}{SUGGEST}"]
+    assert "fake-login" not in h.upstream.requests(WWW, SUGGEST)[0].headers["cookie"]
 
 
 @pytest.mark.parametrize("statement", STATEMENTS)
@@ -302,7 +302,7 @@ def test_finance_report_type_and_detail_map_to_upstream_values(h: Harness) -> No
         STOCK, finance_path("cn", "indicator"), fixture_reply("finance_indicator/sh600000")
     )
 
-    h.run("finance_indicator", "SH600000", type="annual", is_detail=False, count=20)
+    h.run("finance_indicator", "SH600000", report_type="annual", is_detail=False, count=20)
     h.run("finance_indicator", "SH600000")
 
     first, default = h.upstream.requests(STOCK)
@@ -316,13 +316,16 @@ def test_finance_report_type_and_detail_map_to_upstream_values(h: Harness) -> No
 
 
 @pytest.mark.parametrize(
-    "params", [{"type": "Q4"}, {"type": "quarterly"}, {"count": 0}, {"count": 21}]
+    "params",
+    [{"report_type": "Q4"}, {"report_type": "quarterly"}, {"count": 0}, {"count": 21}],
 )
 def test_finance_params_are_validated(h: Harness, params: dict[str, Any]) -> None:
     with pytest.raises(InvalidParams):
         h.run("finance_income", "SH600000", **params)
     with pytest.raises(InvalidParams):
         h.call("finance_income", symbol="SH600000", period="annual")
+    with pytest.raises(InvalidParams):
+        h.call("finance_income", symbol="SH600000", type="annual")
     assert h.upstream.sent == []
 
 

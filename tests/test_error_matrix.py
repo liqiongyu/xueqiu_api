@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 import httpx2
 import pytest
@@ -11,22 +12,29 @@ import pytest
 from xueqiu_api import (
     AuthExpired,
     Blocked,
+    InvalidParams,
     LoginRequired,
     RateLimited,
+    SymbolNotFound,
     UpstreamChanged,
+    UpstreamError,
     UpstreamUnavailable,
     XueqiuError,
 )
+from xueqiu_api.registry import NotFound
 
 from .harness import (
     Harness,
+    Register,
     Reply,
+    check_login_only_endpoint,
     danjuan_error_reply,
     error_reply,
     fixture_reply,
     home_page,
     json_reply,
     raise_reply,
+    synthetic_endpoint,
     text_reply,
     waf_reply,
 )
@@ -39,6 +47,7 @@ KLINE = "/v5/stock/chart/kline.json"
 WEB_PATH = "/cubes/rebalancing/history.json"
 FUND_PATH = "/djapi/fund/base/008975"
 TOKEN = "xq_a_token=fake-login-token-0001; u=fake-login-u-0001"
+SYNTHETIC = "/v5/synthetic.json"
 
 
 def paths(h: Harness) -> list[str]:
@@ -81,8 +90,26 @@ def test_stock_login_codes_after_a_refresh_on_an_anonymous_endpoint_are_upstream
 
     assert caught.value.upstream_code == code
     assert caught.value.endpoint == "kline"
-    assert "XUEQIU_TOKEN" in caught.value.hint
+    # The token does not reach this endpoint, so setting one would not help.
+    assert "XUEQIU_TOKEN" not in caught.value.hint
     assert paths(h) == [*BOOTSTRAP, f"{STOCK}{KLINE}", *BOOTSTRAP, f"{STOCK}{KLINE}"]
+
+
+@pytest.mark.parametrize(("code", "reply"), STOCK_LOGIN_ERRORS)
+def test_login_codes_on_an_anonymous_endpoint_are_not_auth_expired_with_a_token(
+    make: Callable[..., Harness], code: str, reply: Reply
+) -> None:
+    h = make(token=TOKEN)
+    h.upstream.route(STOCK, KLINE, reply)
+
+    with pytest.raises(UpstreamChanged) as caught:
+        h.kline("SH600000")
+
+    assert caught.value.upstream_code == code
+    assert paths(h) == [*BOOTSTRAP, f"{STOCK}{KLINE}", *BOOTSTRAP, f"{STOCK}{KLINE}"]
+    for sent in h.upstream.requests(STOCK, KLINE):
+        assert "xq_a_token=fake-anon-token-0001" in sent.headers["cookie"]
+        assert "fake-login" not in sent.headers["cookie"]
 
 
 def test_login_code_on_a_cookieless_endpoint_does_not_refresh(h: Harness) -> None:
@@ -128,14 +155,195 @@ def test_login_codes_with_a_token_are_auth_expired_without_retry(
     h.upstream.route(host, path, reply)
 
     with pytest.raises(AuthExpired) as caught:
-        if path == KLINE:
-            h.kline("SH600000")
-        else:
-            h.request(host=host, path=path)
+        h.request(host=host, path=path)
 
     assert caught.value.recoverable == "reauth"
     assert paths(h) == [f"{host}{path}"]
     assert h.upstream.sent[0].headers["cookie"] == TOKEN
+
+
+@pytest.mark.parametrize(
+    ("host", "path"), [(STOCK, SYNTHETIC), (WWW, "/cubes/synthetic.json")], ids=["stock", "www"]
+)
+def test_login_only_endpoints_need_credentials_and_report_rejected_ones(
+    make: Callable[..., Harness], register_endpoint: Register, host: Any, path: str
+) -> None:
+    spec = synthetic_endpoint(host=host, path=path, auth="required")
+
+    check_login_only_endpoint(make, register_endpoint(spec))
+
+
+def test_a_login_only_endpoint_with_bad_params_reports_the_params_first(
+    h: Harness, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(auth="required"))
+
+    with pytest.raises(InvalidParams):
+        h.call(spec.name, symbol="SH600000", extra=1)
+
+    assert h.upstream.sent == []
+
+
+NOT_FOUND = NotFound(statuses=(404,), codes=("20809", "600001"))
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        json_reply({}, 404),
+        text_reply("<html>not found</html>", 404),
+        error_reply("20809", "该组合不存在", 400),
+        error_reply("600001", "synthetic not found"),
+        json_reply({"data": {}, "error_code": 0}),
+        json_reply({"data": None, "error_code": 0}),
+    ],
+    ids=["404-json", "404-text", "code-at-400", "code-at-200", "empty-object", "null"],
+)
+def test_declared_not_found_answers_are_symbol_not_found(
+    h: Harness, register_endpoint: Register, reply: Reply
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(not_found=NOT_FOUND))
+    h.upstream.route(STOCK, SYNTHETIC, reply)
+
+    with pytest.raises(SymbolNotFound) as caught:
+        h.call(spec.name, symbol="SH600000")
+
+    assert caught.value.endpoint == spec.name
+    assert caught.value.params == {"symbol": "SH600000"}
+    assert len(h.upstream.requests(STOCK, SYNTHETIC)) == 1
+
+
+def test_a_not_found_error_carries_the_upstream_text(
+    h: Harness, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(not_found=NOT_FOUND))
+    h.upstream.route(STOCK, SYNTHETIC, error_reply("600001", "该基金暂不销售"))
+
+    with pytest.raises(SymbolNotFound) as caught:
+        h.call(spec.name, symbol="SH600000")
+
+    assert "该基金暂不销售" in caught.value.message
+    assert caught.value.upstream_code == "600001"
+
+
+def test_other_errors_at_a_declared_status_are_not_symbol_not_found(
+    h: Harness, register_endpoint: Register
+) -> None:
+    rule = NotFound(statuses=(400,), codes=("20809",))
+    spec = register_endpoint(synthetic_endpoint(not_found=rule))
+    h.upstream.route(STOCK, SYNTHETIC, error_reply("100002", "synthetic error", 400))
+
+    with pytest.raises(UpstreamError):
+        h.call(spec.name, symbol="SH600000")
+
+
+def test_undeclared_answers_stay_what_they_were(h: Harness, register_endpoint: Register) -> None:
+    spec = register_endpoint(synthetic_endpoint())
+    h.upstream.route(STOCK, SYNTHETIC, json_reply({}, 404), error_reply("20809", "synthetic"))
+
+    with pytest.raises(UpstreamChanged):
+        h.call(spec.name, symbol="SH600000")
+    with pytest.raises(UpstreamError):
+        h.call(spec.name, symbol="SH600000")
+
+
+def test_a_symbol_of_another_market_is_invalid_with_no_request(
+    h: Harness, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(markets=("CN",)))
+
+    with pytest.raises(InvalidParams) as caught:
+        h.call(spec.name, symbol="00700")
+
+    error = caught.value
+    assert (error.field, error.valid_values, error.endpoint) == ("symbol", ("CN",), spec.name)
+    assert h.upstream.sent == []
+
+
+def test_a_symbol_of_a_declared_market_is_sent(h: Harness, register_endpoint: Register) -> None:
+    spec = register_endpoint(synthetic_endpoint(markets=("CN",)))
+    h.upstream.route(STOCK, SYNTHETIC, json_reply({"data": {"value": 1}, "error_code": 0}))
+
+    assert h.call(spec.name, symbol="SH600000").value == 1
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"value": 7}, {"value": 7, "code": "SH600000"}],
+    ids=["plain", "code-echo-is-not-an-error"],
+)
+def test_the_bare_envelope_hands_the_whole_body_to_parse(
+    h: Harness, register_endpoint: Register, body: dict[str, Any]
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(host=WWW, path=SYNTHETIC, envelope="bare"))
+    h.upstream.route(WWW, SYNTHETIC, json_reply(body))
+
+    assert h.call(spec.name, symbol="SH600000").value == 7
+
+
+def test_the_bare_envelope_still_recognizes_upstream_errors(
+    h: Harness, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(host=WWW, path=SYNTHETIC, envelope="bare"))
+    h.upstream.route(WWW, SYNTHETIC, json_reply({"error_code": "10022"}))
+
+    with pytest.raises(UpstreamChanged) as caught:
+        h.call(spec.name, symbol="SH600000")
+
+    assert caught.value.upstream_code == "10022"
+    assert paths(h) == [*BOOTSTRAP, f"{WWW}{SYNTHETIC}", *BOOTSTRAP, f"{WWW}{SYNTHETIC}"]
+
+
+@pytest.mark.parametrize("code", [0, "0"])
+def test_the_danjuan_envelope_unwraps_data(
+    h: Harness, register_endpoint: Register, code: int | str
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(host=DANJUAN, path=SYNTHETIC, envelope="danjuan"))
+    h.upstream.route(DANJUAN, SYNTHETIC, json_reply({"data": {"value": 7}, "result_code": code}))
+
+    assert h.call(spec.name, symbol="SH600000").value == 7
+    assert "cookie" not in h.upstream.sent[0].headers
+
+
+def test_danjuan_error_codes_stay_errors(h: Harness, register_endpoint: Register) -> None:
+    spec = register_endpoint(synthetic_endpoint(host=DANJUAN, path=SYNTHETIC, envelope="danjuan"))
+    h.upstream.route(DANJUAN, SYNTHETIC, danjuan_error_reply(70000, "synthetic error"))
+
+    with pytest.raises(UpstreamError) as caught:
+        h.call(spec.name, symbol="SH600000")
+
+    assert caught.value.upstream_code == "70000"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"data": {"value": 7}}, {"data": {"value": 7}, "result_code": None}, {"result_code": 0}, []],
+    ids=["no-code", "null-code", "no-data", "list"],
+)
+def test_a_danjuan_envelope_mismatch_is_upstream_changed(
+    h: Harness, register_endpoint: Register, body: Any
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(host=DANJUAN, path=SYNTHETIC, envelope="danjuan"))
+    h.upstream.route(DANJUAN, SYNTHETIC, json_reply(body))
+
+    with pytest.raises(UpstreamChanged):
+        h.call(spec.name, symbol="SH600000")
+
+
+def test_a_danjuan_answer_without_data_is_not_found_where_declared(
+    h: Harness, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(
+        synthetic_endpoint(
+            host=DANJUAN, path=SYNTHETIC, envelope="danjuan", not_found=NotFound(codes=("600001",))
+        )
+    )
+    h.upstream.route(DANJUAN, SYNTHETIC, json_reply({"result_code": 0}))
+
+    with pytest.raises(SymbolNotFound) as caught:
+        h.call(spec.name, symbol="SH600000")
+
+    assert caught.value.endpoint == spec.name
 
 
 @pytest.mark.parametrize("token", [None, TOKEN])

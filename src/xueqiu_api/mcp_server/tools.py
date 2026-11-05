@@ -1,6 +1,6 @@
 """The five MCP tools: definitions built from the registry at startup, and their dispatch.
 
-This module does not import the ``mcp`` SDK; ``xueqiu_api.mcp.server`` adapts it to the
+This module does not import the ``mcp`` SDK; ``xueqiu_api.mcp_server.server`` adapts it to the
 protocol. A tool result is one text from ``xueqiu_api._render``, and every failure is an error
 text built from ``ERROR_TABLE``. The dedicated tools translate their arguments into endpoint
 params and then take the same path as ``xq_call``, so both give the same text for the same
@@ -47,11 +47,10 @@ from ..errors import (
     XueqiuError,
 )
 from ..registry import Endpoint, invalid_params, signature
-from ..sites import SITES
 from ..symbols import SymbolCode, normalize_symbol, split_list
 from . import McpOptions
 
-log = logging.getLogger("xueqiu_api.mcp")
+log = logging.getLogger("xueqiu_api.mcp_server")
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -85,7 +84,6 @@ REAUTH_HINT = (
     "Set XUEQIU_TOKEN in the env block of this MCP server's configuration and restart the "
     "server. Never paste the token into the chat."
 )
-LOGIN_CODES = frozenset(code for site in SITES.values() for code in site.login_codes)
 KLINE_SYMBOLS = 5
 DESCRIBE_NAMES = 5
 KEYWORD_CHARS = 200
@@ -252,13 +250,6 @@ class Toolbox:
         """Hint for this server, or None to keep the error's own hint."""
         if error.recoverable == "reauth":
             return REAUTH_HINT
-        if (
-            error.code == "upstream_changed"
-            and error.upstream_code in LOGIN_CODES
-            and _sends_cookies(error.endpoint)
-        ):
-            # An anonymous endpoint that now wants a login: a token may help.
-            return f"{error.hint} {REAUTH_HINT}"
         if error.code == "symbol_not_found" and "xq_search" in self.tools:
             return f"{error.hint} Use xq_search to look up a code by name."
         return None
@@ -816,11 +807,6 @@ def _examples(names: Sequence[str]) -> str:
     """Titles of the first few of ``names``, as a parenthetical for a sentence."""
     titles = [REGISTRY[name].agent.title_zh for name in names[:3]]
     return f"（{'、'.join(titles)}等）" if titles else ""
-
-
-def _sends_cookies(endpoint: str | None) -> bool:
-    spec = REGISTRY.get(endpoint or "")
-    return spec is not None and spec.cookies and SITES[spec.host].cookies
 
 
 def _tool_arguments(params: Mapping[str, Any]) -> dict[str, Any]:

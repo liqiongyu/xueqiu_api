@@ -62,9 +62,9 @@ class Client(ClientBase):
 
     Args:
         token: a bare ``xq_a_token`` value or a cookie string such as ``"xq_a_token=...; u=..."``.
-            Defaults to the ``XUEQIU_TOKEN`` environment variable; without either, or with
-            ``token=""``, the client uses an anonymous session. Some endpoints (kline) also
-            need the ``u`` cookie.
+            Defaults to the ``XUEQIU_TOKEN`` environment variable; ``token=""`` means none. It
+            is sent only to endpoints registered as needing a login and by ``request()``; every
+            other endpoint sends the anonymous cookies, with or without a token.
         session_path: where the anonymous cookies are cached; defaults to the user cache
             directory. Login cookies are never written.
         min_intervals: longer minimum intervals between requests per host, in seconds.
@@ -138,39 +138,59 @@ class Client(ClientBase):
         return self._call(SUGGEST_STOCK, {"query": query})
 
     def finance_income(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+        self,
+        symbol: str,
+        *,
+        report_type: ReportType = "all",
+        is_detail: bool = True,
+        count: int = 5,
     ) -> Financials:
         """Income statement, latest report period first; see ``FinanceParams``."""
         return self._call(
             FINANCE_INCOME,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
         )
 
     def finance_balance(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+        self,
+        symbol: str,
+        *,
+        report_type: ReportType = "all",
+        is_detail: bool = True,
+        count: int = 5,
     ) -> Financials:
         """Balance sheet, latest report period first; see ``FinanceParams``."""
         return self._call(
             FINANCE_BALANCE,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
         )
 
     def finance_cash_flow(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+        self,
+        symbol: str,
+        *,
+        report_type: ReportType = "all",
+        is_detail: bool = True,
+        count: int = 5,
     ) -> Financials:
         """Cash flow statement, latest report period first; see ``FinanceParams``."""
         return self._call(
             FINANCE_CASH_FLOW,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
         )
 
     def finance_indicator(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
+        self,
+        symbol: str,
+        *,
+        report_type: ReportType = "all",
+        is_detail: bool = True,
+        count: int = 5,
     ) -> Financials:
         """Key financial indicators, latest report period first; see ``FinanceParams``."""
         return self._call(
             FINANCE_INDICATOR,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
+            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
         )
 
     def f10_company(self, symbol: str) -> Company:
@@ -221,13 +241,7 @@ class Client(ClientBase):
             if isinstance(outcome, Ok):
                 return outcome.value
             self._note_failure(call, outcome)
-            step = next_step(
-                outcome,
-                call=call,
-                attempt=attempt,
-                refreshed=refreshed,
-                credentials=self._session.has_credentials,
-            )
+            step = next_step(outcome, call=call, attempt=attempt, refreshed=refreshed)
             if isinstance(step, XueqiuError):
                 raise step
             if step.refresh:
@@ -243,7 +257,7 @@ class Client(ClientBase):
             "GET",
             call.url,
             params=call.query,
-            headers=request_headers(call, self._session.cookie_header()),
+            headers=request_headers(call, self._session.cookie_header(call.credentials)),
             timeout=self._timeout(deadline),
         )
         chunks: list[bytes] = []
@@ -263,11 +277,14 @@ class Client(ClientBase):
         return classify(call, result, self._session.secrets())
 
     def _ensure_session(self, call: Call, deadline: float) -> None:
-        if self._session.ready:
+        seen = self._session.generation
+        if self._session.ready(call):
             return
         with self._session_locked(call, deadline):
-            if not self._session.ready:
+            if self._session.generation == seen:
                 self._bootstrap(deadline)
+        if not self._session.ready(call):
+            raise self._cookie_error(call)
 
     def _refresh(self, call: Call, seen: int, deadline: float) -> None:
         with self._session_locked(call, deadline):

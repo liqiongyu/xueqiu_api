@@ -50,6 +50,7 @@ def _parse(payload: Any, params: SuggestStockParams) -> list[StockSuggestion]:
 
 ENDPOINT = Endpoint(
     name="suggest_stock",
+    doc="Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``.",
     host="www.xueqiu.com",
     path="/query/v1/suggest_stock.json",
     params=SuggestStockParams,
@@ -61,6 +62,7 @@ ENDPOINT = Endpoint(
     # Without cookies www answers HTTP 200 {"code": 400016, "success": false} (2026-11-05).
     verified_on=date(2026, 11, 5),
     agent=AgentInfo(
+        category="search",
         title_zh="证券搜索",
         title_en="Security search",
         summary="按代码、拼音首字母或名称查证券的雪球代码和名称，只知道名称时先用它。",

@@ -8,7 +8,7 @@ from typing import Any, cast
 from pydantic import ValidationInfo, field_validator, model_validator
 
 from .._finance import REPORT_DATE_ZONE
-from .._time import from_ms
+from .._time import date_from_ms
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolParams
 from .quotec import Quote, exchange_time
@@ -45,9 +45,7 @@ class QuoteDetail(Quote):
     @field_validator("issue_date", mode="before")
     @classmethod
     def _shanghai_date(cls, value: Any) -> Any:
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return from_ms(value, REPORT_DATE_ZONE).date()
-        return value
+        return date_from_ms(value, REPORT_DATE_ZONE)
 
     @model_validator(mode="before")
     @classmethod
@@ -74,6 +72,7 @@ def _parse(payload: Any, params: SymbolParams) -> QuoteDetail:
 
 ENDPOINT = Endpoint(
     name="quote_detail",
+    doc="Full quote of one symbol, with its name, valuation fields and market status.",
     host="stock.xueqiu.com",
     path="/v5/stock/quote.json",
     params=SymbolParams,
@@ -83,7 +82,9 @@ ENDPOINT = Endpoint(
     freshness="realtime",
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
+    markets=("CN", "HK", "US"),
     agent=AgentInfo(
+        category="quote",
         title_zh="行情详情",
         title_en="Quote detail",
         summary="取一只股票或指数的完整行情，包括名称、市值、市盈率、市净率、股息率和市场交易状态。",

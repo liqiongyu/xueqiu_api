@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, Self, cast
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from .._time import from_ms, to_ms
-from ..registry import AgentInfo, Endpoint
+from ..registry import AgentInfo, Endpoint, Pagination
 from ..symbols import SymbolCode, normalize_symbol
 
 Period = Literal["1m", "5m", "15m", "30m", "60m", "120m", "day", "week", "month", "quarter", "year"]
@@ -186,6 +186,7 @@ def _is_number(value: Any) -> bool:
 
 ENDPOINT = Endpoint(
     name="kline",
+    doc="Bars of one symbol in one request; see ``KlineParams`` for how the range is chosen.",
     host="stock.xueqiu.com",
     path="/v5/stock/chart/kline.json",
     params=KlineParams,
@@ -195,7 +196,13 @@ ENDPOINT = Endpoint(
     freshness="intraday",
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
+    pagination=Pagination(style="bars"),
+    markets=("CN", "HK", "US"),
+    order="oldest_first",
+    # Without u the upstream answers HTTP 200 with 0 bars (measured 2026-11-05).
+    needs_cookies=("u",),
     agent=AgentInfo(
+        category="kline",
         title_zh="K线",
         title_en="Candlestick bars",
         summary="取一只股票或指数的日线、周线、月线或分钟线，可选前复权、后复权或不复权。",

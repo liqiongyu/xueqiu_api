@@ -1,7 +1,7 @@
 """MCP server behind ``xueqiu mcp``.
 
 This module must import without the optional ``mcp`` dependency: the CLI builds ``McpOptions``
-first and only then imports ``xueqiu_api.mcp.server``, the module that needs it.
+first and only then imports ``xueqiu_api.mcp_server.server``, the module that needs it.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ MAX_MAX_CHARS = 40_000
 class McpOptions:
     """Options of ``xueqiu mcp``.
 
-    The CLI passes them to ``xueqiu_api.mcp.server.main(options)``, which runs the stdio server
-    and returns the process exit code.
+    The CLI passes them to ``xueqiu_api.mcp_server.server.main(options)``, which runs the stdio
+    server and returns the process exit code.
     """
 
     exclude: tuple[str, ...] = ()

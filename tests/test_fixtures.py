@@ -10,14 +10,12 @@ from typing import Any, cast
 
 import pytest
 
+from xueqiu_api._model import USER_KEY
+
 from .harness import ANON_COOKIES, FIXTURES
 
 FILES = sorted(path for path in FIXTURES.rglob("*") if path.is_file())
 SECRET_KEY = re.compile(r"token|cookie|passw|secret|^session$|session_?id|auth", re.IGNORECASE)
-USER_KEY = re.compile(
-    r"^(users?|uid|user_?id|screen_name|nick_?name|avatar\w*|profile_image\w*|comments?)$",
-    re.IGNORECASE,
-)
 COOKIE_NAMES = "|".join(re.escape(name) for name in ANON_COOKIES)
 SECRET_TEXT = re.compile(rf"(?<![\w.-])({COOKIE_NAMES})=|\bcookie:|set-cookie", re.IGNORECASE)
 SECRET_VALUE = re.compile(r"[0-9a-f]{32,}|eyJ[\w-]+\.[\w-]+", re.IGNORECASE)
@@ -73,6 +71,9 @@ def test_fixture_is_small_and_sanitized(path: Path) -> None:
         ("replay/quotec/probe.json", '{"body": {}, "headers": {"server": "openresty"}}'),
         ("replay/quotec/probe.json", '{"body": {"user": {"id": 1}}}'),
         ("replay/quotec/probe.json", '{"body": {"screen_name": "someone"}}'),
+        ("replay/quotec/probe.json", '{"body": {"list": [{"owner": {"id": 1}}]}}'),
+        ("replay/quotec/probe.json", '{"body": {"owner_id": 1}}'),
+        ("replay/quotec/probe.json", '{"body": {"contractor_name": "someone"}}'),
         ("replay/quotec/probe.json", '{"body": {"query_id": "' + "0123456789abcdef" * 2 + '"}}'),
         ("page.html", "Cookie: something"),
         ("page.html", "xq_r_token=fake"),
