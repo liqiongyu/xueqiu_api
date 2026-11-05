@@ -7,7 +7,7 @@ package collects them into ``xueqiu_api.endpoints.REGISTRY``.
 from __future__ import annotations
 
 import difflib
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from types import MappingProxyType
@@ -226,15 +226,14 @@ def invalid_params(
     *,
     name: str,
     endpoint: str | None,
-    choices: Mapping[str, Sequence[str]] | None = None,
     more: str = "",
     params: Mapping[str, Any] | None = None,
 ) -> InvalidParams:
     """``InvalidParams`` for a failed validation of ``model``, the params of ``name``.
 
-    It names the first rejected field, its allowed values (from ``choices`` or a Literal) and
-    the closest of them; unknown parameter names get the list of known ones. The hint is the
-    signature, followed by ``more``.
+    It names the first rejected field, the allowed values of a Literal and the closest of them;
+    unknown parameter names get the list of known ones. The hint is the signature, followed by
+    ``more``.
     """
     errors = exc.errors()
     hint = f"Parameters: {signature(name, model)}.{more}"
@@ -252,7 +251,7 @@ def invalid_params(
         )
     first = errors[0]
     key = str(first["loc"][0]) if first["loc"] else ""
-    valid = list((choices or {}).get(key) or _literal_values(model, key))
+    valid = _literal_values(model, key)
     value = first.get("input")
     problems = "; ".join(
         f"{'.'.join(str(part) for part in e['loc']) or 'arguments'}: {e['msg']}" for e in errors

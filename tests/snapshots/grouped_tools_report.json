@@ -1,0 +1,46 @@
+{
+  "xq_capital": {
+    "params": [
+      "page",
+      "page_size",
+      "symbol"
+    ],
+    "over_8_params": false,
+    "mixed_types": {}
+  },
+  "xq_company": {
+    "params": [
+      "symbol"
+    ],
+    "over_8_params": false,
+    "mixed_types": {}
+  },
+  "xq_cube": {
+    "params": [
+      "begin",
+      "cube_symbol",
+      "end"
+    ],
+    "over_8_params": false,
+    "mixed_types": {}
+  },
+  "xq_financials": {
+    "params": [
+      "count",
+      "is_detail",
+      "report_type",
+      "symbol"
+    ],
+    "over_8_params": false,
+    "mixed_types": {}
+  },
+  "xq_fund": {
+    "params": [
+      "fund_code",
+      "page",
+      "page_size"
+    ],
+    "over_8_params": false,
+    "mixed_types": {}
+  }
+}

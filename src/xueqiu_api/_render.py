@@ -31,7 +31,7 @@ from ._finance import Financials, LineItem, ReportPeriod
 from ._pages import Page
 from .endpoints.kline import DEFAULT_COUNT, Kline, KlineParams, older_range
 from .errors import InvalidParams, XueqiuError
-from .registry import Endpoint
+from .registry import AgentInfo, Endpoint
 from .symbols import normalize_symbol
 
 ERROR_CHARS = 1500
@@ -77,6 +77,10 @@ Pager = Callable[[int, int], tuple[Mapping[str, Any], int] | None]
 _EMPTY = (
     "no rows. Likely causes: a wrong market prefix (indexes need SH or SZ, such as SH000001), "
     "or an endpoint that returns nothing to anonymous sessions."
+)
+_EMPTY_NO_SYMBOL = (
+    "no rows. Likely causes: a code or value with no data, or an endpoint that returns nothing "
+    "to anonymous sessions."
 )
 _EMPTY_BARS = (
     "no bars. Likely causes: a wrong market prefix (indexes need SH or SZ, such as SH000001), "
@@ -232,6 +236,7 @@ def render(
         page = cast(Page[Any], result)
         stats = {"page": page.page, "page_size": page.page_size, "total": page.total}
         head.append(stats_line({**stats, "last_page": page.last_page}, 0, tag="page"))
+        notes += _page_notes(spec, page)
     zone = _zone(params)
     head.append(
         f"# meta: fetched_at={fetched_at.astimezone(zone).isoformat(timespec='seconds')} "
@@ -259,7 +264,7 @@ def render(
                 f"available: {', '.join(available)}"
             )
     if not rows:
-        notes.append(_EMPTY_BARS if isinstance(result, Kline) else _EMPTY)
+        notes.append(_empty_note(agent, dump, cast(object, result)))
     head += [f"# note: {note}" for note in notes]
     free = [name for name in wanted if name in agent.free_text]
     labels = [name for name in wanted if name in agent.labels]
@@ -269,7 +274,7 @@ def render(
         rows, tables = _lay_out(named, wanted, explicit=bool(fields))
     else:
         tables = [_Table("", 0, len(rows), tuple(wanted))]
-    if isinstance(result, Series | Sectioned | Page):
+    if isinstance(result, Series | Sectioned | Page) or (isinstance(result, list) and not batch):
         following = result.next_params if isinstance(result, Page) else None
         pager = _row_pager(dump, len(rows), keep_last, following)
     pairs = {name for name in wanted if any(isinstance(row.get(name), LineItem) for row in rows)}
@@ -667,6 +672,32 @@ def _present(column: Sequence[Any] | None) -> list[tuple[int, float]]:
         for index, value in enumerate(column or ())
         if isinstance(value, int | float) and not isinstance(value, bool)
     ]
+
+
+def _page_notes(spec: Endpoint[Any, Any], page: Page[Any]) -> list[str]:
+    notes: list[str] = []
+    if page.short and len(page):
+        notes.append(
+            f"this page has {len(page)} of {page.page_size} rows: the list may have ended, or the "
+            "upstream's page size cap may be lower than page_size."
+        )
+    if page.capped and spec.pagination is not None:
+        rule = spec.pagination
+        notes.append(
+            f"the upstream counts {page.total} rows and serves at most {rule.total_cap}. "
+            f"{rule.cap_hint}".rstrip()
+        )
+    return notes
+
+
+def _empty_note(agent: AgentInfo, dump: Mapping[str, Any], result: object) -> str:
+    if isinstance(result, Page) and result.page > 1:
+        return f"no rows on page {result.page}: the list ended before it."
+    if agent.empty_hint:
+        return agent.empty_hint
+    if isinstance(result, Kline):
+        return _EMPTY_BARS
+    return _EMPTY if "symbol" in dump or "symbols" in dump else _EMPTY_NO_SYMBOL
 
 
 def _no_pager(first: int, stop: int) -> tuple[Mapping[str, Any], int] | None:

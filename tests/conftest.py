@@ -75,10 +75,12 @@ def _samples_parse_their_endpoint(
 
 @pytest.fixture
 def register_endpoint(monkeypatch: pytest.MonkeyPatch) -> Register:
-    """Add a synthetic endpoint to the module-level registries for one test."""
+    """Add synthetic endpoints to the module-level registries for one test."""
+    added: dict[str, Endpoint[Any, Any]] = {}
 
     def register(spec: Endpoint[Any, Any]) -> Endpoint[Any, Any]:
-        merged = MappingProxyType(dict(sorted({**REGISTRY, spec.name: spec}.items())))
+        added[spec.name] = spec
+        merged = MappingProxyType(dict(sorted({**REGISTRY, **added}.items())))
         for module in ("_base", "_replay", "cli", "mcp_server.tools"):
             monkeypatch.setattr(f"xueqiu_api.{module}.REGISTRY", merged)
         return spec
