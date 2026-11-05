@@ -1,0 +1,95 @@
+{
+  "params": { "cube_symbol": "ZH2567925", "page": 1 },
+  "body": {
+    "count": 20,
+    "page": 1,
+    "totalCount": 2,
+    "maxPage": 1,
+    "list": [
+      {
+        "id": 2000002,
+        "status": "success",
+        "cube_id": 1000001,
+        "prev_bebalancing_id": 2000001,
+        "category": "user_rebalancing",
+        "created_at": 1700000300000,
+        "updated_at": 1700000400000,
+        "cash": 0.0,
+        "cash_value": 0.0,
+        "error_code": null,
+        "error_message": null,
+        "holdings": null,
+        "rebalancing_histories": [
+          {
+            "id": 4000003,
+            "stock_id": 3000001,
+            "stock_symbol": "SH600000",
+            "stock_name": "浦发银行",
+            "prev_weight_adjusted": 57.29,
+            "prev_weight": 50.0,
+            "target_weight": 33.0,
+            "weight": 33.0,
+            "price": 9.89,
+            "prev_price": 9.5,
+            "volume": 0.01
+          },
+          {
+            "id": 4000004,
+            "stock_id": 3000002,
+            "stock_symbol": "SZ000001",
+            "stock_name": "平安银行",
+            "prev_weight_adjusted": 42.71,
+            "prev_weight": 50.0,
+            "target_weight": 67.0,
+            "weight": 67.0,
+            "price": 11.2,
+            "prev_price": 11.8,
+            "volume": 0.02
+          }
+        ]
+      },
+      {
+        "id": 2000001,
+        "status": "success",
+        "cube_id": 1000001,
+        "prev_bebalancing_id": null,
+        "category": "user_rebalancing",
+        "created_at": 1700000000000,
+        "updated_at": 1700000100000,
+        "cash": 0.0,
+        "cash_value": 0.0,
+        "error_code": null,
+        "error_message": null,
+        "holdings": null,
+        "rebalancing_histories": [
+          {
+            "id": 4000001,
+            "stock_id": 3000001,
+            "stock_symbol": "SH600000",
+            "stock_name": "浦发银行",
+            "prev_weight_adjusted": null,
+            "prev_weight": null,
+            "target_weight": 50.0,
+            "weight": 50.0,
+            "price": 9.5,
+            "prev_price": null,
+            "volume": 0.01
+          },
+          {
+            "id": 4000002,
+            "stock_id": 3000002,
+            "stock_symbol": "SZ000001",
+            "stock_name": "平安银行",
+            "prev_weight_adjusted": null,
+            "prev_weight": null,
+            "target_weight": 50.0,
+            "weight": 50.0,
+            "price": 11.8,
+            "prev_price": null,
+            "volume": 0.02
+          }
+        ]
+      }
+    ]
+  }
+}
