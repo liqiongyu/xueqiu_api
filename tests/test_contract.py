@@ -64,8 +64,10 @@ def fixture_params(name: str) -> list[dict[str, str]]:
 def test_the_example_query_covers_a_replay_fixture(name: str) -> None:
     query = example_query(REGISTRY[name])
 
-    # A file without params answers every request, so it says nothing about this one.
-    assert any(params and params.items() <= query.items() for params in fixture_params(name))
+    # A file without params answers every request, so it says nothing unless the query is empty.
+    assert any(
+        (params or not query) and params.items() <= query.items() for params in fixture_params(name)
+    )
 
 
 @pytest.mark.parametrize("name", ENDPOINTS)

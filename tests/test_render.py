@@ -537,6 +537,13 @@ def test_tables_show_only_their_own_columns() -> None:
     ]
 
 
+def test_default_fields_of_tables_not_in_this_result_are_not_reported() -> None:
+    spec = spec_of("id", "price", params=NoCodes)
+    tables = Tables({"a": [{"id": "r0001"}], "b": [{"id": "r0002"}]})
+
+    assert "default fields missing" not in text_of(spec, tables)
+
+
 def test_requested_fields_leave_out_a_table_without_them() -> None:
     spec = spec_of("id", params=NoCodes)
     tables = Tables({"a": [{"id": "r0001", "price": 1.5}], "b": [{"id": "r0002"}]})

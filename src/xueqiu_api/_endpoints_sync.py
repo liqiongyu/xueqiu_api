@@ -9,28 +9,149 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from pydantic import BaseModel
 
 from ._finance import Financials, ReportType
+from ._index import IndexValuation, ValuationHistory, ValuationWindow
 from ._pages import Page, PageT
 from .endpoints.batch_quote import ENDPOINT as BATCH_QUOTE
+from .endpoints.capital_assort import ENDPOINT as CAPITAL_ASSORT
+from .endpoints.capital_assort import CapitalAssort
 from .endpoints.capital_block_trades import ENDPOINT as CAPITAL_BLOCK_TRADES
 from .endpoints.capital_block_trades import BlockTrade
+from .endpoints.capital_distribution import ENDPOINT as CAPITAL_DISTRIBUTION
+from .endpoints.capital_distribution import CapitalDistribution
+from .endpoints.capital_flow import ENDPOINT as CAPITAL_FLOW
+from .endpoints.capital_flow import CapitalFlow
+from .endpoints.capital_history import ENDPOINT as CAPITAL_HISTORY
+from .endpoints.capital_history import CapitalHistory
+from .endpoints.capital_history_detail import ENDPOINT as CAPITAL_HISTORY_DETAIL
+from .endpoints.capital_history_detail import CapitalHistoryDetail
+from .endpoints.capital_longhu import ENDPOINT as CAPITAL_LONGHU
+from .endpoints.capital_longhu import LonghuEntry
+from .endpoints.capital_margin import ENDPOINT as CAPITAL_MARGIN
+from .endpoints.capital_margin import MarginHistory
+from .endpoints.cube_holdings import ENDPOINT as CUBE_HOLDINGS
+from .endpoints.cube_holdings import CubeHoldings
+from .endpoints.cube_max_drawdown import ENDPOINT as CUBE_MAX_DRAWDOWN
+from .endpoints.cube_max_drawdown import CubeMaxDrawdown
+from .endpoints.cube_monthly_returns import ENDPOINT as CUBE_MONTHLY_RETURNS
+from .endpoints.cube_monthly_returns import CubeMonthlyReturn
 from .endpoints.cube_nav_daily import ENDPOINT as CUBE_NAV_DAILY
 from .endpoints.cube_nav_daily import CubeNav
+from .endpoints.cube_quote import ENDPOINT as CUBE_QUOTE
+from .endpoints.cube_quote import CubeQuote
+from .endpoints.cube_rank_list import ENDPOINT as CUBE_RANK_LIST
+from .endpoints.cube_rank_list import CubeSummary
+from .endpoints.cube_rebalancing_history import ENDPOINT as CUBE_REBALANCING_HISTORY
+from .endpoints.cube_rebalancing_history import RebalancingPage
+from .endpoints.cube_score import ENDPOINT as CUBE_SCORE
+from .endpoints.cube_score import CubeScore
+from .endpoints.f10_bonus import ENDPOINT as F10_BONUS
+from .endpoints.f10_bonus import BonusPage
+from .endpoints.f10_business_analysis import ENDPOINT as F10_BUSINESS_ANALYSIS
+from .endpoints.f10_business_analysis import BusinessAnalysis
 from .endpoints.f10_company import ENDPOINT as F10_COMPANY
 from .endpoints.f10_company import Company
+from .endpoints.f10_executive_trades import ENDPOINT as F10_EXECUTIVE_TRADES
+from .endpoints.f10_executive_trades import ExecutiveTrade
+from .endpoints.f10_executives import ENDPOINT as F10_EXECUTIVES
+from .endpoints.f10_executives import Executive
+from .endpoints.f10_holders import ENDPOINT as F10_HOLDERS
+from .endpoints.f10_holders import Holders
+from .endpoints.f10_indicator import ENDPOINT as F10_INDICATOR
+from .endpoints.f10_indicator import MainIndicator
+from .endpoints.f10_industry import ENDPOINT as F10_INDUSTRY
+from .endpoints.f10_industry import IndustryInfo
+from .endpoints.f10_industry_compare import ENDPOINT as F10_INDUSTRY_COMPARE
+from .endpoints.f10_industry_compare import IndustryCompare
+from .endpoints.f10_org_holding_change import ENDPOINT as F10_ORG_HOLDING_CHANGE
+from .endpoints.f10_org_holding_change import OrgHoldingChange
+from .endpoints.f10_org_holding_detail import ENDPOINT as F10_ORG_HOLDING_DETAIL
+from .endpoints.f10_org_holding_detail import OrgHoldingDetail
+from .endpoints.f10_share_changes import ENDPOINT as F10_SHARE_CHANGES
+from .endpoints.f10_share_changes import ShareChange
+from .endpoints.f10_top_holders import ENDPOINT as F10_TOP_HOLDERS
+from .endpoints.f10_top_holders import TopHolders
 from .endpoints.finance_balance import ENDPOINT as FINANCE_BALANCE
+from .endpoints.finance_business import ENDPOINT as FINANCE_BUSINESS
+from .endpoints.finance_business import RevenueBreakdown
 from .endpoints.finance_cash_flow import ENDPOINT as FINANCE_CASH_FLOW
 from .endpoints.finance_income import ENDPOINT as FINANCE_INCOME
 from .endpoints.finance_indicator import ENDPOINT as FINANCE_INDICATOR
+from .endpoints.fund_achievement import ENDPOINT as FUND_ACHIEVEMENT
+from .endpoints.fund_achievement import FundPeriodPerformance
+from .endpoints.fund_asset import ENDPOINT as FUND_ASSET
+from .endpoints.fund_asset import FundAsset
+from .endpoints.fund_auto_invest_return import ENDPOINT as FUND_AUTO_INVEST_RETURN
+from .endpoints.fund_auto_invest_return import FundAutoInvestReturn
+from .endpoints.fund_derived import ENDPOINT as FUND_DERIVED
+from .endpoints.fund_derived import FundDerived
+from .endpoints.fund_detail import ENDPOINT as FUND_DETAIL
+from .endpoints.fund_detail import FundDetail
+from .endpoints.fund_growth import ENDPOINT as FUND_GROWTH
+from .endpoints.fund_growth import FundGrowth, FundGrowthPeriod
+from .endpoints.fund_info import ENDPOINT as FUND_INFO
+from .endpoints.fund_info import FundInfo
+from .endpoints.fund_manager import ENDPOINT as FUND_MANAGER
+from .endpoints.fund_manager import FundManager
 from .endpoints.fund_nav_history import ENDPOINT as FUND_NAV_HISTORY
 from .endpoints.fund_nav_history import FundNav
+from .endpoints.fund_rank import ENDPOINT as FUND_RANK
+from .endpoints.fund_rank import FundRankItem, FundRankOrder, FundRankType
+from .endpoints.fund_rank_options import ENDPOINT as FUND_RANK_OPTIONS
+from .endpoints.fund_rank_options import FundRankOptions
+from .endpoints.fund_search import ENDPOINT as FUND_SEARCH
+from .endpoints.fund_search import FundSearchResult
+from .endpoints.fund_trade_date import ENDPOINT as FUND_TRADE_DATE
+from .endpoints.fund_trade_date import FundTradeDate
+from .endpoints.index_pb_history import ENDPOINT as INDEX_PB_HISTORY
+from .endpoints.index_pe_history import ENDPOINT as INDEX_PE_HISTORY
+from .endpoints.index_stock_bond_percentile import ENDPOINT as INDEX_STOCK_BOND_PERCENTILE
+from .endpoints.index_stock_bond_percentile import StockBondPercentile
+from .endpoints.index_valuation import ENDPOINT as INDEX_VALUATION
+from .endpoints.index_valuation_list import ENDPOINT as INDEX_VALUATION_LIST
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import Adjust, Kline, Period
+from .endpoints.market_bj_indexes import ENDPOINT as MARKET_BJ_INDEXES
+from .endpoints.market_bj_indexes import BoardIndexQuote
+from .endpoints.market_hot_stocks import ENDPOINT as MARKET_HOT_STOCKS
+from .endpoints.market_hot_stocks import HotStock, HotStockRegion, HotStockWindow
+from .endpoints.market_industry_stocks import ENDPOINT as MARKET_INDUSTRY_STOCKS
+from .endpoints.market_industry_stocks import IndustryStocks
 from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
 from .endpoints.quote_detail import QuoteDetail
+from .endpoints.quote_heat import ENDPOINT as QUOTE_HEAT
+from .endpoints.quote_heat import StockHeat
+from .endpoints.quote_minute import ENDPOINT as QUOTE_MINUTE
+from .endpoints.quote_minute import MinuteChart, MinuteDays
+from .endpoints.quote_order_book import ENDPOINT as QUOTE_ORDER_BOOK
+from .endpoints.quote_order_book import OrderBook
+from .endpoints.quote_relevant import ENDPOINT as QUOTE_RELEVANT
+from .endpoints.quote_relevant import RelatedStock
+from .endpoints.quote_trades import ENDPOINT as QUOTE_TRADES
+from .endpoints.quote_trades import TradeTick
 from .endpoints.quotec import ENDPOINT as QUOTEC
 from .endpoints.quotec import Quote
+from .endpoints.screener_events import ENDPOINT as SCREENER_EVENTS
+from .endpoints.screener_events import StockEvent
+from .endpoints.screener_industries import ENDPOINT as SCREENER_INDUSTRIES
+from .endpoints.screener_industries import ScreenerIndustry
+from .endpoints.screener_popularity_rank import ENDPOINT as SCREENER_POPULARITY_RANK
+from .endpoints.screener_popularity_rank import PopularStock, RankMarket
+from .endpoints.screener_quote_list import ENDPOINT as SCREENER_QUOTE_LIST
+from .endpoints.screener_quote_list import (
+    Board,
+    Order,
+    QuoteListMarket,
+    QuoteListOrderBy,
+    ScreenerQuote,
+)
+from .endpoints.search_stock import ENDPOINT as SEARCH_STOCK
+from .endpoints.search_stock import StockHit
 from .endpoints.suggest_stock import ENDPOINT as SUGGEST_STOCK
 from .endpoints.suggest_stock import StockSuggestion
+from .endpoints.watchlist_groups import ENDPOINT as WATCHLIST_GROUPS
+from .endpoints.watchlist_groups import WatchlistGroup
+from .endpoints.watchlist_stocks import ENDPOINT as WATCHLIST_STOCKS
+from .endpoints.watchlist_stocks import WatchlistCategory, WatchlistItem
 from .registry import Endpoint
 
 P = TypeVar("P", bound=BaseModel)
@@ -62,6 +183,14 @@ class SyncEndpoints:
         Auth anonymous; freshness realtime.
         """
         return self._call(BATCH_QUOTE, {"symbols": symbols})
+
+    def capital_assort(self, symbol: str) -> CapitalAssort:
+        """成交分布: Today's buy and sell turnover of one A-share by size class, with the totals per
+        side.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(CAPITAL_ASSORT, {"symbol": symbol})
 
     def capital_block_trades(
         self,
@@ -112,6 +241,127 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
+    def capital_distribution(self, symbol: str) -> CapitalDistribution:
+        """资金分布: Today's buy and sell turnover of one A-share by order size, and its main-force net.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(CAPITAL_DISTRIBUTION, {"symbol": symbol})
+
+    def capital_flow(self, symbol: str) -> CapitalFlow:
+        """分时资金流向: Net inflow of one A-share or Hong Kong stock by the minute through one session.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(CAPITAL_FLOW, {"symbol": symbol})
+
+    def capital_history(self, symbol: str) -> CapitalHistory:
+        """历史资金流向: Main-force net inflow of one A-share per day for 20 trading days, with running
+        sums.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CAPITAL_HISTORY, {"symbol": symbol})
+
+    def capital_history_detail(self, symbol: str) -> CapitalHistoryDetail:
+        """历史资金流向明细: Net inflow of one A-share per day for 20 trading days, broken down by order
+        size.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CAPITAL_HISTORY_DETAIL, {"symbol": symbol})
+
+    def capital_longhu(
+        self,
+        symbol: str,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Page[LonghuEntry]:
+        """龙虎榜: Disclosures of one A-share on the top-traders list (longhu), latest first.
+
+        Args:
+            symbol: An A-share symbol.
+            page: Page number, from 1; page 1 holds the latest rows.
+            page_size: Rows per page.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CAPITAL_LONGHU, {"symbol": symbol, "page": page, "page_size": page_size})
+
+    def capital_longhu_pages(
+        self,
+        symbol: str,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[Page[LonghuEntry]]:
+        """Every page of ``capital_longhu``, one request each. 龙虎榜: Disclosures of one A-share on the
+        top-traders list (longhu), latest first.
+
+        Args:
+            symbol: An A-share symbol.
+            page: Page number, from 1; page 1 holds the latest rows.
+            page_size: Rows per page; by default the largest, 100.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._pages(
+            CAPITAL_LONGHU,
+            {"symbol": symbol, "page": page, "page_size": page_size},
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def capital_margin(self, symbol: str, *, count: int = 50) -> MarginHistory:
+        """融资融券: Margin trading and short selling of one A-share per day, latest first, up to 120
+        days.
+
+        Older days than the latest 120 are out of reach.
+
+        Args:
+            symbol: An A-share symbol.
+            count: Trading days to fetch, latest first.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CAPITAL_MARGIN, {"symbol": symbol, "count": count})
+
+    def cube_holdings(self, cube_symbol: str) -> CubeHoldings:
+        """组合持仓: What one portfolio holds, with weights and cash; needs a login, structure
+        unverified.
+
+        Args:
+            cube_symbol: Portfolio code, such as ZH2567925.
+
+        Auth required; freshness intraday.
+        """
+        return self._call(CUBE_HOLDINGS, {"cube_symbol": cube_symbol})
+
+    def cube_max_drawdown(self, cube_symbol: str) -> CubeMaxDrawdown:
+        """组合最大回撤: The largest drawdown of one portfolio since inception, with its dates.
+
+        Args:
+            cube_symbol: Portfolio code, such as ZH2567925.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CUBE_MAX_DRAWDOWN, {"cube_symbol": cube_symbol})
+
+    def cube_monthly_returns(self, cube_symbol: str) -> list[CubeMonthlyReturn]:
+        """组合月度收益: Calendar-month gains of one portfolio and its benchmark, latest first.
+
+        Args:
+            cube_symbol: Portfolio code, such as ZH2567925.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CUBE_MONTHLY_RETURNS, {"cube_symbol": cube_symbol})
+
     def cube_nav_daily(
         self,
         cube_symbol: str,
@@ -132,12 +382,251 @@ class SyncEndpoints:
         """
         return self._call(CUBE_NAV_DAILY, {"cube_symbol": cube_symbol, "begin": begin, "end": end})
 
+    def cube_quote(self, cube_symbols: str | Sequence[str]) -> list[CubeQuote]:
+        """组合行情: Latest net value and gains of up to 10 portfolios, in the order requested.
+
+        A code the upstream does not know raises ``SymbolNotFound`` when requested alone, measured
+        2026-11-05. A request mixing known and unknown codes was not measured.
+
+        Args:
+            cube_symbols: Portfolio codes, as a sequence or one comma-separated string.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(CUBE_QUOTE, {"cube_symbols": cube_symbols})
+
+    def cube_rank_list(self, *, page: int = 1) -> Page[CubeSummary]:
+        """组合排行榜: One page of the portfolio leaderboard, with each portfolio's net value and gains.
+
+        Upstream category 14, the only one measured, which held 100 portfolios in 5 pages on
+        2026-11-04. How it ranks them is not documented.
+
+        Args:
+            page: Page number, from 1 to 5.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CUBE_RANK_LIST, {"page": page})
+
+    def cube_rank_list_pages(
+        self,
+        *,
+        page: int = 1,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[Page[CubeSummary]]:
+        """Every page of ``cube_rank_list``, one request each. 组合排行榜: One page of the portfolio
+        leaderboard, with each portfolio's net value and gains.
+
+        Upstream category 14, the only one measured, which held 100 portfolios in 5 pages on
+        2026-11-04. How it ranks them is not documented.
+
+        Args:
+            page: Page number, from 1 to 5.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._pages(CUBE_RANK_LIST, {"page": page}, max_pages=max_pages, max_items=max_items)
+
+    def cube_rebalancing_history(
+        self,
+        cube_symbol: str,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> RebalancingPage:
+        """组合调仓记录: One page of a portfolio's rebalancings; needs a login, structure unverified.
+
+        Args:
+            cube_symbol: Portfolio code, such as ZH2567925.
+            page: Page number, from 1.
+            page_size: Rebalancings per page.
+
+        Auth required; freshness daily.
+        """
+        return self._call(
+            CUBE_REBALANCING_HISTORY,
+            {"cube_symbol": cube_symbol, "page": page, "page_size": page_size},
+        )
+
+    def cube_rebalancing_history_pages(
+        self,
+        cube_symbol: str,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[RebalancingPage]:
+        """Every page of ``cube_rebalancing_history``, one request each. 组合调仓记录: One page of a
+        portfolio's rebalancings; needs a login, structure unverified.
+
+        Args:
+            cube_symbol: Portfolio code, such as ZH2567925.
+            page: Page number, from 1.
+            page_size: Rows per page; by default the largest, 50.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth required; freshness daily.
+        """
+        return self._pages(
+            CUBE_REBALANCING_HISTORY,
+            {"cube_symbol": cube_symbol, "page": page, "page_size": page_size},
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def cube_score(self, cube_symbol: str) -> CubeScore:
+        """组合评分: The score card of one portfolio: total score, tier and sub-scores.
+
+        Args:
+            cube_symbol: Portfolio code, such as ZH2567925.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(CUBE_SCORE, {"cube_symbol": cube_symbol})
+
+    def f10_bonus(self, symbol: str, *, page: int = 1, page_size: int = 50) -> BonusPage:
+        """分红送配: Dividends of one listed company, latest first; A-shares add issues and allotments.
+
+        Args:
+            page: Page number, from 1; page 1 holds the latest dividends.
+            page_size: Dividends per page.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_BONUS, {"symbol": symbol, "page": page, "page_size": page_size})
+
+    def f10_bonus_pages(
+        self,
+        symbol: str,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[BonusPage]:
+        """Every page of ``f10_bonus``, one request each. 分红送配: Dividends of one listed company,
+        latest first; A-shares add issues and allotments.
+
+        Args:
+            page: Page number, from 1; page 1 holds the latest dividends.
+            page_size: Rows per page; by default the largest, 100.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._pages(
+            F10_BONUS,
+            {"symbol": symbol, "page": page, "page_size": page_size},
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def f10_business_analysis(self, symbol: str) -> list[BusinessAnalysis]:
+        """经营分析: Management's discussion in the periodic reports of one A-share, latest first.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_BUSINESS_ANALYSIS, {"symbol": symbol})
+
     def f10_company(self, symbol: str) -> Company:
         """公司资料: Company profile of one listed company.
 
         Auth anonymous; freshness static.
         """
         return self._call(F10_COMPANY, {"symbol": symbol})
+
+    def f10_executive_trades(self, symbol: str) -> list[ExecutiveTrade]:
+        """高管增减持: Share changes of the directors, supervisors and executives of one A-share, latest
+        first.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_EXECUTIVE_TRADES, {"symbol": symbol})
+
+    def f10_executives(self, symbol: str) -> list[Executive]:
+        """公司高管: Directors, supervisors and executives of one A-share, in the upstream's order.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_EXECUTIVES, {"symbol": symbol})
+
+    def f10_holders(self, symbol: str) -> Holders:
+        """股东与股本: Holder counts of an A-share; major holders, capital and splits of HK and US stocks.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_HOLDERS, {"symbol": symbol})
+
+    def f10_indicator(self, symbol: str) -> list[MainIndicator]:
+        """主要指标: Key figures of the latest report of one A-share, valued at the latest price.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(F10_INDICATOR, {"symbol": symbol})
+
+    def f10_industry(self, symbol: str) -> IndustryInfo:
+        """所属行业和概念: Industry and concept boards of one listed company, with the classification
+        standard.
+
+        Auth anonymous; freshness static.
+        """
+        return self._call(F10_INDUSTRY, {"symbol": symbol})
+
+    def f10_industry_compare(self, symbol: str) -> IndustryCompare:
+        """行业对比: One A-share against the average, minimum and maximum of its industry.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(F10_INDUSTRY_COMPARE, {"symbol": symbol})
+
+    def f10_org_holding_change(self, symbol: str) -> OrgHoldingChange:
+        """机构持仓变动: Institutional ownership of one stock, by report period for A-shares and by day for
+        US.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_ORG_HOLDING_CHANGE, {"symbol": symbol})
+
+    def f10_org_holding_detail(
+        self,
+        symbol: str,
+        *,
+        report_date: date | None = None,
+    ) -> OrgHoldingDetail:
+        """持股基金名单: The funds holding one A-share at one report period, with their total.
+
+        Args:
+            report_date: Period end to list, one of ``report_periods``, such as 2026-06-30; by
+                default the latest.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_ORG_HOLDING_DETAIL, {"symbol": symbol, "report_date": report_date})
+
+    def f10_share_changes(self, symbol: str, *, count: int = 50) -> list[ShareChange]:
+        """股本变动: Share capital changes of one A-share, latest first.
+
+        Args:
+            symbol: An A-share symbol.
+            count: Latest changes to fetch.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_SHARE_CHANGES, {"symbol": symbol, "count": count})
+
+    def f10_top_holders(self, symbol: str) -> TopHolders:
+        """十大股东: Ten largest shareholders of one A-share in the latest report period; the denominator
+        of held_ratio is unverified.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(F10_TOP_HOLDERS, {"symbol": symbol})
 
     def finance_balance(
         self,
@@ -163,6 +652,18 @@ class SyncEndpoints:
             FINANCE_BALANCE,
             {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
         )
+
+    def finance_business(self, symbol: str, *, count: int = 2) -> RevenueBreakdown:
+        """主营构成: Revenue by business, product or region of one A-share or US company, latest period
+        first.
+
+        Args:
+            symbol: An A-share or US stock; the request goes to the region of its market.
+            count: Report periods to fetch, latest first.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FINANCE_BUSINESS, {"symbol": symbol, "count": count})
 
     def finance_cash_flow(
         self,
@@ -239,6 +740,91 @@ class SyncEndpoints:
             {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
         )
 
+    def fund_achievement(self, fund_code: str) -> list[FundPeriodPerformance]:
+        """基金阶段业绩: Returns, largest drawdowns and peer ranks of one fund by year and by recent
+        period.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_ACHIEVEMENT, {"fund_code": fund_code})
+
+    def fund_asset(self, fund_code: str) -> FundAsset:
+        """基金持仓和资产配置: Asset allocation and top holdings of one fund's latest report, on net assets.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_ASSET, {"fund_code": fund_code})
+
+    def fund_auto_invest_return(self, fund_code: str) -> FundAutoInvestReturn:
+        """基金定投收益: Returns of the upstream's default auto-invest plan in one fund, by window.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_AUTO_INVEST_RETURN, {"fund_code": fund_code})
+
+    def fund_derived(self, fund_code: str) -> FundDerived:
+        """基金收益和排名: Latest net value, period returns, peer ranks and auto-invest returns of one fund.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_DERIVED, {"fund_code": fund_code})
+
+    def fund_detail(self, fund_code: str) -> FundDetail:
+        """基金费率和详情: Fees, settlement days, latest report on total assets and the managers of one
+        fund.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_DETAIL, {"fund_code": fund_code})
+
+    def fund_growth(self, fund_code: str, *, period: FundGrowthPeriod = "ty") -> FundGrowth:
+        """基金业绩走势: Net value and cumulative return of one fund against its index and benchmark,
+        oldest first; long windows are sampled, so do not compute a drawdown from them.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+            period: Window: ty 今年以来, 1m 近1月, 3m 近3月, 6m 近6月, 1y 近1年, 3y 近3年, 5y 近5年, all 成立以来.
+                Long windows come back as sampled points.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_GROWTH, {"fund_code": fund_code, "period": period})
+
+    def fund_info(self, fund_code: str) -> FundInfo:
+        """基金资料: Profile, status and latest net value of one fund.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_INFO, {"fund_code": fund_code})
+
+    def fund_manager(self, fund_code: str) -> list[FundManager]:
+        """基金经理: Current managers of one fund, with tenure, returns and assets managed.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(FUND_MANAGER, {"fund_code": fund_code})
+
     def fund_nav_history(
         self,
         fund_code: str,
@@ -288,6 +874,177 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
+    def fund_rank(
+        self,
+        *,
+        fund_type: FundRankType = "1",
+        order_by: FundRankOrder = "1m",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Page[FundRankItem]:
+        """基金排行: Funds of one type ranked by return over a window, best first, at most 1000 rows per
+        type.
+
+        Args:
+            fund_type: Fund type: 1 股票型, 3 混合型, 2 债券型, 5 指数型, 11 QDII型.
+            order_by: Window of the return that ranks the funds: td 日涨幅, 1w 近一周, 1m 近一月 (a month
+                here, a minute bar in kline), 3m 近三月, 6m 近六月, ty 今年以来, 1y 近一年, 2y 近两年, 3y 近三年, 5y 近五年,
+                base 成立以来.
+            page: Page number, from 1.
+            page_size: Rows per page.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(
+            FUND_RANK,
+            {"fund_type": fund_type, "order_by": order_by, "page": page, "page_size": page_size},
+        )
+
+    def fund_rank_pages(
+        self,
+        *,
+        fund_type: FundRankType = "1",
+        order_by: FundRankOrder = "1m",
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[Page[FundRankItem]]:
+        """Every page of ``fund_rank``, one request each. 基金排行: Funds of one type ranked by return
+        over a window, best first, at most 1000 rows per type.
+
+        Args:
+            fund_type: Fund type: 1 股票型, 3 混合型, 2 债券型, 5 指数型, 11 QDII型.
+            order_by: Window of the return that ranks the funds: td 日涨幅, 1w 近一周, 1m 近一月 (a month
+                here, a minute bar in kline), 3m 近三月, 6m 近六月, ty 今年以来, 1y 近一年, 2y 近两年, 3y 近三年, 5y 近五年,
+                base 成立以来.
+            page: Page number, from 1.
+            page_size: Rows per page; by default the largest, 100.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._pages(
+            FUND_RANK,
+            {"fund_type": fund_type, "order_by": order_by, "page": page, "page_size": page_size},
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def fund_rank_options(self) -> FundRankOptions:
+        """基金排行选项: The fund types and return windows that fund_rank takes, as the upstream lists
+        them.
+
+        Auth anonymous; freshness static.
+        """
+        return self._call(FUND_RANK_OPTIONS, {})
+
+    def fund_search(self, *, query: str) -> list[FundSearchResult]:
+        """基金搜索: Funds and advisory portfolios matching a fund code, a fund name or a keyword.
+
+        Args:
+            query: Fund code, fund name or keyword, such as 008975, 富国中证消费50 or 消费.
+
+        Auth anonymous; freshness static.
+        """
+        return self._call(FUND_SEARCH, {"query": query})
+
+    def fund_trade_date(self, fund_code: str) -> FundTradeDate:
+        """基金交易日期: Settlement dates of an order for one fund placed now, as month-day text with no
+        year.
+
+        Args:
+            fund_code: Six digits, such as 008975.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(FUND_TRADE_DATE, {"fund_code": fund_code})
+
+    def index_pb_history(
+        self,
+        index_code: str,
+        *,
+        day: ValuationWindow = "all",
+        begin: date | None = None,
+        end: date | None = None,
+    ) -> ValuationHistory:
+        """指数PB历史: PB of one index over time with Danjuan's reference lines, oldest first.
+
+        Args:
+            index_code: An index from index_valuation_list, such as SH000300 or CSIH30269. Case-
+                insensitive.
+            day: Window: all, 3y or 5y. all starts about 10 years back.
+            begin: First date, inclusive.
+            end: Last date, inclusive.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(
+            INDEX_PB_HISTORY,
+            {"index_code": index_code, "day": day, "begin": begin, "end": end},
+        )
+
+    def index_pe_history(
+        self,
+        index_code: str,
+        *,
+        day: ValuationWindow = "all",
+        begin: date | None = None,
+        end: date | None = None,
+    ) -> ValuationHistory:
+        """指数PE历史: PE of one index over time with Danjuan's reference lines, oldest first.
+
+        Args:
+            index_code: An index from index_valuation_list, such as SH000300 or CSIH30269. Case-
+                insensitive.
+            day: Window: all, 3y or 5y. all starts about 10 years back.
+            begin: First date, inclusive.
+            end: Last date, inclusive.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(
+            INDEX_PE_HISTORY,
+            {"index_code": index_code, "day": day, "begin": begin, "end": end},
+        )
+
+    def index_stock_bond_percentile(
+        self,
+        *,
+        begin: date | None = None,
+        end: date | None = None,
+    ) -> StockBondPercentile:
+        """股债性价比: Danjuan's stock-bond percentile over about 5 years, oldest first.
+
+        One request returns about 5 years; ``begin`` and ``end`` choose the rows kept of it.
+
+        Args:
+            begin: First date, inclusive.
+            end: Last date, inclusive.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(INDEX_STOCK_BOND_PERCENTILE, {"begin": begin, "end": end})
+
+    def index_valuation(self, index_code: str) -> IndexValuation:
+        """单个指数估值: The current valuation of one index.
+
+        Args:
+            index_code: An index from index_valuation_list, such as SH000300 or CSIH30269. Case-
+                insensitive.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(INDEX_VALUATION, {"index_code": index_code})
+
+    def index_valuation_list(self) -> list[IndexValuation]:
+        """指数估值表: Danjuan's valuation table, one row per index.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(INDEX_VALUATION_LIST, {})
+
     def kline(
         self,
         symbol: str,
@@ -336,12 +1093,95 @@ class SyncEndpoints:
             },
         )
 
+    def market_bj_indexes(self) -> list[BoardIndexQuote]:
+        """北证50: Quotes of the BSE 50 and its two comparison indexes, SSE 50 and SZSE 100.
+
+        Auth anonymous; freshness realtime.
+        """
+        return self._call(MARKET_BJ_INDEXES, {})
+
+    def market_hot_stocks(
+        self,
+        *,
+        region: HotStockRegion = "cn",
+        window: HotStockWindow = "hour",
+        count: int = 10,
+    ) -> list[HotStock]:
+        """热股榜: The most popular stocks on Xueqiu by region and window, hottest first, with their
+        quotes.
+
+        Args:
+            region: Ranking to read: global, us, cn or hk. Global day had only A-shares on top,
+                measured 2026-11-05, once during Shanghai trading.
+            window: hour or day.
+            count: How many rows from the top to fetch.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(MARKET_HOT_STOCKS, {"region": region, "window": window, "count": count})
+
+    def market_industry_stocks(self, symbol: str, *, count: int = 10) -> IndustryStocks:
+        """同行业股票: Stocks the upstream lists under the board of one A-share, with their quotes and
+        size.
+
+        Args:
+            count: How many rows from the top to fetch.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(MARKET_INDUSTRY_STOCKS, {"symbol": symbol, "count": count})
+
     def quote_detail(self, symbol: str) -> QuoteDetail:
         """行情详情: Full quote of one symbol, with its name, valuation fields and market status.
 
         Auth anonymous; freshness realtime.
         """
         return self._call(QUOTE_DETAIL, {"symbol": symbol})
+
+    def quote_heat(self, symbol: str) -> StockHeat:
+        """个股热度: Popularity rank of one stock on Xueqiu, with its visitor and discussion counts.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(QUOTE_HEAT, {"symbol": symbol})
+
+    def quote_minute(self, symbol: str, *, days: MinuteDays = 1) -> MinuteChart:
+        """分时: Intraday points of one symbol over the latest 1 or 5 sessions, oldest first; bars
+        older than that are in ``kline``.
+
+        Args:
+            days: 1: the latest session, a point a minute. 5: the latest 5, a point every 10
+                minutes.
+
+        Auth anonymous; freshness realtime.
+        """
+        return self._call(QUOTE_MINUTE, {"symbol": symbol, "days": days})
+
+    def quote_order_book(self, symbol: str) -> OrderBook:
+        """盘口: Snapshot of the resting bids and asks of one A-share with their imbalance; executed
+        trades are in ``quote_trades``.
+
+        Auth anonymous; freshness realtime.
+        """
+        return self._call(QUOTE_ORDER_BOOK, {"symbol": symbol})
+
+    def quote_relevant(self, symbol: str) -> list[RelatedStock]:
+        """相关股票: Other stocks the upstream relates to one A-share, with their last price and change.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(QUOTE_RELEVANT, {"symbol": symbol})
+
+    def quote_trades(self, symbol: str, *, count: int = 50) -> list[TradeTick]:
+        """成交明细: The most recent executed trades of one symbol, oldest first; resting orders are in
+        ``quote_order_book``.
+
+        Args:
+            count: How many of the most recent trades to fetch; earlier ones are out of reach.
+
+        Auth anonymous; freshness realtime.
+        """
+        return self._call(QUOTE_TRADES, {"symbol": symbol, "count": count})
 
     def quotec(self, symbols: str | Sequence[str]) -> list[Quote]:
         """实时行情: Realtime quotes of up to 50 symbols in one request; a string may be comma-separated.
@@ -353,6 +1193,201 @@ class SyncEndpoints:
         """
         return self._call(QUOTEC, {"symbols": symbols})
 
+    def screener_events(
+        self,
+        symbol: str,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Page[StockEvent]:
+        """个股事件: Notices about one A-share, such as block trades and reports, latest first.
+
+        Args:
+            symbol: An A-share symbol.
+            page: Page number, from 1; page 1 holds the latest rows.
+            page_size: Rows per page.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._call(SCREENER_EVENTS, {"symbol": symbol, "page": page, "page_size": page_size})
+
+    def screener_events_pages(
+        self,
+        symbol: str,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[Page[StockEvent]]:
+        """Every page of ``screener_events``, one request each. 个股事件: Notices about one A-share, such
+        as block trades and reports, latest first.
+
+        Args:
+            symbol: An A-share symbol.
+            page: Page number, from 1; page 1 holds the latest rows.
+            page_size: Rows per page; by default the largest, 50.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness daily.
+        """
+        return self._pages(
+            SCREENER_EVENTS,
+            {"symbol": symbol, "page": page, "page_size": page_size},
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def screener_industries(self) -> list[ScreenerIndustry]:
+        """行业列表: The A-share industries and the codes screener_quote_list filters by.
+
+        Auth anonymous; freshness static.
+        """
+        return self._call(SCREENER_INDUSTRIES, {})
+
+    def screener_popularity_rank(
+        self,
+        *,
+        market: RankMarket = "CN",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Page[PopularStock]:
+        """关注度排行: Every security of one market, most followed over 7 days first.
+
+        Args:
+            market: CN, HK or US.
+            page: Page number, from 1.
+            page_size: Rows per page.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(
+            SCREENER_POPULARITY_RANK,
+            {"market": market, "page": page, "page_size": page_size},
+        )
+
+    def screener_popularity_rank_pages(
+        self,
+        *,
+        market: RankMarket = "CN",
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[Page[PopularStock]]:
+        """Every page of ``screener_popularity_rank``, one request each. 关注度排行: Every security of one
+        market, most followed over 7 days first.
+
+        Args:
+            market: CN, HK or US.
+            page: Page number, from 1.
+            page_size: Rows per page; by default the largest, 100.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._pages(
+            SCREENER_POPULARITY_RANK,
+            {"market": market, "page": page, "page_size": page_size},
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def screener_quote_list(
+        self,
+        *,
+        market: QuoteListMarket = "CN",
+        board: Board | None = None,
+        ind_code: str | None = None,
+        order_by: QuoteListOrderBy = "symbol",
+        order: Order = "asc",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Page[ScreenerQuote]:
+        """证券列表行情: Securities of one market, board or industry with their quotes and ratios.
+
+        Args:
+            market: CN, HK or US.
+            board: A-share board, with market CN only; by default all of the market.
+            ind_code: Industry code from screener_industries, such as S6308, with market CN only.
+                A code that does not exist gives no rows.
+            order_by: Sort column: symbol, or percent for the change from the previous close.
+            order: Sort direction: asc or desc.
+            page: Page number, from 1.
+            page_size: Rows per page.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(
+            SCREENER_QUOTE_LIST,
+            {
+                "market": market,
+                "board": board,
+                "ind_code": ind_code,
+                "order_by": order_by,
+                "order": order,
+                "page": page,
+                "page_size": page_size,
+            },
+        )
+
+    def screener_quote_list_pages(
+        self,
+        *,
+        market: QuoteListMarket = "CN",
+        board: Board | None = None,
+        ind_code: str | None = None,
+        order_by: QuoteListOrderBy = "symbol",
+        order: Order = "asc",
+        page: int = 1,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[Page[ScreenerQuote]]:
+        """Every page of ``screener_quote_list``, one request each. 证券列表行情: Securities of one market,
+        board or industry with their quotes and ratios.
+
+        Args:
+            market: CN, HK or US.
+            board: A-share board, with market CN only; by default all of the market.
+            ind_code: Industry code from screener_industries, such as S6308, with market CN only.
+                A code that does not exist gives no rows.
+            order_by: Sort column: symbol, or percent for the change from the previous close.
+            order: Sort direction: asc or desc.
+            page: Page number, from 1.
+            page_size: Rows per page; by default the largest, 100.
+            max_pages: Stop after this many pages.
+            max_items: Stop after this many rows; the last page is cut to fit.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._pages(
+            SCREENER_QUOTE_LIST,
+            {
+                "market": market,
+                "board": board,
+                "ind_code": ind_code,
+                "order_by": order_by,
+                "order": order,
+                "page": page,
+                "page_size": page_size,
+            },
+            max_pages=max_pages,
+            max_items=max_items,
+        )
+
+    def search_stock(self, *, query: str) -> list[StockHit]:
+        """证券检索: Securities matching a code or name, with their exchange, industry and last price.
+
+        Args:
+            query: Code or name, such as SH600000 or 浦发银行; the name form was measured 2026-11-05.
+
+        Auth anonymous; freshness intraday.
+        """
+        return self._call(SEARCH_STOCK, {"query": query})
+
     def suggest_stock(self, *, query: str) -> list[StockSuggestion]:
         """证券搜索: Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``.
 
@@ -362,3 +1397,29 @@ class SyncEndpoints:
         Auth anonymous; freshness static.
         """
         return self._call(SUGGEST_STOCK, {"query": query})
+
+    def watchlist_groups(self) -> list[WatchlistGroup]:
+        """自选分组: The watchlist groups of the logged-in account; structure unverified.
+
+        Auth required; freshness intraday.
+        """
+        return self._call(WATCHLIST_GROUPS, {})
+
+    def watchlist_stocks(
+        self,
+        *,
+        pid: int = -1,
+        category: WatchlistCategory = "stock",
+    ) -> list[WatchlistItem]:
+        """自选股: The members of one watchlist group of the logged-in account; structure unverified.
+
+        One request with a page size of 1000, the most this method returns. No way to page is
+        known, so a result of exactly 1000 rows may be cut.
+
+        Args:
+            pid: Group id, the ``pid`` of ``watchlist_groups``; -1 means every stock.
+            category: Kind of the group, the ``category`` of ``watchlist_groups``.
+
+        Auth required; freshness intraday.
+        """
+        return self._call(WATCHLIST_STOCKS, {"pid": pid, "category": category})

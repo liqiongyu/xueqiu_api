@@ -34,52 +34,198 @@
     "__init__": "(self, *, token: 'str | None' = None, session_path: 'str | os.PathLike[str] | None' = None, min_intervals: 'Mapping[str, float] | None' = None, deadline: 'float' = 30.0) -> 'None'",
     "batch_quote": "(self, symbols: 'str | Sequence[str]') -> 'list[QuoteDetail]'",
     "call": "(self, endpoint: 'str', /, **params: 'Any') -> 'Any'",
+    "capital_assort": "(self, symbol: 'str') -> 'CapitalAssort'",
     "capital_block_trades": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[BlockTrade]'",
     "capital_block_trades_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[BlockTrade]]'",
+    "capital_distribution": "(self, symbol: 'str') -> 'CapitalDistribution'",
+    "capital_flow": "(self, symbol: 'str') -> 'CapitalFlow'",
+    "capital_history": "(self, symbol: 'str') -> 'CapitalHistory'",
+    "capital_history_detail": "(self, symbol: 'str') -> 'CapitalHistoryDetail'",
+    "capital_longhu": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[LonghuEntry]'",
+    "capital_longhu_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[LonghuEntry]]'",
+    "capital_margin": "(self, symbol: 'str', *, count: 'int' = 50) -> 'MarginHistory'",
     "close": "(self) -> 'None'",
+    "cube_holdings": "(self, cube_symbol: 'str') -> 'CubeHoldings'",
+    "cube_max_drawdown": "(self, cube_symbol: 'str') -> 'CubeMaxDrawdown'",
+    "cube_monthly_returns": "(self, cube_symbol: 'str') -> 'list[CubeMonthlyReturn]'",
     "cube_nav_daily": "(self, cube_symbol: 'str', *, begin: 'date | None' = None, end: 'date | None' = None) -> 'CubeNav'",
+    "cube_quote": "(self, cube_symbols: 'str | Sequence[str]') -> 'list[CubeQuote]'",
+    "cube_rank_list": "(self, *, page: 'int' = 1) -> 'Page[CubeSummary]'",
+    "cube_rank_list_pages": "(self, *, page: 'int' = 1, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[CubeSummary]]'",
+    "cube_rebalancing_history": "(self, cube_symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'RebalancingPage'",
+    "cube_rebalancing_history_pages": "(self, cube_symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[RebalancingPage]'",
+    "cube_score": "(self, cube_symbol: 'str') -> 'CubeScore'",
+    "f10_bonus": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'BonusPage'",
+    "f10_bonus_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[BonusPage]'",
+    "f10_business_analysis": "(self, symbol: 'str') -> 'list[BusinessAnalysis]'",
     "f10_company": "(self, symbol: 'str') -> 'Company'",
+    "f10_executive_trades": "(self, symbol: 'str') -> 'list[ExecutiveTrade]'",
+    "f10_executives": "(self, symbol: 'str') -> 'list[Executive]'",
+    "f10_holders": "(self, symbol: 'str') -> 'Holders'",
+    "f10_indicator": "(self, symbol: 'str') -> 'list[MainIndicator]'",
+    "f10_industry": "(self, symbol: 'str') -> 'IndustryInfo'",
+    "f10_industry_compare": "(self, symbol: 'str') -> 'IndustryCompare'",
+    "f10_org_holding_change": "(self, symbol: 'str') -> 'OrgHoldingChange'",
+    "f10_org_holding_detail": "(self, symbol: 'str', *, report_date: 'date | None' = None) -> 'OrgHoldingDetail'",
+    "f10_share_changes": "(self, symbol: 'str', *, count: 'int' = 50) -> 'list[ShareChange]'",
+    "f10_top_holders": "(self, symbol: 'str') -> 'TopHolders'",
     "finance_balance": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
+    "finance_business": "(self, symbol: 'str', *, count: 'int' = 2) -> 'RevenueBreakdown'",
     "finance_cash_flow": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
     "finance_income": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
     "finance_indicator": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
+    "fund_achievement": "(self, fund_code: 'str') -> 'list[FundPeriodPerformance]'",
+    "fund_asset": "(self, fund_code: 'str') -> 'FundAsset'",
+    "fund_auto_invest_return": "(self, fund_code: 'str') -> 'FundAutoInvestReturn'",
+    "fund_derived": "(self, fund_code: 'str') -> 'FundDerived'",
+    "fund_detail": "(self, fund_code: 'str') -> 'FundDetail'",
+    "fund_growth": "(self, fund_code: 'str', *, period: 'FundGrowthPeriod' = 'ty') -> 'FundGrowth'",
+    "fund_info": "(self, fund_code: 'str') -> 'FundInfo'",
+    "fund_manager": "(self, fund_code: 'str') -> 'list[FundManager]'",
     "fund_nav_history": "(self, fund_code: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[FundNav]'",
     "fund_nav_history_pages": "(self, fund_code: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[FundNav]]'",
+    "fund_rank": "(self, *, fund_type: 'FundRankType' = '1', order_by: 'FundRankOrder' = '1m', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[FundRankItem]'",
+    "fund_rank_options": "(self) -> 'FundRankOptions'",
+    "fund_rank_pages": "(self, *, fund_type: 'FundRankType' = '1', order_by: 'FundRankOrder' = '1m', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[FundRankItem]]'",
+    "fund_search": "(self, *, query: 'str') -> 'list[FundSearchResult]'",
+    "fund_trade_date": "(self, fund_code: 'str') -> 'FundTradeDate'",
+    "index_pb_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_pe_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_stock_bond_percentile": "(self, *, begin: 'date | None' = None, end: 'date | None' = None) -> 'StockBondPercentile'",
+    "index_valuation": "(self, index_code: 'str') -> 'IndexValuation'",
+    "index_valuation_list": "(self) -> 'list[IndexValuation]'",
     "kline": "(self, symbol: 'str', *, period: 'Period' = 'day', adjust: 'Adjust' = 'before', begin: 'date | None' = None, end: 'date | None' = None, before: 'datetime | None' = None, count: 'int | None' = None) -> 'Kline'",
     "kline_history": "(self, symbol: 'str', *, period: 'Period' = 'day', adjust: 'Adjust' = 'before', begin: 'date | None' = None, end: 'date | None' = None) -> 'Kline'",
+    "market_bj_indexes": "(self) -> 'list[BoardIndexQuote]'",
+    "market_hot_stocks": "(self, *, region: 'HotStockRegion' = 'cn', window: 'HotStockWindow' = 'hour', count: 'int' = 10) -> 'list[HotStock]'",
+    "market_industry_stocks": "(self, symbol: 'str', *, count: 'int' = 10) -> 'IndustryStocks'",
     "quote_detail": "(self, symbol: 'str') -> 'QuoteDetail'",
+    "quote_heat": "(self, symbol: 'str') -> 'StockHeat'",
+    "quote_minute": "(self, symbol: 'str', *, days: 'MinuteDays' = 1) -> 'MinuteChart'",
+    "quote_order_book": "(self, symbol: 'str') -> 'OrderBook'",
+    "quote_relevant": "(self, symbol: 'str') -> 'list[RelatedStock]'",
+    "quote_trades": "(self, symbol: 'str', *, count: 'int' = 50) -> 'list[TradeTick]'",
     "quotec": "(self, symbols: 'str | Sequence[str]') -> 'list[Quote]'",
     "request": "(self, *, host: 'Host', path: 'str', params: 'Mapping[str, str | int | float] | None' = None) -> 'Any'",
-    "suggest_stock": "(self, *, query: 'str') -> 'list[StockSuggestion]'"
+    "screener_events": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[StockEvent]'",
+    "screener_events_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[StockEvent]]'",
+    "screener_industries": "(self) -> 'list[ScreenerIndustry]'",
+    "screener_popularity_rank": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[PopularStock]'",
+    "screener_popularity_rank_pages": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[PopularStock]]'",
+    "screener_quote_list": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[ScreenerQuote]'",
+    "screener_quote_list_pages": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'Iterator[Page[ScreenerQuote]]'",
+    "search_stock": "(self, *, query: 'str') -> 'list[StockHit]'",
+    "suggest_stock": "(self, *, query: 'str') -> 'list[StockSuggestion]'",
+    "watchlist_groups": "(self) -> 'list[WatchlistGroup]'",
+    "watchlist_stocks": "(self, *, pid: 'int' = -1, category: 'WatchlistCategory' = 'stock') -> 'list[WatchlistItem]'"
   },
   "AsyncClient": {
     "__init__": "(self, *, token: 'str | None' = None, session_path: 'str | os.PathLike[str] | None' = None, min_intervals: 'Mapping[str, float] | None' = None, deadline: 'float' = 30.0) -> 'None'",
     "batch_quote": "(self, symbols: 'str | Sequence[str]') -> 'list[QuoteDetail]'",
     "call": "(self, endpoint: 'str', /, **params: 'Any') -> 'Any'",
+    "capital_assort": "(self, symbol: 'str') -> 'CapitalAssort'",
     "capital_block_trades": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[BlockTrade]'",
     "capital_block_trades_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[BlockTrade]]'",
+    "capital_distribution": "(self, symbol: 'str') -> 'CapitalDistribution'",
+    "capital_flow": "(self, symbol: 'str') -> 'CapitalFlow'",
+    "capital_history": "(self, symbol: 'str') -> 'CapitalHistory'",
+    "capital_history_detail": "(self, symbol: 'str') -> 'CapitalHistoryDetail'",
+    "capital_longhu": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[LonghuEntry]'",
+    "capital_longhu_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[LonghuEntry]]'",
+    "capital_margin": "(self, symbol: 'str', *, count: 'int' = 50) -> 'MarginHistory'",
     "close": "(self) -> 'None'",
+    "cube_holdings": "(self, cube_symbol: 'str') -> 'CubeHoldings'",
+    "cube_max_drawdown": "(self, cube_symbol: 'str') -> 'CubeMaxDrawdown'",
+    "cube_monthly_returns": "(self, cube_symbol: 'str') -> 'list[CubeMonthlyReturn]'",
     "cube_nav_daily": "(self, cube_symbol: 'str', *, begin: 'date | None' = None, end: 'date | None' = None) -> 'CubeNav'",
+    "cube_quote": "(self, cube_symbols: 'str | Sequence[str]') -> 'list[CubeQuote]'",
+    "cube_rank_list": "(self, *, page: 'int' = 1) -> 'Page[CubeSummary]'",
+    "cube_rank_list_pages": "(self, *, page: 'int' = 1, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[CubeSummary]]'",
+    "cube_rebalancing_history": "(self, cube_symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'RebalancingPage'",
+    "cube_rebalancing_history_pages": "(self, cube_symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[RebalancingPage]'",
+    "cube_score": "(self, cube_symbol: 'str') -> 'CubeScore'",
+    "f10_bonus": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'BonusPage'",
+    "f10_bonus_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[BonusPage]'",
+    "f10_business_analysis": "(self, symbol: 'str') -> 'list[BusinessAnalysis]'",
     "f10_company": "(self, symbol: 'str') -> 'Company'",
+    "f10_executive_trades": "(self, symbol: 'str') -> 'list[ExecutiveTrade]'",
+    "f10_executives": "(self, symbol: 'str') -> 'list[Executive]'",
+    "f10_holders": "(self, symbol: 'str') -> 'Holders'",
+    "f10_indicator": "(self, symbol: 'str') -> 'list[MainIndicator]'",
+    "f10_industry": "(self, symbol: 'str') -> 'IndustryInfo'",
+    "f10_industry_compare": "(self, symbol: 'str') -> 'IndustryCompare'",
+    "f10_org_holding_change": "(self, symbol: 'str') -> 'OrgHoldingChange'",
+    "f10_org_holding_detail": "(self, symbol: 'str', *, report_date: 'date | None' = None) -> 'OrgHoldingDetail'",
+    "f10_share_changes": "(self, symbol: 'str', *, count: 'int' = 50) -> 'list[ShareChange]'",
+    "f10_top_holders": "(self, symbol: 'str') -> 'TopHolders'",
     "finance_balance": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
+    "finance_business": "(self, symbol: 'str', *, count: 'int' = 2) -> 'RevenueBreakdown'",
     "finance_cash_flow": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
     "finance_income": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
     "finance_indicator": "(self, symbol: 'str', *, report_type: 'ReportType' = 'all', is_detail: 'bool' = True, count: 'int' = 5) -> 'Financials'",
+    "fund_achievement": "(self, fund_code: 'str') -> 'list[FundPeriodPerformance]'",
+    "fund_asset": "(self, fund_code: 'str') -> 'FundAsset'",
+    "fund_auto_invest_return": "(self, fund_code: 'str') -> 'FundAutoInvestReturn'",
+    "fund_derived": "(self, fund_code: 'str') -> 'FundDerived'",
+    "fund_detail": "(self, fund_code: 'str') -> 'FundDetail'",
+    "fund_growth": "(self, fund_code: 'str', *, period: 'FundGrowthPeriod' = 'ty') -> 'FundGrowth'",
+    "fund_info": "(self, fund_code: 'str') -> 'FundInfo'",
+    "fund_manager": "(self, fund_code: 'str') -> 'list[FundManager]'",
     "fund_nav_history": "(self, fund_code: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[FundNav]'",
     "fund_nav_history_pages": "(self, fund_code: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[FundNav]]'",
+    "fund_rank": "(self, *, fund_type: 'FundRankType' = '1', order_by: 'FundRankOrder' = '1m', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[FundRankItem]'",
+    "fund_rank_options": "(self) -> 'FundRankOptions'",
+    "fund_rank_pages": "(self, *, fund_type: 'FundRankType' = '1', order_by: 'FundRankOrder' = '1m', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[FundRankItem]]'",
+    "fund_search": "(self, *, query: 'str') -> 'list[FundSearchResult]'",
+    "fund_trade_date": "(self, fund_code: 'str') -> 'FundTradeDate'",
+    "index_pb_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_pe_history": "(self, index_code: 'str', *, day: 'ValuationWindow' = 'all', begin: 'date | None' = None, end: 'date | None' = None) -> 'ValuationHistory'",
+    "index_stock_bond_percentile": "(self, *, begin: 'date | None' = None, end: 'date | None' = None) -> 'StockBondPercentile'",
+    "index_valuation": "(self, index_code: 'str') -> 'IndexValuation'",
+    "index_valuation_list": "(self) -> 'list[IndexValuation]'",
     "kline": "(self, symbol: 'str', *, period: 'Period' = 'day', adjust: 'Adjust' = 'before', begin: 'date | None' = None, end: 'date | None' = None, before: 'datetime | None' = None, count: 'int | None' = None) -> 'Kline'",
     "kline_history": "(self, symbol: 'str', *, period: 'Period' = 'day', adjust: 'Adjust' = 'before', begin: 'date | None' = None, end: 'date | None' = None) -> 'Kline'",
+    "market_bj_indexes": "(self) -> 'list[BoardIndexQuote]'",
+    "market_hot_stocks": "(self, *, region: 'HotStockRegion' = 'cn', window: 'HotStockWindow' = 'hour', count: 'int' = 10) -> 'list[HotStock]'",
+    "market_industry_stocks": "(self, symbol: 'str', *, count: 'int' = 10) -> 'IndustryStocks'",
     "quote_detail": "(self, symbol: 'str') -> 'QuoteDetail'",
+    "quote_heat": "(self, symbol: 'str') -> 'StockHeat'",
+    "quote_minute": "(self, symbol: 'str', *, days: 'MinuteDays' = 1) -> 'MinuteChart'",
+    "quote_order_book": "(self, symbol: 'str') -> 'OrderBook'",
+    "quote_relevant": "(self, symbol: 'str') -> 'list[RelatedStock]'",
+    "quote_trades": "(self, symbol: 'str', *, count: 'int' = 50) -> 'list[TradeTick]'",
     "quotec": "(self, symbols: 'str | Sequence[str]') -> 'list[Quote]'",
     "request": "(self, *, host: 'Host', path: 'str', params: 'Mapping[str, str | int | float] | None' = None) -> 'Any'",
-    "suggest_stock": "(self, *, query: 'str') -> 'list[StockSuggestion]'"
+    "screener_events": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int' = 50) -> 'Page[StockEvent]'",
+    "screener_events_pages": "(self, symbol: 'str', *, page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[StockEvent]]'",
+    "screener_industries": "(self) -> 'list[ScreenerIndustry]'",
+    "screener_popularity_rank": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[PopularStock]'",
+    "screener_popularity_rank_pages": "(self, *, market: 'RankMarket' = 'CN', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[PopularStock]]'",
+    "screener_quote_list": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int' = 50) -> 'Page[ScreenerQuote]'",
+    "screener_quote_list_pages": "(self, *, market: 'QuoteListMarket' = 'CN', board: 'Board | None' = None, ind_code: 'str | None' = None, order_by: 'QuoteListOrderBy' = 'symbol', order: 'Order' = 'asc', page: 'int' = 1, page_size: 'int | None' = None, max_pages: 'int | None' = None, max_items: 'int | None' = None) -> 'AsyncIterator[Page[ScreenerQuote]]'",
+    "search_stock": "(self, *, query: 'str') -> 'list[StockHit]'",
+    "suggest_stock": "(self, *, query: 'str') -> 'list[StockSuggestion]'",
+    "watchlist_groups": "(self) -> 'list[WatchlistGroup]'",
+    "watchlist_stocks": "(self, *, pid: 'int' = -1, category: 'WatchlistCategory' = 'stock') -> 'list[WatchlistItem]'"
   },
   "models": {
+    "Addition": {
+      "listing_ad": "date | None",
+      "actual_issue_vol": "float | None",
+      "actual_issue_price": "float | None",
+      "actual_rc_net_amt": "float | None"
+    },
     "Adjust": [
       "before",
       "after",
       "normal"
     ],
+    "Allotment": {
+      "allot_date": "date | None",
+      "allot_price": "float | None",
+      "actual_allot_num": "float | None",
+      "actual_rc_total_amt": "float | None"
+    },
     "BlockTrade": {
       "trade_date": "date | None",
       "trans_price": "float | None",
@@ -88,6 +234,112 @@
       "premium_pct": "float | None",
       "buy_branch_org_name": "str | None",
       "sell_branch_org_name": "str | None"
+    },
+    "Board": [
+      "sha",
+      "kcb",
+      "sza",
+      "cyb",
+      "zxb",
+      "bj",
+      "shb",
+      "szb",
+      "sh_sz",
+      "sh_sz_bj"
+    ],
+    "BoardIndexQuote": {
+      "symbol": "str",
+      "name": "str | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None"
+    },
+    "BonusPage": {
+      "items": "tuple[T, ...]",
+      "page": "int",
+      "page_size": "int",
+      "total": "int | None",
+      "last_page": "int | None",
+      "capped": "bool",
+      "short": "bool",
+      "next_params": "Mapping[str, Any] | None",
+      "symbol": "str",
+      "additions": "tuple[Addition, ...]",
+      "allotments": "tuple[Allotment, ...]"
+    },
+    "BookLevel": {
+      "price": "float",
+      "volume": "int | None",
+      "orders": "int | None"
+    },
+    "BusinessAnalysis": {
+      "report_name": "str | None",
+      "report_date": "date | None",
+      "operating_analysis_explain": "str | None"
+    },
+    "BusinessPeriod": {
+      "report_date": "date | None",
+      "report_name": "str",
+      "groups": "tuple[RevenueGroup, ...]"
+    },
+    "CapitalAssort": {
+      "symbol": "str",
+      "trade_date": "date | None",
+      "buy_xlarge": "float | None",
+      "buy_large": "float | None",
+      "buy_medium": "float | None",
+      "buy_small": "float | None",
+      "buy_total": "float | None",
+      "sell_xlarge": "float | None",
+      "sell_large": "float | None",
+      "sell_medium": "float | None",
+      "sell_small": "float | None",
+      "sell_total": "float | None"
+    },
+    "CapitalDetailDay": {
+      "trade_date": "date | None",
+      "close": "float | None",
+      "percent": "float | None",
+      "net_inflow": "float | None",
+      "xlarge_net": "float | None",
+      "large_net": "float | None",
+      "medium_net": "float | None",
+      "small_net": "float | None"
+    },
+    "CapitalDistribution": {
+      "symbol": "str",
+      "timestamp": "datetime | None",
+      "net_inflow": "float | None",
+      "buy_xlarge": "float | None",
+      "buy_large": "float | None",
+      "buy_medium": "float | None",
+      "buy_small": "float | None",
+      "sell_xlarge": "float | None",
+      "sell_large": "float | None",
+      "sell_medium": "float | None",
+      "sell_small": "float | None",
+      "analysis": "str | None"
+    },
+    "CapitalFlow": {
+      "symbol": "str",
+      "timestamps": "tuple[datetime, ...]",
+      "columns": "Mapping[str, tuple[float | None, ...]]"
+    },
+    "CapitalHistory": {
+      "symbol": "str",
+      "sum3": "float | None",
+      "sum5": "float | None",
+      "sum10": "float | None",
+      "sum20": "float | None",
+      "items": "tuple[CapitalHistoryDay, ...]"
+    },
+    "CapitalHistoryDay": {
+      "trade_date": "date | None",
+      "net_inflow": "float | None"
+    },
+    "CapitalHistoryDetail": {
+      "symbol": "str",
+      "items": "tuple[CapitalDetailDay, ...]"
     },
     "Company": {
       "symbol": "str",
@@ -102,6 +354,75 @@
       "chairman": "str | None",
       "org_website": "str | None"
     },
+    "CompareItem": {
+      "pe_ttm": "float | None",
+      "pb": "float | None",
+      "basic_eps": "float | None",
+      "avg_roe": "float | None",
+      "gross_selling_rate": "float | None",
+      "net_selling_rate": "float | None",
+      "total_revenue": "float | None",
+      "net_profit_atsopc": "float | None",
+      "np_per_share": "float | None",
+      "operate_cash_flow_ps": "float | None",
+      "total_assets": "float | None",
+      "total_shares": "float | None",
+      "market_capital": "float | None",
+      "operating_income_yoy": "float | None",
+      "net_profit_atsopc_yoy": "float | None",
+      "asset_liab_ratio": "float | None",
+      "symbol": "str | None",
+      "name": "str | None"
+    },
+    "CompareMetrics": {
+      "pe_ttm": "float | None",
+      "pb": "float | None",
+      "basic_eps": "float | None",
+      "avg_roe": "float | None",
+      "gross_selling_rate": "float | None",
+      "net_selling_rate": "float | None",
+      "total_revenue": "float | None",
+      "net_profit_atsopc": "float | None",
+      "np_per_share": "float | None",
+      "operate_cash_flow_ps": "float | None",
+      "total_assets": "float | None",
+      "total_shares": "float | None",
+      "market_capital": "float | None",
+      "operating_income_yoy": "float | None",
+      "net_profit_atsopc_yoy": "float | None",
+      "asset_liab_ratio": "float | None"
+    },
+    "CubeHolding": {
+      "symbol": "str",
+      "name": "str | None",
+      "weight": "float | None",
+      "segment_name": "str | None"
+    },
+    "CubeHoldings": {
+      "symbol": "str",
+      "rebalancing_id": "int",
+      "status": "str | None",
+      "updated_at": "datetime | None",
+      "cash_weight": "float | None",
+      "holdings": "tuple[CubeHolding, ...]",
+      "last_rebalancing_id": "int | None",
+      "last_rebalancing_status": "str | None"
+    },
+    "CubeMaxDrawdown": {
+      "symbol": "str",
+      "max_drawdown": "float | None",
+      "begin_date": "date | None",
+      "end_date": "date | None",
+      "begin_time": "datetime | None",
+      "end_time": "datetime | None",
+      "level": "int | None"
+    },
+    "CubeMonthlyReturn": {
+      "month": "date",
+      "gain": "float | None",
+      "benchmark": "str | None",
+      "benchmark_gain": "float | None"
+    },
     "CubeNav": {
       "symbol": "str",
       "name": "str | None",
@@ -110,6 +431,68 @@
       "dates": "tuple[date, ...]",
       "columns": "Mapping[str, tuple[float | None, ...]]"
     },
+    "CubeQuote": {
+      "symbol": "str",
+      "name": "str | None",
+      "market": "str | None",
+      "net_value": "float | None",
+      "daily_gain": "float | None",
+      "monthly_gain": "float | None",
+      "total_gain": "float | None",
+      "annualized_gain": "float | None",
+      "closed_at": "datetime | None"
+    },
+    "CubeScore": {
+      "symbol": "str",
+      "market": "str | None",
+      "total_score": "float | None",
+      "max_total_score": "int | None",
+      "level": "int | None",
+      "score_rank": "int | None",
+      "score_updated_time": "datetime | None",
+      "report_updated_time": "datetime | None",
+      "sub_scores": "tuple[SubScore, ...]"
+    },
+    "CubeSummary": {
+      "symbol": "str",
+      "name": "str | None",
+      "market": "str | None",
+      "net_value": "float | None",
+      "daily_gain": "float | None",
+      "monthly_gain": "float | None",
+      "total_gain": "float | None",
+      "annualized_gain": "float | None",
+      "closed_at": "datetime | None",
+      "cube_id": "int",
+      "follower_count": "int | None",
+      "created_at": "datetime | None",
+      "updated_at": "datetime | None",
+      "last_rb_id": "int | None"
+    },
+    "Dividend": {
+      "report_name": "str | None",
+      "plan": "str | None",
+      "announcement_date": "date | None",
+      "record_date": "date | None",
+      "ex_date": "date | None",
+      "pay_date": "date | None",
+      "cancelled_date": "date | None"
+    },
+    "Executive": {
+      "personal_name": "str",
+      "position_name": "str | None",
+      "employ_date": "date | None",
+      "employ_ed": "date | None",
+      "held_num": "int | None",
+      "annual_salary": "float | None",
+      "resume_cn": "str | None"
+    },
+    "ExecutiveTrade": {
+      "chg_date": "date | None",
+      "manage_name": "str",
+      "chg_shares_num": "int | None",
+      "trans_avg_price": "float | None"
+    },
     "Financials": {
       "symbol": "str",
       "name": "str | None",
@@ -117,11 +500,393 @@
       "periods": "tuple[ReportPeriod, ...]",
       "extra": "Mapping[str, Any]"
     },
+    "FundAsset": {
+      "report_date": "date | None",
+      "stock_pct_net_assets": "float | None",
+      "bond_pct_net_assets": "float | None",
+      "cash_pct_net_assets": "float | None",
+      "other_pct_net_assets": "float | None",
+      "stocks": "tuple[FundHolding, ...]",
+      "bonds": "tuple[FundBondHolding, ...]"
+    },
+    "FundAutoInvestReturn": {
+      "duration": "str | None",
+      "strategy": "str | None",
+      "smart_strategy": "str | None",
+      "cycle": "str | None",
+      "amount": "float | None",
+      "windows": "tuple[FundAutoInvestWindow, ...]"
+    },
+    "FundAutoInvestWindow": {
+      "window": "str | None",
+      "return_pct": "float | None",
+      "smart_return_max_pct": "float | None"
+    },
+    "FundBenchmarkIndex": {
+      "symbol": "str",
+      "name": "str | None"
+    },
+    "FundBondHolding": {
+      "name": "str | None",
+      "code": "str | None",
+      "symbol": "str | None",
+      "pct_net_assets": "float | None"
+    },
+    "FundDerived": {
+      "fund_code": "str",
+      "fund_type": "str | None",
+      "nav_date": "date | None",
+      "unit_nav": "float | None",
+      "acc_nav": "float | None",
+      "nav_change": "float | None",
+      "daily_pct": "float | None",
+      "return_1w_pct": "float | None",
+      "return_1m_pct": "float | None",
+      "return_3m_pct": "float | None",
+      "return_6m_pct": "float | None",
+      "return_ytd_pct": "float | None",
+      "return_1y_pct": "float | None",
+      "return_2y_pct": "float | None",
+      "return_3y_pct": "float | None",
+      "return_5y_pct": "float | None",
+      "return_since_inception_pct": "float | None",
+      "rank_1m": "int | None",
+      "rank_1m_total": "int | None",
+      "rank_3m": "int | None",
+      "rank_3m_total": "int | None",
+      "rank_6m": "int | None",
+      "rank_6m_total": "int | None",
+      "rank_ytd": "int | None",
+      "rank_ytd_total": "int | None",
+      "rank_1y": "int | None",
+      "rank_1y_total": "int | None",
+      "rank_3y": "int | None",
+      "rank_3y_total": "int | None",
+      "rank_5y": "int | None",
+      "rank_5y_total": "int | None",
+      "rank_since_inception": "int | None",
+      "rank_since_inception_total": "int | None",
+      "aip_return_1y_pct": "float | None",
+      "aip_return_2y_pct": "float | None",
+      "aip_return_3y_pct": "float | None",
+      "aip_return_5y_pct": "float | None",
+      "smart_aip_return_1y_pct": "float | None",
+      "smart_aip_return_2y_pct": "float | None",
+      "smart_aip_return_3y_pct": "float | None",
+      "smart_aip_return_5y_pct": "float | None",
+      "updated_at": "datetime | None"
+    },
+    "FundDetail": {
+      "company_intro": "str | None",
+      "position": "FundPosition",
+      "fees": "FundFees",
+      "managers": "tuple[FundManagerProfile, ...]",
+      "trade_days": "FundTradeDays",
+      "pension_fund": "bool | None"
+    },
+    "FundFeeRow": {
+      "tier": "str | None",
+      "value": "float | None",
+      "unit": "str | None",
+      "special": "bool | None"
+    },
+    "FundFees": {
+      "subscribe_rate_pct": "float | None",
+      "purchase_rate_pct": "float | None",
+      "redeem_rate_pct": "float | None",
+      "purchase_discount": "float | None",
+      "subscribe_discount": "float | None",
+      "purchase_tiers": "tuple[FundFeeRow, ...]",
+      "redeem_tiers": "tuple[FundFeeRow, ...]",
+      "other_fees": "tuple[FundFeeRow, ...]"
+    },
+    "FundGrowth": {
+      "fund_code": "str",
+      "period": "FundGrowthPeriod",
+      "index_name": "str | None",
+      "dates": "tuple[date, ...]",
+      "columns": "Mapping[str, tuple[float | None, ...]]"
+    },
+    "FundGrowthPeriod": [
+      "ty",
+      "1m",
+      "3m",
+      "6m",
+      "1y",
+      "3y",
+      "5y",
+      "all"
+    ],
+    "FundHolding": {
+      "name": "str | None",
+      "code": "str | None",
+      "symbol": "str | None",
+      "pct_net_assets": "float | None",
+      "industry": "str | None",
+      "change_vs_prev_quarter_pct": "float | None",
+      "change_type": "int | None"
+    },
+    "FundInfo": {
+      "fund_code": "str",
+      "name": "str | None",
+      "full_name": "str | None",
+      "fund_type": "str | None",
+      "type_desc": "str | None",
+      "found_date": "date | None",
+      "ipo_start_date": "date | None",
+      "ipo_end_date": "date | None",
+      "company": "str | None",
+      "custodian": "str | None",
+      "manager_name": "str | None",
+      "total_shares": "float | None",
+      "risk_level": "int | None",
+      "rating_desc": "str | None",
+      "purchase_status": "int | None",
+      "redeem_status": "int | None",
+      "subscribe_status": "int | None",
+      "auto_invest_status": "int | None",
+      "can_buy": "bool | None",
+      "purchase_rate_pct": "float | None",
+      "purchase_discount": "float | None",
+      "nav_date": "date | None",
+      "unit_nav": "float | None",
+      "daily_pct": "float | None",
+      "tags": "tuple[FundTag, ...]",
+      "benchmark_indexes": "tuple[FundBenchmarkIndex, ...]",
+      "benchmark_text": "str | None",
+      "invest_target": "str | None",
+      "invest_strategy": "str | None",
+      "pension_fund": "bool | None"
+    },
+    "FundManagedFund": {
+      "fund_code": "str | None",
+      "fund_name": "str | None",
+      "start_date": "date | None",
+      "tenure_return_pct": "float | None"
+    },
+    "FundManager": {
+      "manager_id": "str | None",
+      "name": "str | None",
+      "work_years": "int | None",
+      "start_date": "date | None",
+      "status": "int | None",
+      "role": "int | None",
+      "tenure_text": "str | None",
+      "tenure_return_pct": "float | None",
+      "annualized_return_pct": "float | None",
+      "managed_assets": "float | None"
+    },
+    "FundManagerProfile": {
+      "manager_id": "str | None",
+      "name": "str | None",
+      "work_years": "int | None",
+      "resume": "str | None",
+      "funds": "tuple[FundManagedFund, ...]"
+    },
     "FundNav": {
       "date": "date",
       "nav": "float | None",
       "nav_value": "float | None",
       "daily_pct": "float | None"
+    },
+    "FundPerformanceGroup": [
+      "annual",
+      "stage"
+    ],
+    "FundPeriodPerformance": {
+      "group": "FundPerformanceGroup",
+      "period": "str",
+      "return_pct": "float | None",
+      "max_drawdown_pct": "float | None",
+      "standard_index_return_pct": "float | None",
+      "standard_index_max_drawdown_pct": "float | None",
+      "rank": "int | None",
+      "rank_total": "int | None"
+    },
+    "FundPosition": {
+      "report_date": "date | None",
+      "report_name": "str | None",
+      "report_code": "str | None",
+      "total_assets": "float | None",
+      "net_assets": "float | None",
+      "stock_pct_total_assets": "float | None",
+      "bond_pct_total_assets": "float | None",
+      "cash_pct_total_assets": "float | None",
+      "other_pct_total_assets": "float | None",
+      "stocks": "tuple[FundHolding, ...]",
+      "bonds": "tuple[FundBondHolding, ...]"
+    },
+    "FundRankItem": {
+      "fund_code": "str",
+      "name": "str | None",
+      "return_pct": "float | None",
+      "nav": "float | None",
+      "fund_type": "str | None",
+      "product": "str | None"
+    },
+    "FundRankOption": {
+      "name": "str | None",
+      "code": "str",
+      "default": "bool | None"
+    },
+    "FundRankOptions": {
+      "fund_types": "tuple[FundRankOption, ...]",
+      "order_by": "tuple[FundRankOption, ...]"
+    },
+    "FundRankOrder": [
+      "td",
+      "1w",
+      "1m",
+      "3m",
+      "6m",
+      "ty",
+      "1y",
+      "2y",
+      "3y",
+      "5y",
+      "base"
+    ],
+    "FundRankType": [
+      "1",
+      "3",
+      "2",
+      "5",
+      "11"
+    ],
+    "FundSearchResult": {
+      "code": "str",
+      "name": "str | None",
+      "kind": "str | None",
+      "result_id": "int | None"
+    },
+    "FundTag": {
+      "name": "str",
+      "category": "str | None"
+    },
+    "FundTradeDate": {
+      "buy_confirm": "str | None",
+      "buy_query": "str | None",
+      "sale_confirm": "str | None",
+      "sale_query": "str | None",
+      "sale_to_cash_query": "str | None",
+      "can_pay_with_wallet": "bool | None",
+      "can_sell_to_wallet": "bool | None",
+      "can_convert": "bool | None",
+      "can_sell_to_cash": "bool | None"
+    },
+    "FundTradeDays": {
+      "buy_confirm_days": "int | None",
+      "buy_query_days": "int | None",
+      "buy_total_days": "int | None",
+      "sale_confirm_days": "int | None",
+      "sale_query_days": "int | None",
+      "sale_total_days": "int | None"
+    },
+    "HolderCount": {
+      "report_date": "date | None",
+      "ashare_holder": "int | None",
+      "ashare_holder_chg_pct": "float | None",
+      "per_float": "float | None",
+      "per_float_chg_pct": "float | None",
+      "per_amount": "float | None",
+      "price": "float | None",
+      "top_holder_ratio": "float | None",
+      "top_float_holder_ratio": "float | None"
+    },
+    "Holders": {
+      "symbol": "str",
+      "currency": "str | None",
+      "holder_counts": "tuple[HolderCount, ...]",
+      "major_holders": "tuple[MajorHolder, ...]",
+      "share_changes": "tuple[ShareChangeRecord, ...]",
+      "splits": "tuple[Split, ...]",
+      "repurchases": "tuple[Repurchase, ...]"
+    },
+    "HotStock": {
+      "symbol": "str",
+      "name": "str | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None",
+      "value": "float | None",
+      "increment": "float | None",
+      "rank_change": "int | None",
+      "exchange": "str | None",
+      "stock_type": "int | None",
+      "sub_type": "str | None",
+      "ad": "int | None",
+      "current_ext": "float | None",
+      "percent_ext": "float | None"
+    },
+    "HotStockRegion": [
+      "global",
+      "us",
+      "cn",
+      "hk"
+    ],
+    "HotStockWindow": [
+      "hour",
+      "day"
+    ],
+    "IndexValuation": {
+      "index_code": "str",
+      "name": "str | None",
+      "trade_date": "date | None",
+      "pe": "float | None",
+      "pb": "float | None",
+      "pe_percentile": "float | None",
+      "pb_percentile": "float | None",
+      "pe_over_history": "float | None",
+      "pb_over_history": "float | None",
+      "roe": "float | None",
+      "dividend_yield": "float | None",
+      "bond_yield": "float | None",
+      "peg": "float | None",
+      "eva_type": "str | None",
+      "pb_flag": "bool | None",
+      "updated_at": "datetime | None"
+    },
+    "IndustryBoard": {
+      "ind_name": "str | None",
+      "ind_code": "str | None"
+    },
+    "IndustryCompare": {
+      "symbol": "str",
+      "ind_name": "str | None",
+      "ind_code": "str | None",
+      "ind_class": "str | None",
+      "report_name": "str | None",
+      "report_date": "date | None",
+      "quote_time": "datetime | None",
+      "items": "tuple[CompareItem, ...]",
+      "industry_avg": "CompareMetrics | None",
+      "industry_min": "CompareMetrics | None",
+      "industry_max": "CompareMetrics | None"
+    },
+    "IndustryInfo": {
+      "symbol": "str",
+      "industry_class": "str | None",
+      "concept_class": "str | None",
+      "industries": "tuple[IndustryBoard, ...]",
+      "concepts": "tuple[IndustryBoard, ...]"
+    },
+    "IndustryPeer": {
+      "symbol": "str",
+      "name": "str | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None",
+      "exchange": "str | None",
+      "volume": "float | None",
+      "pe_ttm": "float | None",
+      "market_capital": "float | None"
+    },
+    "IndustryStocks": {
+      "symbol": "str",
+      "industry_name": "str | None",
+      "plate_name": "str | None",
+      "stocks": "tuple[IndustryPeer, ...]",
+      "extra": "Mapping[str, Any]"
     },
     "Kline": {
       "symbol": "str",
@@ -133,6 +898,127 @@
     "LineItem": {
       "value": "float | None",
       "yoy": "float | None"
+    },
+    "LonghuBranch": {
+      "branch_id": "str | None",
+      "branch_name": "str | None",
+      "buy_amt": "float | None",
+      "sell_amt": "float | None",
+      "net_amt": "float | None",
+      "ratio": "float | None"
+    },
+    "LonghuEntry": {
+      "seq": "int",
+      "trade_date": "date | None",
+      "rank_type": "int | None",
+      "info_type_name": "str | None",
+      "percent": "float | None",
+      "trans_amt": "float | None",
+      "buy_total": "float | None",
+      "sell_total": "float | None",
+      "net_buy": "float | None",
+      "ratio_total": "float | None",
+      "total_in": "float | None",
+      "total_out": "float | None",
+      "branches": "tuple[LonghuBranch, ...]"
+    },
+    "MainIndicator": {
+      "report_name": "str | None",
+      "report_date": "date | None",
+      "currency": "str | None",
+      "total_revenue": "float | None",
+      "operating_income_yoy": "float | None",
+      "net_profit_atsopc": "float | None",
+      "net_profit_atsopc_yoy": "float | None",
+      "basic_eps": "float | None",
+      "np_per_share": "float | None",
+      "avg_roe": "float | None",
+      "gross_selling_rate": "float | None",
+      "net_selling_rate": "float | None",
+      "asset_liab_ratio": "float | None",
+      "goodwill_in_net_assets": "float | None",
+      "pledge_ratio": "float | None",
+      "total_shares": "int | None",
+      "float_shares": "int | None",
+      "market_capital": "float | None",
+      "float_market_capital": "float | None",
+      "pe_ttm": "float | None",
+      "pb": "float | None",
+      "dividend": "float | None",
+      "dividend_yield": "float | None"
+    },
+    "MajorHolder": {
+      "holder_name": "str | None",
+      "held_num": "float | None",
+      "held_ratio": "float | None"
+    },
+    "MarginDay": {
+      "trade_date": "date | None",
+      "margin_trading_balance": "float | None",
+      "short_selling_amt_balance": "float | None",
+      "total_balance": "float | None",
+      "margin_trading_buy_amt": "float | None",
+      "margin_trading_net_buy_amt": "float | None"
+    },
+    "MarginHistory": {
+      "symbol": "str",
+      "inclusion_date": "date | None",
+      "items": "tuple[MarginDay, ...]"
+    },
+    "MinuteChart": {
+      "symbol": "str",
+      "days": "MinuteDays",
+      "last_close": "float | None",
+      "timestamps": "tuple[datetime, ...]",
+      "columns": "Mapping[str, tuple[float | None, ...]]",
+      "extra": "Mapping[str, Any]"
+    },
+    "MinuteDays": [
+      1,
+      5
+    ],
+    "Order": [
+      "asc",
+      "desc"
+    ],
+    "OrderBook": {
+      "symbol": "str",
+      "timestamp": "datetime | None",
+      "current": "float | None",
+      "bids": "tuple[BookLevel, ...]",
+      "asks": "tuple[BookLevel, ...]",
+      "buypct": "float | None",
+      "sellpct": "float | None",
+      "diff": "float | None",
+      "ratio": "float | None"
+    },
+    "OrgHoldingChange": {
+      "symbol": "str",
+      "periods": "tuple[OrgHoldingPeriod, ...]",
+      "days": "tuple[OrgHoldingDay, ...]"
+    },
+    "OrgHoldingDay": {
+      "trade_date": "date | None",
+      "institution_num": "int | None",
+      "held_ratio": "float | None",
+      "net_trade_vol": "float | None",
+      "price": "float | None"
+    },
+    "OrgHoldingDetail": {
+      "symbol": "str",
+      "report_name": "str | None",
+      "report_date": "date | None",
+      "holdings": "tuple[StockFundHolding, ...]",
+      "total": "StockFundHolding | None",
+      "report_periods": "tuple[ReportOption, ...]"
+    },
+    "OrgHoldingPeriod": {
+      "report_name": "str | None",
+      "report_date": "date | None",
+      "institution_num": "int | None",
+      "held_ratio": "float | None",
+      "held_ratio_chg_pct": "float | None",
+      "price": "float | None"
     },
     "Page": {
       "items": "tuple[T, ...]",
@@ -157,6 +1043,15 @@
       "quarter",
       "year"
     ],
+    "PopularStock": {
+      "symbol": "str",
+      "name": "str | None",
+      "stock_type": "int | None",
+      "current": "float | None",
+      "percent": "float | None",
+      "follow7d": "float | None",
+      "tick_size": "float | None"
+    },
     "Quote": {
       "symbol": "str",
       "current": "float | None",
@@ -203,6 +1098,70 @@
       "timestamp_night_session": "datetime | None",
       "issue_date": "date | None"
     },
+    "QuoteListMarket": [
+      "CN",
+      "HK",
+      "US"
+    ],
+    "QuoteListOrderBy": [
+      "symbol",
+      "percent"
+    ],
+    "RankMarket": [
+      "CN",
+      "HK",
+      "US"
+    ],
+    "RankPoint": {
+      "day": "date",
+      "rank": "int"
+    },
+    "RankTag": {
+      "code": "str | None",
+      "tag": "str | None"
+    },
+    "Rebalancing": {
+      "rebalancing_id": "int",
+      "status": "str | None",
+      "category": "str | None",
+      "created_at": "datetime | None",
+      "updated_at": "datetime | None",
+      "cash_weight": "float | None",
+      "prev_rebalancing_id": "int | None",
+      "changes": "tuple[RebalancingChange, ...]"
+    },
+    "RebalancingChange": {
+      "symbol": "str",
+      "name": "str | None",
+      "prev_weight_adjusted": "float | None",
+      "prev_weight": "float | None",
+      "target_weight": "float | None",
+      "weight": "float | None",
+      "price": "float | None",
+      "prev_price": "float | None"
+    },
+    "RebalancingPage": {
+      "items": "tuple[T, ...]",
+      "page": "int",
+      "page_size": "int",
+      "total": "int | None",
+      "last_page": "int | None",
+      "capped": "bool",
+      "short": "bool",
+      "next_params": "Mapping[str, Any] | None"
+    },
+    "RelatedStock": {
+      "symbol": "str",
+      "name": "str | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None",
+      "stock_type": "int | None"
+    },
+    "ReportOption": {
+      "report_name": "str | None",
+      "report_date": "date | None"
+    },
     "ReportPeriod": {
       "report_date": "date",
       "report_name": "str",
@@ -213,10 +1172,187 @@
       "all",
       "annual"
     ],
+    "Repurchase": {
+      "repurchase_date": "date | None",
+      "repurchase_shares": "float | None",
+      "avg_price": "float | None"
+    },
+    "RevenueBreakdown": {
+      "symbol": "str",
+      "name": "str | None",
+      "currency": "str | None",
+      "industry": "dict[str, Any] | None",
+      "periods": "tuple[BusinessPeriod, ...]"
+    },
+    "RevenueGroup": {
+      "class_standard": "int",
+      "segments": "tuple[RevenueSegment, ...]"
+    },
+    "RevenueSegment": {
+      "project_announced_name": "str | None",
+      "prime_operating_income": "float | None",
+      "income_ratio": "float | None",
+      "gross_profit_rate": "float | None"
+    },
+    "ScreenerIndustry": {
+      "ind_code": "str",
+      "name": "str",
+      "pinyin": "str | None"
+    },
+    "ScreenerQuote": {
+      "symbol": "str",
+      "name": "str | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None",
+      "stock_type": "int | None",
+      "amount": "float | None",
+      "volume": "float | None",
+      "turnover_rate": "float | None",
+      "amplitude": "float | None",
+      "current_year_percent": "float | None",
+      "market_capital": "float | None",
+      "float_market_capital": "float | None",
+      "total_shares": "float | None",
+      "float_shares": "float | None",
+      "pe_ttm": "float | None",
+      "pb": "float | None",
+      "dividend_yield": "float | None",
+      "issue_date": "date | None",
+      "north_net_inflow_date": "date | None"
+    },
+    "ShareChange": {
+      "chg_date": "date | None",
+      "chg_reason": "str | None",
+      "total_shares": "int | None",
+      "float_shares": "int | None"
+    },
+    "ShareChangeRecord": {
+      "change_date": "date | None",
+      "total_shares": "float | None",
+      "common_shares": "float | None",
+      "reason": "str | None"
+    },
+    "Split": {
+      "explain": "str | None",
+      "announcement_date": "date | None",
+      "effective_date": "date | None",
+      "ex_date": "date | None",
+      "parallel_trading_start": "date | None",
+      "parallel_trading_end": "date | None",
+      "temporary_code": "str | None"
+    },
+    "StockBondPercentile": {
+      "dates": "tuple[date, ...]",
+      "columns": "Mapping[str, tuple[float | None, ...]]"
+    },
+    "StockEvent": {
+      "symbol": "str",
+      "event_date": "date",
+      "subtype": "int | None",
+      "title": "str | None",
+      "message": "str | None",
+      "priority": "int | None"
+    },
+    "StockFundHolding": {
+      "holder_name": "str | None",
+      "held_num": "int | None",
+      "to_float_shares_ratio": "float | None"
+    },
+    "StockHeat": {
+      "symbol": "str",
+      "rank": "int | None",
+      "rank_change": "int | None",
+      "total": "int | None",
+      "visitors": "int | None",
+      "discussions": "int | None",
+      "rank_history": "tuple[RankPoint, ...]",
+      "rank_tag": "tuple[RankTag, ...]"
+    },
+    "StockHit": {
+      "symbol": "str",
+      "name": "str | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None",
+      "name_en": "str | None",
+      "exchange": "str | None",
+      "stock_type": "int | None",
+      "ind_name": "str | None"
+    },
     "StockSuggestion": {
       "symbol": "str",
       "name": "str",
       "stock_type": "int | None"
+    },
+    "SubScore": {
+      "name": "str | None",
+      "param": "str | None",
+      "score": "float | None",
+      "max_score": "int | None"
+    },
+    "TopHolder": {
+      "holder_name": "str",
+      "held_num": "int | None",
+      "held_ratio": "float | None",
+      "held_chg_pct": "float | None",
+      "holder_rank": "int | None"
+    },
+    "TopHolders": {
+      "symbol": "str",
+      "holders": "tuple[TopHolder, ...]",
+      "quit": "tuple[TopHolder, ...]",
+      "total": "TopHoldersTotal | None",
+      "report_periods": "tuple[ReportOption, ...]"
+    },
+    "TopHoldersTotal": {
+      "held_num": "int | None",
+      "held_ratio": "float | None",
+      "held_chg_pct": "float | None"
+    },
+    "TradeTick": {
+      "symbol": "str",
+      "timestamp": "datetime | None",
+      "current": "float | None",
+      "chg": "float | None",
+      "percent": "float | None",
+      "trade_volume": "float | None",
+      "side": "int | None",
+      "trade_unique_id": "str | None"
+    },
+    "ValuationHistory": {
+      "index_code": "str",
+      "dates": "tuple[date, ...]",
+      "columns": "Mapping[str, tuple[float | None, ...]]",
+      "lines": "Mapping[str, float]"
+    },
+    "ValuationWindow": [
+      "all",
+      "3y",
+      "5y"
+    ],
+    "WatchlistCategory": [
+      "stock",
+      "fund",
+      "cube",
+      "mutual_fund"
+    ],
+    "WatchlistGroup": {
+      "pid": "int",
+      "name": "str",
+      "category": "str",
+      "category_code": "int | None",
+      "symbol_count": "int | None",
+      "created_at": "datetime | None",
+      "updated_at": "datetime | None"
+    },
+    "WatchlistItem": {
+      "symbol": "str",
+      "name": "str | None",
+      "stock_type": "int | None",
+      "exchange": "str | None",
+      "created": "datetime | None",
+      "remark": "str | None"
     }
   }
 }

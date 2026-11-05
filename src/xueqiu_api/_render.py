@@ -271,7 +271,7 @@ def render(
     else:
         wanted = [name for name in agent.default_fields if name in available]
         missing = [name for name in agent.default_fields if name not in available]
-        if rows and missing:
+        if rows and missing and not sectioned:
             missing_fields = [
                 f"# note: default fields missing here: {', '.join(missing)}; "
                 f"available: {', '.join(available)}"

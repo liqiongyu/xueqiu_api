@@ -88,7 +88,7 @@ SUGGEST = "/query/v1/suggest_stock.json"
 QUOTEC = "/v5/stock/realtime/quotec.json"
 INCOME = "/v5/stock/finance/cn/income.json"
 F10 = "/v5/stock/f10/cn/company.json"
-TOKEN = "fake-token"
+TOKEN = "xq_a_token=fake-token; u=fake-u"
 CJK = re.compile(r"[一-鿿]")
 BAR_COLUMNS = [
     "timestamp",
@@ -871,7 +871,7 @@ async def test_endpoint_details_fit_the_smallest_budget(connect: Connect) -> Non
 @pytest.mark.anyio
 async def test_a_cut_catalog_continues_with_the_rows_left_out() -> None:
     async with AsyncClient(session_path=Path(os.devnull)) as client:
-        toolbox = Toolbox(McpOptions(max_chars=300), client=client, now=lambda: NOW)
+        toolbox = Toolbox(McpOptions(max_chars=400), client=client, now=lambda: NOW)
         summary, summary_error = await toolbox.call("xq_endpoints", {})
         toolbox = Toolbox(McpOptions(max_chars=450), client=client, now=lambda: NOW)
         rows, rows_error = await toolbox.call("xq_endpoints", {"category": "finance"})
