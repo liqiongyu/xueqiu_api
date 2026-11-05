@@ -545,6 +545,12 @@ UNKNOWN_CODE: list[Case] = [
         },
     ),
     ("kline", STOCK, KLINE, {"data": {}, "error_code": 0, "error_description": ""}),
+    (
+        "f10_company",
+        STOCK,
+        company_path("cn"),
+        {"data": {"company": {"org_name_cn": None, "listed_date": None}}, "error_code": 0},
+    ),
     *(
         (
             f"finance_{statement}",

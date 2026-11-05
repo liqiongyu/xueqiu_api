@@ -10,6 +10,7 @@ from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from .._f10 import region_query
 from .._model import UpstreamModel
 from .._time import date_from_ms
+from ..errors import SymbolNotFound
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolParams, exchange_timezone
 
@@ -58,7 +59,11 @@ def _parse(payload: Any, params: SymbolParams) -> Company:
     )
     if not isinstance(company, dict):
         raise ValueError("f10 company data needs a company object")
-    return Company.model_validate({**cast(dict[str, Any], company), "symbol": params.symbol})
+    fields = cast(dict[str, Any], company)
+    # An unknown code gets a company object with every value null, measured 2026-11-05.
+    if all(value is None for value in fields.values()):
+        raise SymbolNotFound(f"the upstream has no company profile for {params.symbol}")
+    return Company.model_validate({**fields, "symbol": params.symbol})
 
 
 ENDPOINT = Endpoint(
