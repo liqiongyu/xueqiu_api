@@ -6,7 +6,7 @@ import difflib
 import os
 import string
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from http.cookiejar import CookieJar, DefaultCookiePolicy
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -31,6 +31,7 @@ from ._core import (
 from ._pages import Page, finish
 from ._session import TOKEN_ENV, Session, SessionStore, default_session_path, parse_credentials
 from .endpoints import REGISTRY
+from .endpoints.kline import ENDPOINT as KLINE
 from .errors import (
     Blocked,
     InvalidParams,
@@ -42,6 +43,8 @@ from .errors import (
 )
 from .registry import Endpoint
 from .sites import SITES, Host
+from .symbols import Market, normalize_symbol
+from .trading_calendar import CALENDAR_SOURCES
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
@@ -249,6 +252,24 @@ class ClientBase:
                 BREAKER_COOLDOWN_S,
                 failure.message,
             )
+
+
+def market_symbol(market: Market) -> str:
+    """The symbol whose daily bars and quote stand for ``market``."""
+    source = CALENDAR_SOURCES.get(market)
+    if source is None:
+        raise InvalidParams(
+            f"unknown market {str(market)[:40]!r}",
+            field="market",
+            valid_values=tuple(CALENDAR_SOURCES),
+        )
+    return source.symbol
+
+
+def exchange_yesterday(symbol: str, now: datetime) -> date:
+    """The day before ``now`` in the exchange timezone of ``symbol``."""
+    checked = KLINE.validate({"symbol": symbol})
+    return now.astimezone(normalize_symbol(checked.symbol).timezone).date() - timedelta(days=1)
 
 
 def no_cookie_jar() -> CookieJar:

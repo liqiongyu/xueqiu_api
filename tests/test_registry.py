@@ -423,4 +423,15 @@ def test_endpoint_methods_are_exactly_the_registry() -> None:
         if spec.pagination is not None and spec.pagination.style == "page"
     }
 
-    assert public - {"call", "request", "close", "kline_history"} == set(REGISTRY) | walks
+    handwritten = {
+        "call",
+        "request",
+        "close",
+        "kline_history",
+        "security_snapshot",
+        "trading_calendar",
+        "market_state",
+        "adjust_factors",
+    }
+
+    assert public - handwritten == set(REGISTRY) | walks
