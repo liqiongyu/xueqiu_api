@@ -1,0 +1,90 @@
+{
+  "params": {
+    "type": "11",
+    "_type": "11"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "type": 11,
+          "code": "SKHY",
+          "name": "SK海力士",
+          "value": 1369.0,
+          "increment": -27,
+          "rank_change": -1,
+          "has_exist": null,
+          "symbol": "SKHY",
+          "percent": -5.1197,
+          "current": 143.07,
+          "chg": -7.72,
+          "exchange": "NASDAQ",
+          "stock_type": 0,
+          "sub_type": null,
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": 3,
+          "current_ext": 138.9,
+          "percent_ext": -2.914657
+        },
+        {
+          "type": 11,
+          "code": "NVDA",
+          "name": "英伟达",
+          "value": 1254.0,
+          "increment": -6,
+          "rank_change": 1,
+          "has_exist": null,
+          "symbol": "NVDA",
+          "percent": -3.1738,
+          "current": 200.13,
+          "chg": -6.56,
+          "exchange": "NASDAQ",
+          "stock_type": 0,
+          "sub_type": "257",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": 3,
+          "current_ext": 199.8,
+          "percent_ext": -0.164893
+        },
+        {
+          "type": 11,
+          "code": "MRNA",
+          "name": "Moderna",
+          "value": 952.0,
+          "increment": 12,
+          "rank_change": 5,
+          "has_exist": null,
+          "symbol": "MRNA",
+          "percent": 13.1063,
+          "current": 258.38,
+          "chg": 29.94,
+          "exchange": "NASDAQ",
+          "stock_type": 0,
+          "sub_type": "257",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": 3,
+          "current_ext": 257.9799,
+          "percent_ext": -0.154849
+        }
+      ],
+      "items_size": 3
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

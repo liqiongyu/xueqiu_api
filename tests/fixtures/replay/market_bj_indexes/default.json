@@ -1,0 +1,32 @@
+{
+  "body": {
+    "data": {
+      "items": [
+        {
+          "symbol": "BJ899050",
+          "name": "北证50",
+          "current": 894.08,
+          "chg": 39.02,
+          "percent": 4.56
+        },
+        {
+          "symbol": "SH000016",
+          "name": "上证50",
+          "current": 2808.54,
+          "chg": 40.27,
+          "percent": 1.45
+        },
+        {
+          "symbol": "SZ399330",
+          "name": "深证100",
+          "current": 4810.95,
+          "chg": 174.08,
+          "percent": 3.75
+        }
+      ],
+      "items_size": 3
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

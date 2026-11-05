@@ -1,0 +1,95 @@
+{
+  "params": {
+    "symbol": "SH600000",
+    "period": "1d"
+  },
+  "body": {
+    "data": {
+      "last_close": 10.09,
+      "after": [],
+      "items": [
+        {
+          "current": 10.14,
+          "volume": 2614930,
+          "avg_price": 10.102,
+          "chg": 0.05,
+          "percent": 0.5,
+          "timestamp": 1793755800000,
+          "amount": 26415830.0,
+          "high": 10.15,
+          "low": 10.05,
+          "amount_total": 26415830.0,
+          "volume_total": 2614930,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": {
+            "small": -5.84,
+            "medium": -1.13,
+            "large": 5.32,
+            "xlarge": 1.65
+          },
+          "volume_compare": {
+            "volume_sum": 2614930,
+            "volume_sum_last": 2118730
+          }
+        },
+        {
+          "current": 10.21,
+          "volume": 2516000,
+          "avg_price": 10.144,
+          "chg": 0.12,
+          "percent": 1.19,
+          "timestamp": 1793755860000,
+          "amount": 25634693.0,
+          "high": 10.23,
+          "low": 10.16,
+          "amount_total": 52050523.0,
+          "volume_total": 5130930,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": {
+            "small": -4.34,
+            "medium": -4.49,
+            "large": 0.37,
+            "xlarge": 8.45
+          },
+          "volume_compare": {
+            "volume_sum": 5130930,
+            "volume_sum_last": 3481730
+          }
+        },
+        {
+          "current": 10.19,
+          "volume": 1023700,
+          "avg_price": 10.153,
+          "chg": 0.1,
+          "percent": 0.99,
+          "timestamp": 1793755920000,
+          "amount": 10434785.0,
+          "high": 10.21,
+          "low": 10.18,
+          "amount_total": 62485308.0,
+          "volume_total": 6154630,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": {
+            "small": -3.71,
+            "medium": -4.46,
+            "large": -0.02,
+            "xlarge": 8.19
+          },
+          "volume_compare": {
+            "volume_sum": 6154630,
+            "volume_sum_last": 4408230
+          }
+        }
+      ],
+      "items_size": 242
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

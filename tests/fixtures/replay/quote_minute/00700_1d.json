@@ -1,0 +1,80 @@
+{
+  "params": {
+    "symbol": "00700",
+    "period": "1d"
+  },
+  "body": {
+    "data": {
+      "last_close": 397.2,
+      "after": [],
+      "items": [
+        {
+          "current": 394.2,
+          "volume": 783884,
+          "avg_price": 397.3027,
+          "chg": -3.0,
+          "percent": -0.76,
+          "timestamp": 1793755800000,
+          "amount": 311918235.58,
+          "high": 397.8,
+          "low": 394.2,
+          "amount_total": 311918235.58,
+          "volume_total": 783884,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 783884,
+            "volume_sum_last": 1151896
+          }
+        },
+        {
+          "current": 393.2,
+          "volume": 165334,
+          "avg_price": 396.5678,
+          "chg": -4.0,
+          "percent": -1.01,
+          "timestamp": 1793755860000,
+          "amount": 65065391.0,
+          "high": 394.2,
+          "low": 393.0,
+          "amount_total": 376983626.58,
+          "volume_total": 949218,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 949218,
+            "volume_sum_last": 1371525
+          }
+        },
+        {
+          "current": 393.6,
+          "volume": 103938,
+          "avg_price": 396.1926,
+          "chg": -3.6,
+          "percent": -0.91,
+          "timestamp": 1793755920000,
+          "amount": 40869356.400000036,
+          "high": 394.0,
+          "low": 392.8,
+          "amount_total": 417852982.98,
+          "volume_total": 1053156,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 1053156,
+            "volume_sum_last": 1630940
+          }
+        }
+      ],
+      "items_size": 332
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
