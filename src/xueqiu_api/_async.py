@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import os
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Self, TypeVar
@@ -12,7 +12,14 @@ from typing import Any, Self, TypeVar
 import httpx2
 from pydantic import BaseModel
 
-from ._base import DEFAULT_DEADLINE_S, ClientBase, http_result, no_cookie_jar
+from ._base import (
+    DEFAULT_DEADLINE_S,
+    ClientBase,
+    exchange_yesterday,
+    http_result,
+    market_symbol,
+    no_cookie_jar,
+)
 from ._core import (
     HOME_CALL,
     MAX_REDIRECTS,
@@ -26,11 +33,21 @@ from ._core import (
 )
 from ._endpoints_async import AsyncEndpoints
 from ._pages import PageT, PageWalk, start_walk
+from .adjust import AdjustFactors, derive_factors
 from .endpoints.kline import ENDPOINT as KLINE
-from .endpoints.kline import Adjust, BarWalk, Kline, Period
+from .endpoints.kline import MAX_COUNT, Adjust, BarWalk, Kline, Period
+from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
 from .errors import XueqiuError
 from .registry import Endpoint
 from .sites import Host
+from .symbols import Market
+from .trading_calendar import (
+    MarketState,
+    TradingCalendar,
+    calendar_from_kline,
+    market_state_from_quote,
+)
+from .universe import SecuritySnapshot, Segment, SnapshotWalk
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
@@ -91,6 +108,60 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         while walk.params is not None:
             walk.accept(await self._call(KLINE, walk.params))
         return walk.result()
+
+    async def security_snapshot(
+        self, market: Market, *, segments: Sequence[Segment] | None = None
+    ) -> SecuritySnapshot:
+        """Every security listed in ``market``, or in some of its ``segments``.
+
+        One request per page at the host's minimum interval, so a walk takes minutes: 61 requests
+        for CN, 29 for HK and 92 for US at the sizes measured on 2026-11-04 and 2026-11-05. An
+        error on any page of a list raises and leaves no snapshot; an error on the last request of
+        a CN walk, for the ranking's count, only leaves ``screen_total`` None.
+        ``SecuritySnapshot.complete`` says whether all rows came;
+        ``xueqiu_api.universe.check_snapshot`` checks the rest.
+        """
+        walk = SnapshotWalk(market, segments=segments, fetched_at=datetime.now(UTC))
+        while (request := walk.next_request()) is not None:
+            try:
+                walk.feed(await self.call(request.endpoint, **request.params))
+            except XueqiuError:
+                if not request.optional:
+                    raise
+                walk.skip()
+        return walk.result()
+
+    async def trading_calendar(self, market: Market) -> TradingCalendar:
+        """Past sessions of ``market``, from one request for the unadjusted daily bars of its
+        ``CALENDAR_SOURCES`` symbol."""
+        params = {
+            "symbol": market_symbol(market),
+            "period": "day",
+            "adjust": "normal",
+            "count": MAX_COUNT,
+        }
+        return calendar_from_kline(await self._call(KLINE, params), fetched_at=datetime.now(UTC))
+
+    async def market_state(self, market: Market) -> MarketState:
+        """Whether ``market`` is trading now, from one quote of its ``CALENDAR_SOURCES`` symbol.
+
+        HK and US read the quote of a stock, so ``traded_today`` can be False on a day the market
+        traded while that stock is suspended.
+        """
+        quote = await self._call(QUOTE_DETAIL, {"symbol": market_symbol(market)})
+        return market_state_from_quote(quote, now=datetime.now(UTC))
+
+    async def adjust_factors(self, symbol: str, *, end: date | None = None) -> AdjustFactors:
+        """Adjustment factors of ``symbol`` up to ``end``, from its unadjusted and backward-adjusted
+        daily bars: two requests, more only for a history one request cannot hold.
+
+        ``end`` defaults to yesterday on the symbol's exchange, because today's bar can change
+        between the two requests.
+        """
+        last = exchange_yesterday(symbol, datetime.now(UTC)) if end is None else end
+        normal = await self.kline_history(symbol, adjust="normal", end=last)
+        after = await self.kline_history(symbol, adjust="after", end=last)
+        return derive_factors(normal, after, fetched_at=datetime.now(UTC))
 
     async def call(self, endpoint: str, /, **params: Any) -> Any:
         """Call any registered endpoint by name and return its parsed result."""

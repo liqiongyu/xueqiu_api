@@ -15,7 +15,9 @@ ENDPOINT = finance_endpoint(
         title_zh="利润表",
         title_en="Income statement",
         summary=(
-            "取 A 股、港股或美股公司的利润表，每个科目给本期值和同比，可选全部报告期或只取年报，"
+            "取 A 股、港股或美股公司的利润表，每个科目给本期值和同比，"
+            "本期值是财年初至报告期末的累计值，"
+            "可选全部报告期或只取年报，"
             "港股键 tto 营业额、gp 毛利、plocyr 本期利润、ploashh 归母利润、beps_aju 每股收益。"
         ),
         keywords=(
@@ -28,6 +30,7 @@ ENDPOINT = finance_endpoint(
             "revenue",
             "net profit",
             "earnings",
+            "earn",
         ),
         default_fields=(
             "report_date",

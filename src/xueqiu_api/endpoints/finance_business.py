@@ -154,6 +154,7 @@ ENDPOINT = Endpoint(
             "营收构成",
             "主营收入",
             "毛利率",
+            "赚钱",
             "revenue breakdown",
             "segments",
             "business mix",

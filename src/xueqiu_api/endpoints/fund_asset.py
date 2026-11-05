@@ -92,6 +92,7 @@ ENDPOINT = Endpoint(
             "fund holdings",
             "asset allocation",
             "top holdings",
+            "fund owns",
         ),
         default_fields=(
             "name",

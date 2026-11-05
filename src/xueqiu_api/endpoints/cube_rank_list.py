@@ -87,6 +87,7 @@ ENDPOINT = Endpoint(
             "cube rank",
             "leaderboard",
             "portfolio ranking",
+            "top cubes",
         ),
         default_fields=(
             "symbol",

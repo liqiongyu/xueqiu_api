@@ -110,6 +110,7 @@ ENDPOINT = Endpoint(
             "融券余额",
             "融资买入",
             "融资净买入",
+            "做空",
             "margin trading",
             "short selling",
             "margin balance",

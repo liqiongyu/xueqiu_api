@@ -62,7 +62,7 @@ allowed-confusables = ["，", "：", "；", "（", "）"]
 "src/xueqiu_api/_endpoints_*.py" = ["E501"]
 
 [tool.pyright]
-include = ["src", "tests", "scripts/generate_client.py"]
+include = ["src", "tests", "evals", "scripts/generate_client.py"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
 reportUnnecessaryTypeIgnoreComment = true

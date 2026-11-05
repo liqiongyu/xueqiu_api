@@ -72,6 +72,7 @@ ENDPOINT = Endpoint(
             "基金排行选项",
             "基金类型列表",
             "排序区间",
+            "筛选条件",
             "fund rank options",
             "fund types",
         ),

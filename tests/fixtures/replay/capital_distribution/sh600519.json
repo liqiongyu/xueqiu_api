@@ -1,0 +1,32 @@
+{
+  "params": {
+    "symbol": "SH600519"
+  },
+  "body": {
+    "data": {
+      "net_inflow": -82897800.67,
+      "distribution": {
+        "symbol": "SH600519",
+        "sell": {
+          "xlarge": 243859698.84,
+          "large": 113382819.08,
+          "medium": 352402291.99,
+          "small": 104266951.85
+        },
+        "buy": {
+          "xlarge": 183939647.32,
+          "large": 90405069.93,
+          "medium": 436039088.54999995,
+          "small": 103527955.96000001
+        },
+        "timestamp": 1793775419520
+      },
+      "analysis": [
+        "合成分析文本一",
+        "合成分析文本二"
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

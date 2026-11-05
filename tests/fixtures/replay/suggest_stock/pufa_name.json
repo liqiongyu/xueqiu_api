@@ -1,0 +1,29 @@
+{
+  "params": {
+    "q": "浦发银行"
+  },
+  "body": {
+    "code": 200,
+    "data": [
+      {
+        "code": "SH600000",
+        "label": "11",
+        "query": "浦发银行",
+        "state": 1,
+        "stock_type": 11,
+        "type": 1
+      }
+    ],
+    "message": "success",
+    "meta": {
+      "count": 1,
+      "feedback": -1,
+      "has_next_page": true,
+      "maxPage": 1,
+      "page": 1,
+      "query_id": 1,
+      "size": 1
+    },
+    "success": true
+  }
+}

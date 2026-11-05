@@ -1,0 +1,290 @@
+{
+  "date": "2026-11-06",
+  "endpoints": 72,
+  "tasks": 100,
+  "scored": 95,
+  "pending": 0,
+  "metrics": {
+    "all": {
+      "n": 95,
+      "recall_at_1": 0.7895,
+      "recall_at_3": 0.8947,
+      "mrr_at_10": 0.8502,
+      "misses": 6
+    },
+    "dev": {
+      "n": 74,
+      "recall_at_1": 0.8649,
+      "recall_at_3": 0.9595,
+      "mrr_at_10": 0.9149,
+      "misses": 2
+    },
+    "holdout": {
+      "n": 21,
+      "recall_at_1": 0.5238,
+      "recall_at_3": 0.6667,
+      "mrr_at_10": 0.6222,
+      "misses": 4
+    },
+    "zh": {
+      "n": 71,
+      "recall_at_1": 0.7606,
+      "recall_at_3": 0.8873,
+      "mrr_at_10": 0.8319,
+      "misses": 5
+    },
+    "en": {
+      "n": 24,
+      "recall_at_1": 0.875,
+      "recall_at_3": 0.9167,
+      "mrr_at_10": 0.9042,
+      "misses": 1
+    },
+    "own_keyword": {
+      "n": 61,
+      "recall_at_1": 0.9344,
+      "recall_at_3": 0.9672,
+      "mrr_at_10": 0.9568,
+      "misses": 0
+    },
+    "no_own_keyword": {
+      "n": 34,
+      "recall_at_1": 0.5294,
+      "recall_at_3": 0.7647,
+      "mrr_at_10": 0.6588,
+      "misses": 6
+    },
+    "tag:adjust": {
+      "n": 4,
+      "recall_at_1": 0.5,
+      "recall_at_3": 0.75,
+      "mrr_at_10": 0.625,
+      "misses": 1
+    },
+    "tag:colloquial": {
+      "n": 14,
+      "recall_at_1": 0.6429,
+      "recall_at_3": 0.7143,
+      "mrr_at_10": 0.7071,
+      "misses": 2
+    },
+    "tag:confusable": {
+      "n": 37,
+      "recall_at_1": 0.9189,
+      "recall_at_3": 0.973,
+      "mrr_at_10": 0.9514,
+      "misses": 0
+    },
+    "tag:dedicated": {
+      "n": 5,
+      "recall_at_1": 0.4,
+      "recall_at_3": 1.0,
+      "mrr_at_10": 0.7,
+      "misses": 0
+    },
+    "tag:login": {
+      "n": 5,
+      "recall_at_1": 0.8,
+      "recall_at_3": 1.0,
+      "mrr_at_10": 0.9,
+      "misses": 0
+    },
+    "tag:multi_step": {
+      "n": 4,
+      "recall_at_1": 0.5,
+      "recall_at_3": 0.75,
+      "mrr_at_10": 0.625,
+      "misses": 1
+    },
+    "tag:multi_symbol": {
+      "n": 4,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.5,
+      "mrr_at_10": 0.3417,
+      "misses": 0
+    },
+    "tag:recovery": {
+      "n": 5,
+      "recall_at_1": 0.4,
+      "recall_at_3": 0.8,
+      "mrr_at_10": 0.6,
+      "misses": 1
+    },
+    "tag:relative_time": {
+      "n": 11,
+      "recall_at_1": 0.9091,
+      "recall_at_3": 1.0,
+      "mrr_at_10": 0.9545,
+      "misses": 0
+    },
+    "tag:symbol_rule": {
+      "n": 3,
+      "recall_at_1": 0.3333,
+      "recall_at_3": 1.0,
+      "mrr_at_10": 0.6667,
+      "misses": 0
+    },
+    "strict": {
+      "n": 95,
+      "recall_at_1": 0.7158,
+      "recall_at_3": 0.8632,
+      "mrr_at_10": 0.7946,
+      "misses": 8
+    }
+  },
+  "ablation": {
+    "substring": {
+      "all": {
+        "n": 95,
+        "recall_at_1": 0.0,
+        "recall_at_3": 0.0,
+        "mrr_at_10": 0.0,
+        "misses": 95
+      },
+      "dev": {
+        "n": 74,
+        "recall_at_1": 0.0,
+        "recall_at_3": 0.0,
+        "mrr_at_10": 0.0,
+        "misses": 74
+      },
+      "holdout": {
+        "n": 21,
+        "recall_at_1": 0.0,
+        "recall_at_3": 0.0,
+        "mrr_at_10": 0.0,
+        "misses": 21
+      }
+    },
+    "no_synonyms": {
+      "all": {
+        "n": 95,
+        "recall_at_1": 0.7789,
+        "recall_at_3": 0.8632,
+        "mrr_at_10": 0.8275,
+        "misses": 10
+      },
+      "dev": {
+        "n": 74,
+        "recall_at_1": 0.8514,
+        "recall_at_3": 0.9324,
+        "mrr_at_10": 0.8919,
+        "misses": 5
+      },
+      "holdout": {
+        "n": 21,
+        "recall_at_1": 0.5238,
+        "recall_at_3": 0.619,
+        "mrr_at_10": 0.6008,
+        "misses": 5
+      }
+    },
+    "configured": {
+      "all": {
+        "n": 95,
+        "recall_at_1": 0.7895,
+        "recall_at_3": 0.8947,
+        "mrr_at_10": 0.8502,
+        "misses": 6
+      },
+      "dev": {
+        "n": 74,
+        "recall_at_1": 0.8649,
+        "recall_at_3": 0.9595,
+        "mrr_at_10": 0.9149,
+        "misses": 2
+      },
+      "holdout": {
+        "n": 21,
+        "recall_at_1": 0.5238,
+        "recall_at_3": 0.6667,
+        "mrr_at_10": 0.6222,
+        "misses": 4
+      }
+    }
+  },
+  "out_of_scope": {
+    "n": 5,
+    "zero_rows": 2
+  },
+  "own_keyword_top3": [
+    596,
+    616
+  ],
+  "ranks": {
+    "batch_quote-zh-1": 2,
+    "capital_assort-zh-1": 1,
+    "capital_block_trades-en-1": 1,
+    "capital_distribution-zh-1": 1,
+    "capital_flow-zh-1": 1,
+    "capital_history-en-1": 1,
+    "capital_history_detail-zh-1": 1,
+    "capital_longhu-zh-1": 1,
+    "capital_margin-zh-1": 1,
+    "cube_holdings-zh-1": 2,
+    "cube_max_drawdown-zh-1": 1,
+    "cube_monthly_returns-zh-1": 1,
+    "cube_nav_daily-zh-1": 1,
+    "cube_quote-zh-1": 1,
+    "cube_rank_list-en-1": 1,
+    "cube_rebalancing_history-zh-1": 1,
+    "cube_score-zh-1": 1,
+    "f10_bonus-zh-1": 1,
+    "f10_business_analysis-zh-1": 1,
+    "f10_company-en-1": 1,
+    "f10_executive_trades-zh-1": 1,
+    "f10_executives-en-1": 1,
+    "f10_holders-zh-1": 1,
+    "f10_indicator-zh-1": 1,
+    "f10_industry-zh-1": 1,
+    "f10_industry_compare-en-1": 1,
+    "f10_org_holding_change-zh-1": 1,
+    "f10_org_holding_detail-zh-1": 1,
+    "f10_share_changes-en-1": 1,
+    "f10_top_holders-en-1": 1,
+    "finance_balance-en-1": 1,
+    "finance_balance-zh-1": null,
+    "finance_business-zh-1": 1,
+    "finance_cash_flow-zh-1": 1,
+    "finance_income-en-1": 1,
+    "finance_indicator-zh-1": 2,
+    "fund_achievement-en-1": 1,
+    "fund_asset-en-1": 1,
+    "fund_auto_invest_return-zh-1": 1,
+    "fund_derived-zh-1": 1,
+    "fund_detail-zh-1": 1,
+    "fund_growth-zh-1": 1,
+    "fund_info-zh-1": 1,
+    "fund_manager-zh-1": 1,
+    "fund_nav_history-en-1": 1,
+    "fund_rank-zh-1": 1,
+    "fund_rank_options-zh-1": 2,
+    "fund_search-zh-1": 1,
+    "fund_trade_date-zh-1": 1,
+    "index_pb_history-zh-1": 2,
+    "index_pe_history-zh-1": 1,
+    "index_stock_bond_percentile-zh-1": 1,
+    "index_valuation-zh-1": 1,
+    "index_valuation_list-zh-1": 1,
+    "kline-en-1": 1,
+    "kline-zh-1": 2,
+    "market_bj_indexes-zh-1": 1,
+    "market_hot_stocks-zh-1": 1,
+    "market_industry_stocks-zh-1": 1,
+    "quote_detail-zh-1": 5,
+    "quote_heat-zh-1": 1,
+    "quote_minute-en-1": 1,
+    "quote_order_book-en-1": 1,
+    "quote_relevant-zh-1": 1,
+    "quote_trades-zh-1": 1,
+    "quotec-zh-1": 2,
+    "screener_events-en-1": 1,
+    "screener_industries-zh-1": null,
+    "screener_popularity_rank-zh-1": 1,
+    "screener_quote_list-zh-1": 1,
+    "search_stock-zh-1": 1,
+    "suggest_stock-zh-1": 1,
+    "watchlist_groups-zh-1": 1,
+    "watchlist_stocks-zh-1": 1
+  }
+}

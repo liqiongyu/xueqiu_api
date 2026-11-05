@@ -1,0 +1,44 @@
+{
+  "params": {
+    "symbol": "SH000001"
+  },
+  "body": {
+    "data": [
+      {
+        "symbol": "SH000001",
+        "current": 3686.17,
+        "percent": 2.16,
+        "chg": 78.07,
+        "timestamp": 1793775600000,
+        "volume": 59939436100,
+        "amount": 953265155867.1,
+        "market_capital": 64427289139986.98,
+        "float_market_capital": 25239885076364.88,
+        "turnover_rate": 1.3,
+        "amplitude": 2.64,
+        "open": 3605.39,
+        "last_close": 3608.1,
+        "high": 3686.17,
+        "low": 3590.8,
+        "avg_price": 3686.17,
+        "trade_volume": null,
+        "side": null,
+        "is_trade": false,
+        "level": 3,
+        "trade_session": null,
+        "trade_type": null,
+        "current_year_percent": -7.12,
+        "trade_unique_id": null,
+        "type": 12,
+        "bid_appl_seq_num": null,
+        "offer_appl_seq_num": null,
+        "volume_ext": null,
+        "traded_amount_ext": null,
+        "trade_type_v2": null,
+        "yield_to_maturity": null
+      }
+    ],
+    "error_code": 0,
+    "error_description": null
+  }
+}

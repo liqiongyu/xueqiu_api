@@ -104,7 +104,7 @@ Python API 默认关的原因：行情类数据过期有实际风险，库返回
    - 来源：pysnowball 的 58 个函数、PR #45/#46/#47、GitHub 上其他项目用到的雪球 URL，缺的用浏览器 HAR 补。
    - 用一个串行限速脚本从同一个 IP 跑。
 2. 可运行骨架（2026-11-05 完成）：核心、会话缓存、10 个高频接口（quotec 和 batch quote 两个批量行情、行情详情、K 线、证券搜索、利润表、资产负债表、现金流量表、财务指标、F10 公司资料）、`doctor`、5 个工具的 MCP → verify：MockTransport 覆盖每条错误路径（60201、10022、21101、400016、300001、31005、429、418、403、5xx、超时、信封不符、空数据）；用夹具测模型；同一套测试跑同步和异步；tools/list 快照；专用工具和 `xq_call` 输出一致；夹具密钥扫描；live 冒烟测试通过；ruff、pyright strict 通过；CI 跑 3.11 到 3.15 和 3.14t，Linux、macOS、Windows。
-3. 扩面和数据正确性：其余雪球接口、蛋卷基金、组合、分页迭代器、证券列表快照、交易日历、复权因子、质量校验；`xq_endpoints` 改成本地检索（中文按字二元组，加同义词表）；60 到 100 条 agent 评测任务，约七成中文 → verify：每个接口有契约测试和样例测试；pysnowball 审查发现的 71 条问题逐条对应到设计或测试；质量校验在真实样例上通过；离线算出检索的 Recall@1、Recall@3、MRR@10 基线。
+3. 扩面和数据正确性（2026-11-06 完成）：其余雪球接口、蛋卷基金、组合、分页迭代器、证券列表快照、交易日历、复权因子、质量校验；`xq_endpoints` 改成本地检索（中文按字二元组，加同义词表）；60 到 100 条 agent 评测任务，约七成中文 → verify：每个接口有契约测试和样例测试；pysnowball 审查发现的 71 条问题逐条对应到设计或测试；质量校验在真实样例上通过；离线算出检索的 Recall@1、Recall@3、MRR@10 基线。
 4. 出口补全：完整 CLI、MCP 分组工具和 `--tools`（默认工具面按评测结果定）、响应缓存、数据同步和仓库、实时轮询、跨进程限速和熔断 → verify：CLI 端到端测试；同步任务重复运行结果一致；时点视图能返回历史版本；缓存命中、过期、跨账号隔离都有测试；多进程同时运行时总请求速率不超限；回放模式下用几个主流客户端实际调通，一致性测试确认每个接口都能通过 MCP 调到。
 5. 发布：文档站（接口参考从注册表生成，附接口健康状态）、Agent Skill 和 llms.txt、定时巡检、PyPI trusted publishing 和发布证明、依赖更新和密钥扫描、CHANGELOG、语义化版本和弃用策略（工具名和 section 取值也按语义化版本管理，改名进别名表）→ verify：TestPyPI 演练，干净环境安装后示例跑通；发布时存档 tools/list，CI 与上一版比对。
 
@@ -124,12 +124,12 @@ Python API 默认关的原因：行情类数据过期有实际风险，库返回
 
 - 2026-11-05 匿名跑 live 冒烟测试：10 个端点，加港股、美股的利润表和 F10 公司资料，14 次调用都返回数据；`xueqiu doctor` 实测通过。
 - 证券搜索不带 cookie 时，www.xueqiu.com 返回 HTTP 200 和 `{"code": 400016, "success": false}`，带匿名 cookie 正常。第 1 阶段不带 cookie 也有数据的结果没有复现，所以搜索照常带匿名 cookie。
-- 带一组登录 cookie（xq_a_token、xqat、u、xq_is_login）请求 stock.xueqiu.com 的 K 线和行情详情，返回 HTTP 400 和 400016（“遇到错误，请刷新页面或者重新登录帐号后再试”）。同一组 cookie 请求 www.xueqiu.com 的证券搜索有数据，同一时间匿名请求 stock.xueqiu.com 也正常。原因未确认，第 3 阶段接入登录类接口时查清。
+- 带一组登录 cookie（xq_a_token、xqat、u、xq_is_login）请求 stock.xueqiu.com 的 K 线和行情详情，返回 HTTP 400 和 400016（“遇到错误，请刷新页面或者重新登录帐号后再试”）。同一组 cookie 请求 www.xueqiu.com 的证券搜索有数据，同一时间匿名请求 stock.xueqiu.com 也正常。原因未确认，等小号 token。
 - 登录类错误码现在是：stock.xueqiu.com 60201、400016；www.xueqiu.com 10022、21101、400016；蛋卷 300001，代理雪球股票路径时还有 400016。
 - 这次 quotec 按 AAPL、00700、SH600000 的顺序返回，和请求顺序不同；batch_quote 按请求顺序返回。
 - 已知限制：
-  - 设置了 XUEQIU_TOKEN 时，stock.xueqiu.com 上带 cookie 的端点可能报 auth_expired，实测 K 线和行情详情是这样（见上面登录 cookie 一条）。
-  - 查不到的代码（未上市、已退市）现在报 upstream_changed，没有归为 symbol_not_found；这类响应还没实测。
+  - 设置了 XUEQIU_TOKEN 时，stock.xueqiu.com 上带 cookie 的端点可能报 auth_expired，实测 K 线和行情详情是这样（见上面登录 cookie 一条）。第 3 阶段已解决：匿名端点不再发登录 cookie。
+  - 查不到的代码（未上市、已退市）现在报 upstream_changed，没有归为 symbol_not_found；这类响应还没实测。第 3 阶段已解决实测过的端点：行情详情、K 线、财报、F10 公司资料、主营构成、人气热度、基金和指数估值。其余端点仍报 upstream_changed。
   - 港股指数按 HK 加 3 个以上字母识别，同样形状的美股代码无法表示。
   - 财报科目按上游的名称和单位输出：港股、美股没有默认列，部分比率是倍数。
   - xq_kline 一次给多只代码时只返回每只一行统计，fields 不起作用。
@@ -153,7 +153,7 @@ Python API 默认关的原因：行情类数据过期有实际风险，库返回
    - kline_history 返回合并好的一个 Kline，永远往回走，满页才发下一次。
    - MCP 一次调用一个上游页：xq_call 加 offset，语义是这一页已显示的行数，# next 给 page 和 offset。K 线、财报、单条记录不接受 offset。
 4. 数据功能：不进注册表，Client 和 AsyncClient 只加 security_snapshot、trading_calendar、market_state、adjust_factors 四个方法。
-   - 证券列表（xueqiu_api.universe）：A 股按 sha、kcb、sza、bj、shb、szb 走完，每段行数等于上游声明且未封顶就算完整；港股一段；美股用人气榜接口按 category=US 翻完（2026-11-05 实测 9124 行，第 92 页有数据，不受 5000 限制），去重后行数等于 count 才算完整。
+   - 证券列表（xueqiu_api.universe）：A 股按 sha、kcb、sza、bj、shb、szb 走完，每段行数等于上游声明且未封顶就算完整；港股一段；美股用人气榜接口按 category=US、order_by=symbol 翻完，不受 5000 限制，去重后行数等于 count 才算完整。
    - 交易日历（xueqiu_api.trading_calendar）：从指数日线推出，只有过去的交易日，未来日期返回 None，不做半日市。market_state 区分交易中和已收盘，今天是否交易是三态。
    - 复权因子（xueqiu_api.adjust）：后复权价除以不复权价，用 OHLC 舍入区间切段，前复权本地算，和 f10_bonus 对账。每只两次请求。
    - 质量校验（xueqiu_api.quality）：纯函数，返回报告，不抛异常，不改数据，跳过和通过分开，空值不当 0。覆盖 K 线、财报恒等式（银行、非银行、保险、券商）和快照完整性。
@@ -173,9 +173,24 @@ Python API 默认关的原因：行情类数据过期有实际风险，库返回
    - evals/baseline.json 记录离线的 Recall@1、Recall@3、MRR@10，消融、dev 和 holdout 的差距、样本量写进结论。
    - ruff、pyright strict、全矩阵 CI 通过，生成文件新鲜度和 SDK 表面快照通过。
 
+## 第 3 阶段结论
+
+- 注册表 72 个端点，其余 64 个普查接口不导出。2026-11-05 匿名实测：97 次调用覆盖 68 个匿名端点和它们声明的市场，都返回数据，结果里没有用户字段。4 个只能登录的端点没有 token 时不发请求，直接报 login_required，真实结构等小号实测。
+- 证券列表（2026-11-06 实测，匿名，每 1.5 秒一次）：A 股 5656 只，六段都完整，隔天仍和人气榜 count 相等，所以这个数含 B 股；港股 2874 只，完整。美股 count 9127，按 symbol 翻完拿到 9124 只，重复 3 行，complete 如实为假。按 follow7d 翻只拿到 8334 只，因为大多数行没有这个字段，翻页时顺序会变。
+- 数据同步要改的估算：A 股含 B 股是 5656 只；复权因子每只两次请求，全量回补时间翻倍。
+- 交易日历：A 股 SH000001 从 1990-12-19 起，8757 个交易日，和 XSHG 逐日一致。美股 AAPL 从 1997-01-02 起，7508 个交易日，和 XNYS 逐日一致。港股 00700 从 2012-11-01 起，3446 个交易日。这段时间内 XHKG 比它多的两天，2023-09-01 和 2023-09-08，都是全天停市，00700 是对的。恒指和标普 500 不能当来源：恒指有假日占位行，标普 500 有多余的日子。日历来源是一只股票时，它以后停牌会被读成休市。
+- market.status_id 新增实测：1 表示未开盘（2026-11-06 凌晨的 A 股和港股）。美股盘前实测到 2，含义未确认，market_state 报 unknown。
+- 复权因子：after 等于 round(raw*A, 4)；SH600000 的 27 个除权步有 26 个和 f10_bonus 对上，多出的 2006-05-12 没有分红记录。真实对账里，SH601166 2010-06-02 的配股步和 SH600519 2025-06-26 的现金分红（实施方案 27.673，因子隐含 27.60）报 warning。AAPL 首根因子是 2.189，前复权因子不从 1 开始。
+- 质量校验：银行、非银行、保险、券商四类公司的财报恒等式在真实样例上残差为 0。真实样例只在本机运行（设 XUEQIU_SAMPLES_DIR），每条校验的行数都大于 0，只有 factor.shares_match_bonus 要带股本变动才会运行，在 SH600519 的 15 行上手工通过。
+- 检索基线（evals/baseline.json）：dev 74 条计分，Recall@1 0.865，Recall@3 0.960，MRR@10 0.915；holdout 21 条计分，Recall@1 0.524，Recall@3 0.667，MRR@10 0.622；合计 95 条 0.789、0.895、0.850。不用同义词时合计 0.779、0.863、0.828。dev 和 holdout 差 0.34，dev 的关键词按它自己的失败调过，holdout 样本也小，所以读 holdout 的数。口语化任务是短板，靠看目录和模型自己改写查询词兜底。
+- pysnowball 审查 71 条逐条对应完毕，open 为 0：28 条已解决，20 条由第 3 阶段覆盖，13 条归后续阶段，10 条不适用。对照表留在本地。
+- MCP 翻页的已知限制：上游静默回退页大小、又按请求的页大小算偏移时，单次调用测不出，只有一行 # note。调研报告里 xq_market 的 offset 是行偏移，第 3 阶段定成 page 加本页已显示行数，第 4 阶段设计分组工具时按这个来。
+- 第 4 阶段要定的：易混淆的端点（f10_holders 和 f10_top_holders、capital_history 和 capital_history_detail、search_stock 和 suggest_stock）是否合并；分组工具的参数表见 tests/snapshots/grouped_tools_report.json。
+
 ## 待观察
 
 - 匿名 cookie 的有效期：2026-11-04 23:27 取得的一组在次日 08:06 仍能取到行情，更长的期限继续观察。
+- 美股 market.status_id 2 的含义（盘前时段实测到一次）。
 - 休市日和开盘前 market.status_id 的取值（2026-11-07 周六、2027-01-01）。
 - GitHub Actions 的海外机器能否访问雪球。访问不了的话，巡检改为在本机定时运行 doctor，把结果推到仓库。
 - 各类接口数据的实际更新频率，用来定默认 TTL。

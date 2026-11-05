@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator, Iterator
 from typing import assert_type
 
 from xueqiu_api import AsyncClient, Client, Page
+from xueqiu_api.adjust import AdjustFactors
 from xueqiu_api.models import (
     BlockTrade,
     BonusPage,
@@ -28,6 +29,8 @@ from xueqiu_api.models import (
     StockSuggestion,
     WatchlistItem,
 )
+from xueqiu_api.trading_calendar import MarketState, TradingCalendar
+from xueqiu_api.universe import SecuritySnapshot
 
 
 def sync_surface(c: Client) -> None:
@@ -37,6 +40,10 @@ def sync_surface(c: Client) -> None:
     assert_type(c.quote_detail("SH600000"), QuoteDetail)
     assert_type(c.kline("SH600000", period="week", adjust="after"), Kline)
     assert_type(c.kline_history("SH600000"), Kline)
+    assert_type(c.security_snapshot("CN", segments=["kcb"]), SecuritySnapshot)
+    assert_type(c.trading_calendar("HK"), TradingCalendar)
+    assert_type(c.market_state("US"), MarketState)
+    assert_type(c.adjust_factors("SH600000"), AdjustFactors)
     assert_type(c.suggest_stock(query="pfyh"), list[StockSuggestion])
     assert_type(c.f10_company("SH600000"), Company)
     assert_type(c.finance_income("SH600000", report_type="annual"), Financials)
@@ -60,6 +67,9 @@ def sync_surface(c: Client) -> None:
     for row in c.fund_nav_history("008975"):
         assert_type(row, FundNav)
     c.kline("SH600000", period="daily")  # pyright: ignore[reportArgumentType]
+    c.trading_calendar("JP")  # pyright: ignore[reportArgumentType]
+    c.security_snapshot("CN", ["kcb"])  # pyright: ignore[reportCallIssue]
+    c.adjust_factors("SH600000", None)  # pyright: ignore[reportCallIssue]
     c.kline("SH600000", "day")  # pyright: ignore[reportCallIssue]
     c.kline(symbol="SH600000", begins=None)  # pyright: ignore[reportCallIssue]
     c.suggest_stock("pfyh")  # pyright: ignore[reportCallIssue]
@@ -76,6 +86,10 @@ async def async_surface(c: AsyncClient) -> None:
     assert_type(await c.batch_quote(["SH600000"]), list[QuoteDetail])
     assert_type(await c.kline("SH600000", period="week"), Kline)
     assert_type(await c.kline_history("SH600000"), Kline)
+    assert_type(await c.security_snapshot("CN", segments=["kcb"]), SecuritySnapshot)
+    assert_type(await c.trading_calendar("HK"), TradingCalendar)
+    assert_type(await c.market_state("US"), MarketState)
+    assert_type(await c.adjust_factors("SH600000"), AdjustFactors)
     assert_type(await c.finance_income("SH600000"), Financials)
     assert_type(await c.capital_block_trades("SH600000"), Page[BlockTrade])
     assert_type(c.capital_block_trades_pages("SH600000"), AsyncIterator[Page[BlockTrade]])

@@ -1,0 +1,1018 @@
+# Development split of the eval tasks: the prompts, the endpoints that answer them and the calls
+# that do it, in endpoint params. Keywords and synonyms may be tuned on these; evals/holdout.toml
+# is reported in aggregate only. Relative dates in a prompt resolve against `today`.
+today = "2026-11-05"
+
+[[task]]
+id = "batch_quote-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "同时看一下腾讯、苹果和上证指数现在的涨跌幅"
+target = "batch_quote"
+also_ok = ["quotec"]
+expected = [
+  { endpoint = "batch_quote", params = { symbols = ["00700", "AAPL", "SH000001"] } },
+]
+answer_fields = ["symbol", "percent"]
+tags = ["multi_symbol", "dedicated", "symbol_rule"]
+source = "author"
+
+[[task]]
+id = "capital_assort-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "贵州茅台今天大单中单小单的成交分布"
+target = "capital_assort"
+also_ok = ["capital_distribution"]
+expected = [
+  { endpoint = "capital_assort", params = { symbol = "SH600519" } },
+]
+answer_fields = ["buy_large", "sell_large"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "capital_block_trades-en-1"
+lang = "en"
+split = "dev"
+prompt = "Recent block trades of SH600000"
+target = "capital_block_trades"
+expected = [
+  { endpoint = "capital_block_trades", params = { symbol = "SH600000" } },
+]
+answer_fields = ["trade_date", "trans_price"]
+source = "author"
+
+[[task]]
+id = "capital_distribution-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "今天浦发银行超大单、大单的买入卖出金额分别多少"
+target = "capital_distribution"
+also_ok = ["capital_assort"]
+expected = [
+  { endpoint = "capital_distribution", params = { symbol = "SH600000" } },
+]
+answer_fields = ["buy_xlarge", "sell_xlarge"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "capital_flow-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行今天主力资金净流入多少"
+target = "capital_flow"
+also_ok = ["capital_distribution"]
+expected = [
+  { endpoint = "capital_flow", params = { symbol = "SH600000" } },
+]
+answer_fields = ["net_inflow"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "capital_history-en-1"
+lang = "en"
+split = "dev"
+prompt = "capital flow history of SH600000 for the last 20 days"
+target = "capital_history"
+also_ok = ["capital_history_detail"]
+expected = [
+  { endpoint = "capital_history", params = { symbol = "SH600000" } },
+]
+answer_fields = ["trade_date", "net_inflow"]
+tags = ["relative_time"]
+source = "author"
+
+[[task]]
+id = "capital_history_detail-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行近 20 天每天超大单净流入"
+target = "capital_history_detail"
+expected = [
+  { endpoint = "capital_history_detail", params = { symbol = "SH600000" } },
+]
+answer_fields = ["trade_date", "xlarge_net"]
+tags = ["confusable", "relative_time"]
+source = "author"
+
+[[task]]
+id = "capital_longhu-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行最近一次上龙虎榜的原因"
+target = "capital_longhu"
+expected = [
+  { endpoint = "capital_longhu", params = { symbol = "SH600000" } },
+]
+answer_fields = ["info_type_name"]
+source = "author"
+
+[[task]]
+id = "capital_margin-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "有多少人在做空浦发银行"
+target = "capital_margin"
+expected = [
+  { endpoint = "capital_margin", params = { symbol = "SH600000" } },
+]
+answer_fields = ["short_selling_amt_balance"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "cube_holdings-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "组合 ZH2567925 现在持有哪些股票"
+target = "cube_holdings"
+expected = [
+  { endpoint = "cube_holdings", params = { cube_symbol = "ZH2567925" } },
+]
+answer_fields = ["symbol", "weight"]
+tags = ["login"]
+inject = { error = "login_required" }
+source = "author"
+
+[[task]]
+id = "cube_max_drawdown-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "这个组合 ZH2567925 最大回撤多少，什么时候"
+target = "cube_max_drawdown"
+also_ok = ["cube_nav_daily"]
+expected = [
+  { endpoint = "cube_max_drawdown", params = { cube_symbol = "ZH2567925" } },
+]
+answer_fields = ["max_drawdown", "begin_date"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "cube_monthly_returns-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "ZH2567925 去年哪个月亏得最多"
+target = "cube_monthly_returns"
+expected = [
+  { endpoint = "cube_monthly_returns", params = { cube_symbol = "ZH2567925" } },
+]
+answer_fields = ["month", "gain"]
+tags = ["relative_time"]
+source = "author"
+
+[[task]]
+id = "cube_nav_daily-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "组合 ZH2567925 的历史净值走势"
+target = "cube_nav_daily"
+expected = [
+  { endpoint = "cube_nav_daily", params = { cube_symbol = "ZH2567925" } },
+]
+answer_fields = ["date", "nav"]
+source = "author"
+
+[[task]]
+id = "cube_quote-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "ZH2567925 这个组合现在净值多少"
+target = "cube_quote"
+also_ok = ["cube_nav_daily"]
+expected = [
+  { endpoint = "cube_quote", params = { cube_symbols = ["ZH2567925"] } },
+]
+answer_fields = ["net_value"]
+source = "author"
+
+[[task]]
+id = "cube_rank_list-en-1"
+lang = "en"
+split = "dev"
+prompt = "top ranked Xueqiu cubes"
+target = "cube_rank_list"
+expected = [
+  { endpoint = "cube_rank_list", params = { page = 1 } },
+]
+answer_fields = ["symbol", "total_gain"]
+source = "author"
+
+[[task]]
+id = "cube_rebalancing_history-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "这个组合 ZH2567925 最近一次调仓买了什么"
+target = "cube_rebalancing_history"
+expected = [
+  { endpoint = "cube_rebalancing_history", params = { cube_symbol = "ZH2567925" } },
+]
+answer_fields = ["symbol", "target_weight"]
+tags = ["login"]
+inject = { error = "login_required" }
+source = "author"
+
+[[task]]
+id = "cube_score-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "雪球给 ZH2567925 的评分是多少分"
+target = "cube_score"
+expected = [
+  { endpoint = "cube_score", params = { cube_symbol = "ZH2567925" } },
+]
+answer_fields = ["total_score"]
+source = "author"
+
+[[task]]
+id = "f10_bonus-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "腾讯啥时候发钱给股东"
+target = "f10_bonus"
+expected = [
+  { endpoint = "f10_bonus", params = { symbol = "00700" } },
+]
+answer_fields = ["ex_date", "pay_date"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "f10_business_analysis-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行三季报里管理层怎么讨论经营情况"
+target = "f10_business_analysis"
+expected = [
+  { endpoint = "f10_business_analysis", params = { symbol = "SH600000" } },
+]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "f10_company-en-1"
+lang = "en"
+split = "dev"
+prompt = "who runs Tencent"
+target = "f10_company"
+expected = [
+  { endpoint = "f10_company", params = { symbol = "00700" } },
+]
+answer_fields = ["chairman"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "f10_executive_trades-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行高管最近有没有增持"
+target = "f10_executive_trades"
+expected = [
+  { endpoint = "f10_executive_trades", params = { symbol = "SH600000" } },
+]
+answer_fields = ["chg_date", "chg_shares_num"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "f10_executives-en-1"
+lang = "en"
+split = "dev"
+prompt = "List the directors of SH600000"
+target = "f10_executives"
+expected = [
+  { endpoint = "f10_executives", params = { symbol = "SH600000" } },
+]
+answer_fields = ["personal_name", "position_name"]
+source = "author"
+
+[[task]]
+id = "f10_holders-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "600519 股东户数变化"
+target = "f10_holders"
+expected = [
+  { endpoint = "f10_holders", params = { symbol = "SH600519" } },
+]
+answer_fields = ["report_date", "ashare_holder"]
+tags = ["confusable", "symbol_rule"]
+source = "author"
+
+[[task]]
+id = "f10_indicator-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "贵州茅台最新一期主要指标和当前估值快照"
+target = "f10_indicator"
+also_ok = ["finance_indicator"]
+expected = [
+  { endpoint = "f10_indicator", params = { symbol = "SH600519" } },
+]
+answer_fields = ["pe_ttm", "avg_roe"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "f10_industry-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "宁德时代属于什么行业和概念板块"
+target = "f10_industry"
+also_ok = ["search_stock"]
+expected = [
+  { endpoint = "f10_industry", params = { symbol = "SZ300750" } },
+]
+answer_fields = ["ind_name"]
+source = "author"
+
+[[task]]
+id = "f10_industry_compare-en-1"
+lang = "en"
+split = "dev"
+prompt = "compare SH600000 against its industry average"
+target = "f10_industry_compare"
+expected = [
+  { endpoint = "f10_industry_compare", params = { symbol = "SH600000" } },
+]
+answer_fields = ["stat", "pe_ttm"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "f10_org_holding_change-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "机构持有贵州茅台的比例这几个季度有什么变化"
+target = "f10_org_holding_change"
+expected = [
+  { endpoint = "f10_org_holding_change", params = { symbol = "SH600519" } },
+]
+answer_fields = ["report_name", "held_ratio"]
+tags = ["confusable", "relative_time"]
+source = "author"
+
+[[task]]
+id = "f10_org_holding_detail-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "哪些基金持有浦发银行，持了多少"
+target = "f10_org_holding_detail"
+expected = [
+  { endpoint = "f10_org_holding_detail", params = { symbol = "SH600000" } },
+]
+answer_fields = ["holder_name", "held_num"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "f10_share_changes-en-1"
+lang = "en"
+split = "dev"
+prompt = "Share count history of SH600000"
+target = "f10_share_changes"
+expected = [
+  { endpoint = "f10_share_changes", params = { symbol = "SH600000" } },
+]
+answer_fields = ["chg_date", "total_shares"]
+source = "author"
+
+[[task]]
+id = "f10_top_holders-en-1"
+lang = "en"
+split = "dev"
+prompt = "Who are the largest shareholders of SH600000"
+target = "f10_top_holders"
+expected = [
+  { endpoint = "f10_top_holders", params = { symbol = "SH600000" } },
+]
+answer_fields = ["holder_name", "held_ratio"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "finance_balance-en-1"
+lang = "en"
+split = "dev"
+prompt = "Look up Kweichow Moutai's code, then show its balance sheet"
+target = "finance_balance"
+also_ok = ["suggest_stock"]
+expected = [
+  { endpoint = "suggest_stock", params = { query = "Kweichow Moutai" } },
+  { endpoint = "finance_balance", params = { symbol = "SH600519" } },
+]
+tags = ["multi_step"]
+source = "author"
+
+[[task]]
+id = "finance_balance-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "贵州茅台欠了多少钱"
+target = "finance_balance"
+expected = [
+  { endpoint = "finance_balance", params = { symbol = "SH600519" } },
+]
+answer_fields = ["report_name", "total_liab"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "finance_business-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行靠什么赚钱"
+target = "finance_business"
+also_ok = ["f10_company", "f10_business_analysis"]
+expected = [
+  { endpoint = "finance_business", params = { symbol = "SH600000" } },
+]
+answer_fields = ["project_announced_name", "income_ratio"]
+tags = ["colloquial", "confusable"]
+source = "author"
+
+[[task]]
+id = "finance_cash_flow-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "宁德时代经营活动现金流净额最近五期"
+target = "finance_cash_flow"
+expected = [
+  { endpoint = "finance_cash_flow", params = { symbol = "SZ300750", count = 5 } },
+]
+answer_fields = ["report_name", "ncf_from_oa"]
+source = "author"
+
+[[task]]
+id = "finance_income-en-1"
+lang = "en"
+split = "dev"
+prompt = "How much does Apple earn"
+target = "finance_income"
+also_ok = ["finance_indicator"]
+expected = [
+  { endpoint = "finance_income", params = { symbol = "AAPL" } },
+]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "finance_indicator-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "贵州茅台毛利率是多少"
+target = "finance_indicator"
+also_ok = ["f10_indicator"]
+expected = [
+  { endpoint = "finance_indicator", params = { symbol = "SH600519" } },
+]
+answer_fields = ["report_name", "gross_selling_rate"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "fund_achievement-en-1"
+lang = "en"
+split = "dev"
+prompt = "What is the max drawdown of fund 008975 in each year"
+target = "fund_achievement"
+expected = [
+  { endpoint = "fund_achievement", params = { fund_code = "008975" } },
+]
+answer_fields = ["period", "max_drawdown_pct"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "fund_asset-en-1"
+lang = "en"
+split = "dev"
+prompt = "what stocks does fund 008975 own"
+target = "fund_asset"
+also_ok = ["fund_detail"]
+expected = [
+  { endpoint = "fund_asset", params = { fund_code = "008975" } },
+]
+answer_fields = ["name", "pct_net_assets"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "fund_auto_invest_return-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "每月定投 008975 近三年收益多少"
+target = "fund_auto_invest_return"
+also_ok = ["fund_derived"]
+expected = [
+  { endpoint = "fund_auto_invest_return", params = { fund_code = "008975" } },
+]
+answer_fields = ["window", "return_pct"]
+tags = ["relative_time"]
+source = "author"
+
+[[task]]
+id = "fund_derived-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "008975 近一年收益率和同类排名"
+target = "fund_derived"
+also_ok = ["fund_achievement"]
+expected = [
+  { endpoint = "fund_derived", params = { fund_code = "008975" } },
+]
+answer_fields = ["return_1y_pct", "rank_1y"]
+tags = ["confusable", "relative_time"]
+source = "author"
+
+[[task]]
+id = "fund_detail-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "008975 申购费和赎回费是多少"
+target = "fund_detail"
+expected = [
+  { endpoint = "fund_detail", params = { fund_code = "008975" } },
+]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "fund_growth-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "008975 今年以来的累计收益和业绩基准对比"
+target = "fund_growth"
+expected = [
+  { endpoint = "fund_growth", params = { fund_code = "008975", period = "ty" } },
+]
+answer_fields = ["cum_return_pct", "benchmark_cum_return_pct"]
+tags = ["confusable", "relative_time"]
+source = "author"
+
+[[task]]
+id = "fund_info-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "基金 008975 是哪家公司的，什么类型，风险等级多少"
+target = "fund_info"
+expected = [
+  { endpoint = "fund_info", params = { fund_code = "008975" } },
+]
+answer_fields = ["company", "type_desc", "risk_level"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "fund_manager-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "008975 这只基金谁在管"
+target = "fund_manager"
+also_ok = ["fund_info"]
+expected = [
+  { endpoint = "fund_manager", params = { fund_code = "008975" } },
+]
+answer_fields = ["name"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "fund_nav_history-en-1"
+lang = "en"
+split = "dev"
+prompt = "NAV history of 008975"
+target = "fund_nav_history"
+expected = [
+  { endpoint = "fund_nav_history", params = { fund_code = "008975" } },
+]
+answer_fields = ["date", "nav"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "fund_rank-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "近一个月收益最高的股票型基金"
+target = "fund_rank"
+expected = [
+  { endpoint = "fund_rank", params = { fund_type = "1", order_by = "1m" } },
+]
+answer_fields = ["fund_code", "return_pct"]
+tags = ["relative_time"]
+source = "author"
+
+[[task]]
+id = "fund_rank_options-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "基金排行能按哪些类型和区间筛选"
+target = "fund_rank_options"
+expected = [
+  { endpoint = "fund_rank_options", params = {} },
+]
+answer_fields = ["code", "name"]
+source = "author"
+
+[[task]]
+id = "fund_search-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "消费方向的投顾组合有哪些"
+target = "fund_search"
+expected = [
+  { endpoint = "fund_search", params = { query = "消费" } },
+]
+answer_fields = ["code", "name"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "fund_trade_date-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "今天买 008975 什么时候确认份额"
+target = "fund_trade_date"
+expected = [
+  { endpoint = "fund_trade_date", params = { fund_code = "008975" } },
+]
+answer_fields = ["buy_confirm"]
+source = "author"
+
+[[task]]
+id = "index_pb_history-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "沪深300的市净率历史走势"
+target = "index_pb_history"
+expected = [
+  { endpoint = "index_pb_history", params = { index_code = "SH000300" } },
+]
+answer_fields = ["date", "pb"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "index_pe_history-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "沪深300近几年的市盈率走势"
+target = "index_pe_history"
+expected = [
+  { endpoint = "index_pe_history", params = { index_code = "SH000300" } },
+]
+answer_fields = ["date", "pe"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "index_stock_bond_percentile-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "股票和债券现在哪个更划算"
+target = "index_stock_bond_percentile"
+expected = [
+  { endpoint = "index_stock_bond_percentile", params = {} },
+]
+answer_fields = ["date", "percentile"]
+tags = ["colloquial"]
+source = "author"
+
+[[task]]
+id = "index_valuation-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "沪深300现在估值高吗"
+target = "index_valuation"
+also_ok = ["index_valuation_list"]
+expected = [
+  { endpoint = "index_valuation", params = { index_code = "SH000300" } },
+]
+answer_fields = ["pe_percentile"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "index_valuation_list-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "蛋卷指数估值表里哪些指数低估"
+target = "index_valuation_list"
+expected = [
+  { endpoint = "index_valuation_list", params = {} },
+]
+answer_fields = ["name", "eva_type"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "kline-en-1"
+lang = "en"
+split = "dev"
+prompt = "Get weekly forward-adjusted candles for AAPL for the last three months"
+target = "kline"
+expected = [
+  { endpoint = "kline", params = { symbol = "AAPL", period = "week", adjust = "before", begin = "2026-08-05" } },
+]
+answer_fields = ["timestamp", "close"]
+tags = ["adjust", "relative_time", "dedicated"]
+source = "author"
+
+[[task]]
+id = "kline-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "比较贵州茅台、五粮液和沪深300今年以来的涨幅"
+target = "kline"
+expected = [
+  { endpoint = "kline", params = { symbol = "SH600519", begin = "2026-01-01" } },
+  { endpoint = "kline", params = { symbol = "SZ000858", begin = "2026-01-01" } },
+  { endpoint = "kline", params = { symbol = "SH000300", begin = "2026-01-01" } },
+]
+answer_fields = ["timestamp", "close"]
+tags = ["multi_symbol", "relative_time", "dedicated", "recovery"]
+inject = { error = "rate_limited", on_call = 2 }
+source = "author"
+
+[[task]]
+id = "market_bj_indexes-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "北证50现在多少点"
+target = "market_bj_indexes"
+also_ok = ["batch_quote", "quotec"]
+expected = [
+  { endpoint = "market_bj_indexes", params = {} },
+]
+answer_fields = ["name", "current"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "market_hot_stocks-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "雪球今天最热门的港股有哪些"
+target = "market_hot_stocks"
+expected = [
+  { endpoint = "market_hot_stocks", params = { region = "hk", window = "day" } },
+]
+answer_fields = ["symbol", "value"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "market_industry_stocks-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行所在板块下面都有哪些股票，市盈率多少"
+target = "market_industry_stocks"
+expected = [
+  { endpoint = "market_industry_stocks", params = { symbol = "SH600000" } },
+]
+answer_fields = ["symbol", "pe_ttm"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "out_of_scope-en-1"
+lang = "en"
+split = "dev"
+prompt = "Show the latest comments about Moutai on Xueqiu"
+target = "out_of_scope"
+tags = ["out_of_scope"]
+source = "author"
+
+[[task]]
+id = "out_of_scope-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "雪球上大家怎么评价贵州茅台"
+target = "out_of_scope"
+tags = ["out_of_scope"]
+source = "author"
+
+[[task]]
+id = "out_of_scope-zh-2"
+lang = "zh"
+split = "dev"
+prompt = "蛋卷基金组合 CSI1014 的净值"
+target = "out_of_scope"
+tags = ["out_of_scope"]
+source = "author"
+
+[[task]]
+id = "out_of_scope-zh-3"
+lang = "zh"
+split = "dev"
+prompt = "看一下这个用户最近发的帖子"
+target = "out_of_scope"
+tags = ["out_of_scope"]
+source = "author"
+
+[[task]]
+id = "quote_detail-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "茅台贵不贵"
+target = "quote_detail"
+also_ok = ["f10_indicator"]
+expected = [
+  { endpoint = "quote_detail", params = { symbol = "SH600519" } },
+]
+answer_fields = ["pe_ttm", "pb"]
+tags = ["colloquial", "confusable"]
+source = "author"
+
+[[task]]
+id = "quote_heat-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行在雪球的热度排名"
+target = "quote_heat"
+expected = [
+  { endpoint = "quote_heat", params = { symbol = "SH600000" } },
+]
+answer_fields = ["rank"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "quote_minute-en-1"
+lang = "en"
+split = "dev"
+prompt = "intraday minute chart of AAPL for the last 5 days"
+target = "quote_minute"
+expected = [
+  { endpoint = "quote_minute", params = { symbol = "AAPL", days = 5 } },
+]
+answer_fields = ["timestamp", "current"]
+tags = ["confusable", "relative_time"]
+source = "author"
+
+[[task]]
+id = "quote_order_book-en-1"
+lang = "en"
+split = "dev"
+prompt = "Show the order book for SH600000"
+target = "quote_order_book"
+expected = [
+  { endpoint = "quote_order_book", params = { symbol = "SH600000" } },
+]
+answer_fields = ["bids", "asks"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "quote_relevant-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "和浦发银行相关的股票有哪些"
+target = "quote_relevant"
+also_ok = ["market_industry_stocks"]
+expected = [
+  { endpoint = "quote_relevant", params = { symbol = "SH600000" } },
+]
+answer_fields = ["symbol", "name"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "quote_trades-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "贵州茅台最新的几笔逐笔成交"
+target = "quote_trades"
+expected = [
+  { endpoint = "quote_trades", params = { symbol = "SH600519", count = 5 } },
+]
+answer_fields = ["timestamp", "trade_volume"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "quotec-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "看看 000001 这个指数今天的行情"
+target = "quotec"
+also_ok = ["batch_quote", "quote_detail"]
+expected = [
+  { endpoint = "quotec", params = { symbols = ["SH000001"] } },
+]
+tags = ["symbol_rule", "recovery", "dedicated"]
+source = "author"
+
+[[task]]
+id = "screener_events-en-1"
+lang = "en"
+split = "dev"
+prompt = "When is the next earnings date for SH600000"
+target = "screener_events"
+expected = [
+  { endpoint = "screener_events", params = { symbol = "SH600000" } },
+]
+answer_fields = ["event_date", "title"]
+source = "author"
+
+[[task]]
+id = "screener_industries-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "养殖业有哪些股票"
+target = "screener_industries"
+also_ok = ["screener_quote_list"]
+expected = [
+  { endpoint = "screener_industries", params = {} },
+  { endpoint = "screener_quote_list", params = { market = "CN" } },
+]
+tags = ["multi_step"]
+source = "author"
+
+[[task]]
+id = "screener_popularity_rank-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "雪球上最近关注度最高的股票"
+target = "screener_popularity_rank"
+also_ok = ["market_hot_stocks"]
+expected = [
+  { endpoint = "screener_popularity_rank", params = {} },
+]
+answer_fields = ["symbol", "follow7d"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "screener_quote_list-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "今天科创板涨幅前十"
+target = "screener_quote_list"
+expected = [
+  { endpoint = "screener_quote_list", params = { market = "CN", board = "kcb", order_by = "percent", order = "desc", page_size = 10 } },
+]
+answer_fields = ["symbol", "percent"]
+source = "author"
+
+[[task]]
+id = "search_stock-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "查一下 SH600000 的所属行业"
+target = "search_stock"
+also_ok = ["f10_industry", "f10_company"]
+expected = [
+  { endpoint = "search_stock", params = { query = "SH600000" } },
+]
+answer_fields = ["ind_name"]
+tags = ["confusable"]
+source = "author"
+
+[[task]]
+id = "suggest_stock-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "浦发银行的股票代码是什么"
+target = "suggest_stock"
+also_ok = ["search_stock"]
+expected = [
+  { endpoint = "suggest_stock", params = { query = "浦发银行" } },
+]
+answer_fields = ["symbol"]
+tags = ["dedicated"]
+source = "author"
+
+[[task]]
+id = "watchlist_groups-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "我自选里有几只港股"
+target = "watchlist_groups"
+also_ok = ["watchlist_stocks"]
+expected = [
+  { endpoint = "watchlist_groups", params = {} },
+  { endpoint = "watchlist_stocks", params = { pid = -1 } },
+]
+tags = ["multi_step", "login"]
+inject = { error = "login_required" }
+source = "author"
+
+[[task]]
+id = "watchlist_stocks-zh-1"
+lang = "zh"
+split = "dev"
+prompt = "看看我的自选股"
+target = "watchlist_stocks"
+expected = [
+  { endpoint = "watchlist_stocks", params = {} },
+]
+answer_fields = ["symbol", "name"]
+tags = ["login"]
+inject = { error = "login_required" }
+source = "author"

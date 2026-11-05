@@ -37,6 +37,7 @@ from .._render import (
     render,
     render_bar_stats,
 )
+from .._search import RESULT_CAP, EndpointIndex
 from ..endpoints import REGISTRY
 from ..endpoints.kline import (
     MAX_COUNT,
@@ -97,6 +98,7 @@ REAUTH_HINT = (
 )
 KLINE_SYMBOLS = 5
 DESCRIBE_NAMES = 5
+ENDPOINT_QUERY_CHARS = 200
 KEYWORD_CHARS = 200
 TITLE_LINE_CHARS = 500
 MAX_CANDIDATES = 5
@@ -214,7 +216,7 @@ class KlineArgs(_Args):
 
 
 class EndpointsArgs(_Args):
-    query: str | None = Field(default=None, max_length=QUERY_CHARS)
+    query: str | None = Field(default=None, max_length=ENDPOINT_QUERY_CHARS)
     name: Annotated[tuple[str, ...], Field(min_length=1, max_length=DESCRIBE_NAMES)] | None = None
     category: str | None = None
 
@@ -259,6 +261,7 @@ class Toolbox:
             and (DEDICATED[tool] in self.endpoints if tool in DEDICATED else bool(self.endpoints))
         )
         self._categories = _by_category(self.endpoints)
+        self._index = EndpointIndex(REGISTRY[name] for name in self.endpoints)
         self.instructions = instructions(self.tools, self.endpoints)
         self.specs = tuple(self._spec(tool) for tool in self.tools)
         self._properties = {
@@ -509,23 +512,32 @@ class Toolbox:
         return fit(head, lines, footer=footer, max_chars=self._max_chars)
 
     def _catalog(self, query: str, category: str | None) -> str:
-        needle = query.casefold()
-        specs = [
-            spec
-            for spec in (REGISTRY[name] for name in self.endpoints)
-            if (category is None or spec.agent.category == category)
-            and (not needle or needle in _haystack(spec))
+        names = [
+            name
+            for name in self.endpoints
+            if category is None or REGISTRY[name].agent.category == category
         ]
+        if query:
+            names = [hit.name for hit in self._index.search(query, only=names)]
+        specs = [REGISTRY[name] for name in names]
         chosen = {"query": query} if query else {}
         chosen |= {"category": category} if category else {}
         head = [
             f"# endpoints {compact_json(chosen)}",
             f"# meta: source=local registry rows={len(specs)}",
         ]
-        if specs:
-            head.append(csv_line(["name", "title", "summary", "auth", "freshness", "tool"]))
+        if not specs:
+            head.append(
+                "# note: no endpoint matches; call xq_endpoints without arguments for the summary "
+                "by category."
+            )
         else:
-            head.append("# note: no endpoint matches; call xq_endpoints without query to see all.")
+            if query:
+                head.append(
+                    "# note: ranked by text match, best first; leave out query for the summary by "
+                    "category."
+                )
+            head.append(csv_line(["name", "title", "summary", "auth", "freshness", "tool"]))
         lines = [
             csv_line(
                 [
@@ -679,8 +691,8 @@ class Toolbox:
                 ],
                 "本服务器已启用端点的本地目录，不访问上游。不带参数时每个类别一行：类别、中文标题、"
                 "端点数和全部端点名；category 列出该类端点的端点名、中文标题、一句话说明、是否需要"
-                "登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词，行格式相同；"
-                f"name 给 1 到 {DESCRIBE_NAMES} 个端点名，"
+                "登录、时效类别和承接工具；query 是中文或英文检索词，可以写一句话，按相关度返回"
+                f"最多 {RESULT_CAP} 条，行格式相同；name 给 1 到 {DESCRIBE_NAMES} 个端点名，"
                 "返回参数签名、取值含义、默认值和上限、适用市场、翻页方式和一个示例调用。",
                 [
                     f"xq_endpoints {compact_json({'category': first.agent.category})}",
@@ -806,8 +818,9 @@ class Toolbox:
                 {
                     "query": {
                         "type": "string",
-                        "maxLength": QUERY_CHARS,
-                        "description": "按子串匹配端点名、标题、说明和关键词",
+                        "maxLength": ENDPOINT_QUERY_CHARS,
+                        "description": "中文或英文检索词，可以写一句话，按相关度返回最多 "
+                        f"{RESULT_CAP} 条",
                     },
                     "name": {
                         "type": "array",
@@ -999,12 +1012,6 @@ def _tool_arguments(params: Mapping[str, Any]) -> dict[str, Any]:
 
 def _matches(names: Sequence[str], patterns: Sequence[str]) -> bool:
     return any(fnmatch.fnmatchcase(name, pattern) for name in names for pattern in patterns)
-
-
-def _haystack(spec: Endpoint[Any, Any]) -> str:
-    agent = spec.agent
-    words = [spec.name, agent.title_zh, agent.title_en, agent.summary, *agent.keywords]
-    return " ".join(words).casefold()
 
 
 def _keyword_line(words: Sequence[str], limit: int = KEYWORD_CHARS) -> str:

@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "SH600519"
+  },
+  "body": {
+    "data": {
+      "quote_name": "贵州茅台",
+      "currency_name": "人民币",
+      "org_type": 1,
+      "last_report_name": "2026三季报",
+      "statuses": null,
+      "currency": "CNY",
+      "list": [
+        {
+          "asset_liab_ratio": [19.0, 0.0412],
+          "avg_roe": [26.4, -0.0614],
+          "basic_eps": [51.6, 0.0421],
+          "ctime": 1793358014000,
+          "gross_selling_rate": [91.3, 0.0021],
+          "net_profit_atsopc": [64800000000.0, 0.0432],
+          "net_profit_atsopc_yoy": [4.32, -0.5211],
+          "net_selling_rate": [51.2, 0.0035],
+          "operating_income_yoy": [3.81, -0.4102],
+          "report_date": 1790697600000,
+          "report_name": "2026三季报"
+        },
+        {
+          "asset_liab_ratio": [18.3, 0.0221],
+          "avg_roe": [18.9, -0.0503],
+          "basic_eps": [36.2, 0.0533],
+          "ctime": 1787829403000,
+          "gross_selling_rate": [91.1, 0.0015],
+          "net_profit_atsopc": [45400000000.0, 0.0541],
+          "net_profit_atsopc_yoy": [5.41, -0.4733],
+          "net_selling_rate": [50.8, 0.0029],
+          "operating_income_yoy": [4.05, -0.3871],
+          "report_date": 1782748800000,
+          "report_name": "2026中报"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
