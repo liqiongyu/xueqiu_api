@@ -1,0 +1,21 @@
+{
+  "params": { "system": "true" },
+  "body": {
+    "data": {
+      "stocks": [
+        { "id": -1, "name": "全部", "category": 1, "order_id": 1, "include": false, "type": -1, "symbol_count": 3, "created_at": 1700000000000, "updated_at": 1700000100000 },
+        { "id": -5, "name": "沪深", "category": 1, "order_id": 2, "include": false, "type": -1, "symbol_count": 3, "created_at": 1700000000000, "updated_at": 1700000100000 },
+        { "id": -7, "name": "港股", "category": 1, "order_id": 3, "include": false, "type": -1, "symbol_count": 0, "created_at": 1700000000000, "updated_at": 1700000100000 }
+      ],
+      "funds": [
+        { "id": -110, "name": "全部", "category": 2, "order_id": 1, "include": false, "type": -1, "symbol_count": 1 }
+      ],
+      "cubes": [
+        { "id": -120, "name": "全部", "category": 3, "order_id": 1, "include": false, "type": -1, "symbol_count": 2 }
+      ],
+      "mutualFunds": []
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

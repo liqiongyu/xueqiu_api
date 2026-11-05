@@ -1,0 +1,59 @@
+{
+  "params": { "cube_symbol": "ZH2567925" },
+  "body": {
+    "last_rb": {
+      "id": 2000002,
+      "status": "pending",
+      "cube_id": 1000001,
+      "category": "user_rebalancing",
+      "created_at": 1700000300000,
+      "updated_at": 1700000300000,
+      "cash": 5.0,
+      "error_code": null,
+      "error_message": null,
+      "holdings": null
+    },
+    "last_success_rb": {
+      "id": 2000001,
+      "status": "success",
+      "cube_id": 1000001,
+      "category": "user_rebalancing",
+      "created_at": 1700000000000,
+      "updated_at": 1700000100000,
+      "cash": 5.0,
+      "cash_value": 0.05,
+      "error_code": null,
+      "error_status": null,
+      "error_message": "示例系统提示",
+      "holdings": [
+        {
+          "stock_id": 3000001,
+          "stock_symbol": "SH600000",
+          "stock_name": "浦发银行",
+          "weight": 40.0,
+          "segment_name": "示例分组",
+          "segment_color": "#999999",
+          "volume": 0.01
+        },
+        {
+          "stock_id": 3000002,
+          "stock_symbol": "SZ000001",
+          "stock_name": "平安银行",
+          "weight": 35.0,
+          "segment_name": "示例分组",
+          "segment_color": "#999999",
+          "volume": 0.02
+        },
+        {
+          "stock_id": 3000003,
+          "stock_symbol": "SH510300",
+          "stock_name": "示例ETF",
+          "weight": 20.0,
+          "segment_name": null,
+          "segment_color": null,
+          "volume": 0.03
+        }
+      ]
+    }
+  }
+}
