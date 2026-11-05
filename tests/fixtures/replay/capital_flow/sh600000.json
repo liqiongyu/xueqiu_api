@@ -1,0 +1,49 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "symbol": "SH600000",
+      "items": [
+        {
+          "timestamp": 1793755800000,
+          "amount": 8708224.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793755860000,
+          "amount": 28264747.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793755920000,
+          "amount": 24741032.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793763000000,
+          "amount": -30120000.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793768400000,
+          "amount": -31050000.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793775540000,
+          "amount": -80110000.0,
+          "type": null
+        },
+        {
+          "timestamp": 1793775600000,
+          "amount": -82897800.67,
+          "type": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
