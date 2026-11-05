@@ -1,0 +1,76 @@
+{
+  "params": {
+    "fund_code": "008975"
+  },
+  "body": {
+    "data": {
+      "fd_code": "008975",
+      "end_date": "2026-11-04",
+      "unit_nav": "1.2048",
+      "unit_acc_nav": "1.2048",
+      "nav_grtd": "-1.2702",
+      "nav_grl1w": "6.0750132066",
+      "nav_grl1m": "7.2458607798",
+      "nav_grl3m": "3.8620689655",
+      "nav_grl6m": "0.7610604667",
+      "nav_grlty": "-4.6005226067",
+      "nav_grl1y": "-4.5627376426",
+      "nav_grl2y": "-3.0264005151",
+      "nav_grl3y": "0.3916340305",
+      "nav_grl5y": "-21.811928094",
+      "nav_grbase": "20.48",
+      "srank_l1m": "9/4521",
+      "srank_l3m": "126/4317",
+      "srank_l6m": "200/4059",
+      "srank_lty": "911/4587",
+      "srank_l1y": "742/3677",
+      "srank_l3y": "1455/1875",
+      "srank_l5y": "817/1260",
+      "srank_base": "1253/4587",
+      "updated_at": 1793791584557,
+      "nav_growth": "-0.0155",
+      "fd_type": "5",
+      "aip_grl1y": "2.9600",
+      "aip_grl2y": "0.6300",
+      "aip_grl3y": "1.4000",
+      "aip_grl5y": "-2.5300",
+      "itg_aip_grl1y": "3.6600",
+      "itg_aip_grl2y": "1.5700",
+      "itg_aip_grl3y": "3.0200",
+      "itg_aip_grl5y": "0.3700",
+      "annual_performance_list": [
+        {
+          "period": "成立以来",
+          "nav": "20.48",
+          "rank": "1253/4587"
+        },
+        {
+          "period": "今年以来",
+          "nav": "-4.60",
+          "rank": "911/4587"
+        },
+        {
+          "period": "2025",
+          "nav": "0.99",
+          "rank": "3402/3860"
+        }
+      ],
+      "first_nav": false,
+      "yield_history": [
+        {
+          "yield": "3.86",
+          "name": "近3个月"
+        },
+        {
+          "yield": "0.76",
+          "name": "近6个月"
+        },
+        {
+          "yield": "-4.56",
+          "name": "近一年"
+        }
+      ]
+    },
+    "result_code": 0
+  }
+}

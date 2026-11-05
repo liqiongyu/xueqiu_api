@@ -1,0 +1,203 @@
+{
+  "params": {
+    "fund_code": "008975"
+  },
+  "body": {
+    "data": {
+      "fund_company": "合成公司简介",
+      "fund_position": {
+        "source": "4",
+        "source_mark": "第三季度报",
+        "enddate": 1790697600000,
+        "asset_tot": 1379824964.74,
+        "asset_val": 1166490565.91,
+        "stock_percent": 0.61,
+        "cash_percent": 9.82,
+        "bond_percent": 5.48,
+        "other_percent": 84.09,
+        "stock_list": [
+          {
+            "name": "贵州茅台",
+            "code": "600519",
+            "percent": 0.17,
+            "current_price": 1446.44,
+            "change_percentage": -2.27,
+            "xq_symbol": "SH600519",
+            "xq_url": "https://xueqiu.com/S/SH600519",
+            "change_of_pre_quarter": "0.05%",
+            "change_of_pre_quarter_type": 1,
+            "percent_double": 0.17,
+            "amarket": true
+          },
+          {
+            "name": "伊利股份",
+            "code": "600887",
+            "percent": 0.14,
+            "current_price": 30.71,
+            "change_percentage": -2.41,
+            "xq_symbol": "SH600887",
+            "change_of_pre_quarter": "0.05%",
+            "change_of_pre_quarter_type": 1,
+            "percent_double": 0.14,
+            "amarket": true
+          },
+          {
+            "name": "海尔智家",
+            "code": "600690",
+            "percent": 0.06,
+            "current_price": 20.98,
+            "change_percentage": -1.73,
+            "xq_symbol": "SH600690",
+            "change_of_pre_quarter": "0.02%",
+            "change_of_pre_quarter_type": 1,
+            "percent_double": 0.06,
+            "amarket": true
+          }
+        ],
+        "bond_list": [
+          {
+            "name": "25国债19",
+            "code": "019792",
+            "percent": 5.79,
+            "xq_symbol": "019792",
+            "percent_double": 5.79,
+            "amarket": false
+          },
+          {
+            "name": "26国债14",
+            "code": "019846",
+            "percent": 0.69,
+            "xq_symbol": "019846",
+            "percent_double": 0.69,
+            "amarket": false
+          }
+        ],
+        "chart_list": [
+          {
+            "type_desc": "股票",
+            "type": "stock",
+            "percent": 0.61,
+            "color": "#F04848"
+          },
+          {
+            "type_desc": "债券",
+            "type": "bond",
+            "percent": 5.48,
+            "color": "#287DFF"
+          },
+          {
+            "type_desc": "现金",
+            "type": "cash",
+            "percent": 9.82,
+            "color": "#FFCA03"
+          }
+        ],
+        "important_list_show": 3,
+        "end_date_str": "2026-09-30"
+      },
+      "fund_rates": {
+        "fd_code": "008975",
+        "subscribe_rate": "1.0",
+        "declare_rate": "1.2",
+        "withdraw_rate": "1.5",
+        "discount": "0.1",
+        "subscribe_discount": "1",
+        "declare_discount": "0.1",
+        "declare_rate_table": [
+          {
+            "name": "0.0万<买入金额<100.0万",
+            "value": "1.2",
+            "unit": "2",
+            "special": false
+          },
+          {
+            "name": "100.0万<=买入金额<500.0万",
+            "value": "0.8",
+            "unit": "2",
+            "special": false
+          },
+          {
+            "name": "500.0万<=买入金额",
+            "value": "1000.0",
+            "unit": "1",
+            "special": false
+          }
+        ],
+        "withdraw_rate_table": [
+          {
+            "name": "0.0天<持有期限<7.0天",
+            "value": "1.5",
+            "unit": "2",
+            "special": false
+          },
+          {
+            "name": "7.0天<=持有期限<365.0天",
+            "value": "0.5",
+            "unit": "2",
+            "special": false
+          },
+          {
+            "name": "365.0天<=持有期限<2.0年",
+            "value": "0.25",
+            "unit": "2",
+            "special": false
+          }
+        ],
+        "other_rate_table": [
+          {
+            "name": "基金管理费",
+            "value": "0.5",
+            "unit": "2",
+            "special": false
+          },
+          {
+            "name": "基金托管费",
+            "value": "0.1",
+            "unit": "2",
+            "special": false
+          }
+        ]
+      },
+      "manager_list": [
+        {
+          "indi_id": "100000001",
+          "name": "示例经理",
+          "resume": "合成履历",
+          "work_year": "16",
+          "achievement_list": [
+            {
+              "fund_code": "021254",
+              "fundsname": "示例基金1",
+              "post_date": "2026-03-17",
+              "cp_rate": -8.8768
+            },
+            {
+              "fund_code": "021255",
+              "fundsname": "示例基金2",
+              "post_date": "2026-03-17",
+              "cp_rate": -9.1021
+            },
+            {
+              "fund_code": "516830",
+              "fundsname": "示例基金3",
+              "post_date": "2026-03-17",
+              "cp_rate": -9.2795
+            }
+          ]
+        }
+      ],
+      "fund_date_conf": {
+        "fd_code": "008975",
+        "buy_confirm_date": 1,
+        "buy_query_date": 1,
+        "sale_confirm_date": 1,
+        "sale_query_date": 3,
+        "all_buy_days": 2,
+        "all_sale_days": 4
+      },
+      "show_service_rate_tip": false,
+      "pension_fund": false
+    },
+    "result_code": 0
+  }
+}

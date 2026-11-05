@@ -1,0 +1,71 @@
+{
+  "params": {
+    "fund_code": "008975",
+    "day": "all"
+  },
+  "body": {
+    "data": {
+      "fund_nav_growth": [
+        {
+          "date": "2020-03-18",
+          "nav": "1.0000",
+          "value": "0.0",
+          "than_value": "0.0",
+          "performance_value": "0.0"
+        },
+        {
+          "date": "2020-03-27",
+          "nav": "1.0146",
+          "percentage": "1.0256",
+          "value": "0.0146",
+          "than_value": "0.036931",
+          "performance_value": "0.035169"
+        },
+        {
+          "date": "2020-04-02",
+          "nav": "1.0191",
+          "percentage": "0.4435",
+          "value": "0.0191",
+          "than_value": "0.053211",
+          "performance_value": "0.050629"
+        },
+        {
+          "date": "2026-11-03",
+          "nav": "1.2203",
+          "percentage": "2.2455",
+          "value": "0.2203",
+          "than_value": "0.061753",
+          "performance_value": "0.067799"
+        },
+        {
+          "date": "2026-11-04",
+          "nav": "1.2048",
+          "percentage": "-1.2702",
+          "value": "0.2048",
+          "than_value": "0.046984",
+          "performance_value": "0.05369"
+        }
+      ],
+      "growth_lines": [
+        {
+          "line_name": "本产品",
+          "line_key": "value",
+          "line_color": "#FFA100"
+        },
+        {
+          "line_name": "中证消费50",
+          "line_key": "than_value",
+          "line_color": "#797C86"
+        }
+      ],
+      "tip": [
+        {
+          "title": "合成指数",
+          "content": "合成指数说明。"
+        }
+      ],
+      "performance_remark": "合成业绩说明。"
+    },
+    "result_code": 0
+  }
+}
