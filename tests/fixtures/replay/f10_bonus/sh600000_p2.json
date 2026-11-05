@@ -1,0 +1,34 @@
+{
+  "params": {
+    "symbol": "SH600000",
+    "page": "2"
+  },
+  "body": {
+    "data": {
+      "addtions": [
+        {
+          "actual_issue_vol": 1248316498.0,
+          "actual_issue_price": 11.88,
+          "listing_ad": 1504627200000,
+          "actual_rc_net_amt": 14816552046.0
+        },
+        {
+          "actual_issue_vol": 999510332.0,
+          "actual_issue_price": 16.36,
+          "listing_ad": 1458576000000,
+          "actual_rc_net_amt": 16351989024.0
+        },
+        {
+          "actual_issue_vol": 2869764833.0,
+          "actual_issue_price": 13.75,
+          "listing_ad": 1287158400000,
+          "actual_rc_net_amt": 39199464245.0
+        }
+      ],
+      "allots": [],
+      "items": []
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

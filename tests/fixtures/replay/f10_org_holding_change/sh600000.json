@@ -1,0 +1,37 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "chg_date": "2026三季报",
+          "institution_num": "74",
+          "chg": -1.37,
+          "held_ratio": 75.192,
+          "price": 9.48,
+          "timestamp": 1790697600000
+        },
+        {
+          "chg_date": "2026中报",
+          "institution_num": "521",
+          "chg": 1.14,
+          "held_ratio": 76.2369,
+          "price": 8.2216,
+          "timestamp": 1782748800000
+        },
+        {
+          "chg_date": "2026一季报",
+          "institution_num": "42",
+          "chg": -3.87,
+          "held_ratio": 75.3782,
+          "price": 9.7208,
+          "timestamp": 1774886400000
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

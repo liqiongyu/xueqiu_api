@@ -1,0 +1,74 @@
+{
+  "params": {
+    "symbol": "00700"
+  },
+  "body": {
+    "data": {
+      "shares": [
+        {
+          "chdate": 1791907200000,
+          "refcshgty": null,
+          "numpush": 9092644829.0,
+          "epshgch": null,
+          "prefsh": null
+        },
+        {
+          "chdate": 1791820800000,
+          "refcshgty": null,
+          "numpush": 9092620581.0,
+          "epshgch": null,
+          "prefsh": null
+        },
+        {
+          "chdate": 1791734400000,
+          "refcshgty": null,
+          "numpush": 9092612336.0,
+          "epshgch": null,
+          "prefsh": null
+        }
+      ],
+      "splits": [
+        {
+          "sdateprltr": 1401292800000,
+          "explain": "1股拆为5股",
+          "frlsdateinfo": 1395158400000,
+          "edateprltr": 1403193600000,
+          "tpastkcode": "02988",
+          "sdatetpatr": 1400083200000
+        }
+      ],
+      "holders": [
+        {
+          "shhname_ogdis": "示例股东甲",
+          "numrts": 2055231800.0,
+          "pctishg": 22.6043
+        },
+        {
+          "shhname_ogdis": "示例股东乙",
+          "numrts": 804859700.0,
+          "pctishg": 8.8522
+        }
+      ],
+      "repurchase": [
+        {
+          "numrpdsh": 240000.0,
+          "avg": 418.27,
+          "rpdate": 1791993600000
+        },
+        {
+          "numrpdsh": 237000.0,
+          "avg": 422.91,
+          "rpdate": 1791907200000
+        },
+        {
+          "numrpdsh": 237000.0,
+          "avg": 422.88,
+          "rpdate": 1791820800000
+        }
+      ],
+      "currency": "HKD"
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
