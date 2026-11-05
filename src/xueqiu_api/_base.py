@@ -28,6 +28,7 @@ from ._core import (
     log,
     unwrap,
 )
+from ._pages import Page, finish
 from ._session import TOKEN_ENV, Session, SessionStore, default_session_path, parse_credentials
 from .endpoints import REGISTRY
 from .errors import (
@@ -152,7 +153,10 @@ class ClientBase:
     def _finish(self, spec: Endpoint[P, R], params: P, call: Call, body: Any) -> R:
         try:
             payload = unwrap(spec.envelope, body, may_lack_data=spec.not_found is not None)
-            return spec.parse(payload, params)
+            result = spec.parse(payload, params)
+            if spec.pagination is not None and isinstance(result, Page):
+                return cast(R, finish(spec.pagination, cast(Page[Any], result), call.params))
+            return result
         except SymbolNotFound as exc:
             raise SymbolNotFound(exc.message, endpoint=spec.name, params=call.params) from None
         except (ValueError, TypeError) as exc:

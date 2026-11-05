@@ -13,14 +13,14 @@ from importlib import metadata
 from typing import Any, cast, get_args, get_origin, get_type_hints
 
 import pytest
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 import xueqiu_api
 from xueqiu_api import REGISTRY, AsyncClient, Client
 from xueqiu_api import endpoints as endpoint_package
 from xueqiu_api._model import USER_KEY, UpstreamModel
 from xueqiu_api._replay import ReplayTransport
-from xueqiu_api.registry import CATEGORY_TITLES, Auth, Category, Endpoint, Freshness
+from xueqiu_api.registry import CATEGORY_TITLES, Auth, Category, Endpoint, Freshness, Pagination
 from xueqiu_api.sites import SITES
 from xueqiu_api.symbols import SymbolParams
 
@@ -35,6 +35,9 @@ NOT_A_SECURITY = {"ind_code"}
 """Names that match ``CODE_LIKE`` but select something else: an industry."""
 UNPREFIXED = {"kline", "quotec", "batch_quote", "suggest_stock"}
 """Names from before the rule that a name starts with its category."""
+SHORT_PAGE_ENDS = {"capital_block_trades"}
+"""Endpoints with a measured page size cap, so that a short page ends them: full pages 1 and 2
+at size=100 for capital_block_trades, measured 2026-11-05."""
 
 
 def result_fields(hint: Any, seen: set[Any]) -> Iterator[str]:
@@ -82,6 +85,27 @@ def lint_spec(module: str, spec: Endpoint[Any, Any]) -> list[str]:
     for name in result_fields(returns, set()):
         if USER_KEY.match(name):
             problems.append(f"result field {name} names a user")
+    return problems + lint_pagination(spec)
+
+
+def lint_pagination(spec: Endpoint[Any, Any]) -> list[str]:
+    """What is wrong with how one endpoint declares its pages."""
+    problems: list[str] = []
+    rule = spec.pagination
+    paged = rule is not None and rule.style == "page"
+    if ("page" in spec.params.model_fields) != paged:
+        problems.append(f"{spec.name} needs both a page param and style='page', or neither")
+    if rule is None:
+        return problems
+    if rule.end == "short" and spec.name not in SHORT_PAGE_ENDS:
+        problems.append(f"{spec.name} ends on a short page without a measured page size cap")
+    field = spec.params.model_fields.get("page_size")
+    if field is not None:
+        schema = spec.params.model_json_schema()["properties"]["page_size"]
+        if not schema.get("maximum") == rule.size_cap == spec.agent.upstream_cap:
+            problems.append(f"{spec.name} page_size le, size_cap and upstream_cap differ")
+        if rule.size_cap is not None and field.default != min(50, rule.size_cap):
+            problems.append(f"{spec.name} page_size must default to min(50, size_cap)")
     return problems
 
 
@@ -191,6 +215,50 @@ def test_the_lint_rejects_a_bad_endpoint(
     assert any(problem in line for line in lint_spec(module, spec))
 
 
+class _PageParams(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
+
+    page: int = Field(default=1, ge=1)
+    """Page number."""
+    page_size: int = Field(default=50, ge=1, le=100)
+    """Rows per page."""
+
+
+class _PageLeParams(_PageParams):
+    page_size: int = Field(default=50, ge=1, le=200)
+    """Rows per page, with another cap."""
+
+
+class _PageDefaultParams(_PageParams):
+    page_size: int = Field(default=100, ge=1, le=100)
+    """Rows per page, with another default."""
+
+
+def _paged(rule: Pagination, params: type[BaseModel] = _PageParams) -> Endpoint[Any, Any]:
+    agent = replace(synthetic_endpoint().agent, upstream_cap=100)
+    return synthetic_endpoint(params=params, agent=agent, pagination=rule)
+
+
+def test_the_lint_accepts_a_page_endpoint() -> None:
+    assert lint_pagination(_paged(Pagination(style="page", size_cap=100))) == []
+
+
+@pytest.mark.parametrize(
+    ("spec", "problem"),
+    [
+        (_paged(Pagination(style="latest", size_cap=100)), "both a page param"),
+        (synthetic_endpoint(pagination=Pagination(style="page")), "both a page param"),
+        (_paged(Pagination(style="page", size_cap=50)), "differ"),
+        (_paged(Pagination(style="page", size_cap=100), _PageLeParams), "differ"),
+        (_paged(Pagination(style="page", size_cap=100), _PageDefaultParams), "min(50, size_cap)"),
+        (_paged(Pagination(style="page", end="short", size_cap=100)), "short page"),
+    ],
+    ids=["style", "param", "cap", "le", "default", "short"],
+)
+def test_the_lint_rejects_bad_pagination(spec: Endpoint[Any, Any], problem: str) -> None:
+    assert any(problem in line for line in lint_pagination(spec))
+
+
 def test_the_lint_rejects_a_section_without_a_group() -> None:
     agent = replace(synthetic_endpoint().agent, section="synthetic")
 
@@ -229,6 +297,7 @@ def test_endpoint_spec_is_complete(name: str) -> None:
     assert agent.mcp_tool is None or re.fullmatch(r"xq_[a-z0-9_]+", agent.mcp_tool)
     assert agent.precision >= 0
     assert not set(agent.free_text) & set(agent.default_fields)
+    assert not set(agent.free_text) & set(agent.labels)
     assert agent.examples
     for example in agent.examples:
         spec.validate(example)
@@ -286,4 +355,4 @@ def test_every_endpoint_has_matching_client_methods(name: str) -> None:
 def test_endpoint_methods_are_exactly_the_registry() -> None:
     public = {name for name in vars(Client) if not name.startswith("_")}
 
-    assert public - {"call", "request", "close"} == set(REGISTRY)
+    assert public - {"call", "request", "close", "kline_history"} == set(REGISTRY)

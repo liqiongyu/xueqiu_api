@@ -245,6 +245,40 @@ class Harness:
     def request(self, **params: Any) -> Any:
         return self.run("request", **params)
 
+    def walk(
+        self, spec: Endpoint[Any, Any], *, stop_after: int | None = None, **params: Any
+    ) -> tuple[list[Any], Exception | None]:
+        """Consume the pages of ``spec`` and return what was delivered and the first error.
+
+        ``stop_after`` breaks out of the loop after that many pages; ``max_pages`` and
+        ``max_items`` go along with ``params``.
+        """
+        limits = {key: params.pop(key) for key in ("max_pages", "max_items") if key in params}
+        pages: list[Any] = []
+        client = self.client
+        if isinstance(client, Client):
+            try:
+                for page in client._pages(spec, params, **limits):  # pyright: ignore[reportPrivateUsage]
+                    pages.append(page)
+                    if len(pages) == stop_after:
+                        break
+            except Exception as exc:
+                return pages, exc
+            return pages, None
+
+        async def drain() -> Exception | None:
+            try:
+                async for page in client._pages(spec, params, **limits):  # pyright: ignore[reportPrivateUsage]
+                    pages.append(page)
+                    if len(pages) == stop_after:
+                        break
+            except Exception as exc:
+                return exc
+            return None
+
+        assert self._runner is not None
+        return pages, self._runner.run(drain())
+
     def concurrently(
         self, calls: Sequence[tuple[str, tuple[Any, ...], Mapping[str, Any]]]
     ) -> list[Any]:

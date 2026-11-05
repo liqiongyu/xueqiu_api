@@ -383,11 +383,13 @@ class Toolbox:
             options["fields"] = list(fields)
         tool = spec.agent.mcp_tool
 
-        def call(params: Mapping[str, Any]) -> str:
-            return f"xq_call {compact_json({'endpoint': spec.name, 'params': params, **options})}"
+        def call(params: Mapping[str, Any], offset: int) -> str:
+            more = {**options, "offset": offset} if offset else options
+            return f"xq_call {compact_json({'endpoint': spec.name, 'params': params, **more})}"
 
-        def dedicated(params: Mapping[str, Any]) -> str:
-            return f"{tool} {compact_json({**_tool_arguments(params), **options})}"
+        def dedicated(params: Mapping[str, Any], offset: int) -> str:
+            more = {**options, "offset": offset} if offset else options
+            return f"{tool} {compact_json({**_tool_arguments(params), **more})}"
 
         if "xq_call" in self.tools:
             return call

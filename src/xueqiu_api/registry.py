@@ -183,6 +183,7 @@ class Endpoint(Generic[P, R]):
                 params={key: value for key, value in params.items() if value is not None},
             ) from None
         self._check_market(validated)
+        self._check_total(validated)
         return validated
 
     def _check_market(self, validated: P) -> None:
@@ -199,6 +200,23 @@ class Endpoint(Generic[P, R]):
                 field="symbol",
                 valid_values=self.markets,
                 hint=f"Use a symbol of these markets: {allowed}.",
+            )
+
+    def _check_total(self, validated: P) -> None:
+        """Reject a page that starts past the most rows the upstream serves across all pages."""
+        rule = self.pagination
+        if rule is None or rule.total_cap is None:
+            return
+        page: int = getattr(validated, "page", 1)
+        page_size: int = getattr(validated, "page_size", rule.size_cap or 0)
+        if (page - 1) * page_size >= rule.total_cap:
+            raise InvalidParams(
+                f"{self.name} serves at most {rule.total_cap} rows; page {page} of {page_size} "
+                "starts after them",
+                endpoint=self.name,
+                params=validated.model_dump(mode="json", exclude_none=True),
+                field="page",
+                hint=rule.cap_hint,
             )
 
 

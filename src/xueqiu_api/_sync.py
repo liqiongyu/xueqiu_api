@@ -4,9 +4,9 @@ import contextlib
 import os
 import threading
 import time
-from collections.abc import Callable, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Self, TypeVar
 
 import httpx2
@@ -25,6 +25,7 @@ from ._core import (
     request_headers,
 )
 from ._finance import Financials, ReportType
+from ._pages import PageT, PageWalk, start_walk
 from .endpoints.batch_quote import ENDPOINT as BATCH_QUOTE
 from .endpoints.f10_company import ENDPOINT as F10_COMPANY
 from .endpoints.f10_company import Company
@@ -33,7 +34,7 @@ from .endpoints.finance_cash_flow import ENDPOINT as FINANCE_CASH_FLOW
 from .endpoints.finance_income import ENDPOINT as FINANCE_INCOME
 from .endpoints.finance_indicator import ENDPOINT as FINANCE_INDICATOR
 from .endpoints.kline import ENDPOINT as KLINE
-from .endpoints.kline import Adjust, Kline, Period
+from .endpoints.kline import Adjust, BarWalk, Kline, Period
 from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
 from .endpoints.quote_detail import QuoteDetail
 from .endpoints.quotec import ENDPOINT as QUOTEC
@@ -133,6 +134,23 @@ class Client(ClientBase):
             },
         )
 
+    def kline_history(
+        self,
+        symbol: str,
+        *,
+        period: Period = "day",
+        adjust: Adjust = "before",
+        begin: date | None = None,
+        end: date | None = None,
+    ) -> Kline:
+        """Every bar of one symbol in a range, oldest first, in as many requests as that takes."""
+        walk = BarWalk(
+            symbol, period=period, adjust=adjust, begin=begin, end=end, now=datetime.now(UTC)
+        )
+        while walk.params is not None:
+            walk.accept(self._call(KLINE, walk.params))
+        return walk.result()
+
     def suggest_stock(self, *, query: str) -> list[StockSuggestion]:
         """Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``."""
         return self._call(SUGGEST_STOCK, {"query": query})
@@ -225,6 +243,21 @@ class Client(ClientBase):
         validated = spec.validate(params)
         call = self._endpoint_call(spec, validated)
         return self._finish(spec, validated, call, self._run(call, deadline))
+
+    def _pages(
+        self,
+        spec: Endpoint[P, PageT],
+        params: Mapping[str, Any],
+        *,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> Iterator[PageT]:
+        """Pages one at a time, each one call; bad params raise here, before any request."""
+        return self._walk(spec, start_walk(spec, params, max_pages, max_items))
+
+    def _walk(self, spec: Endpoint[P, PageT], walk: PageWalk) -> Iterator[PageT]:
+        while walk.params is not None:
+            yield walk.accept(self._call(spec, walk.params))
 
     def _run(self, call: Call, deadline: float) -> Any:
         attempt, refreshed, last = 0, False, None

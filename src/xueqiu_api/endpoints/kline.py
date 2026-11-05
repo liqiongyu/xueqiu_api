@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from .._time import from_ms, to_ms
+from ..errors import UpstreamChanged
 from ..registry import AgentInfo, Endpoint, Pagination
 from ..symbols import SymbolCode, normalize_symbol
 
@@ -21,6 +22,8 @@ Adjust = Literal["before", "after", "normal"]
 DEFAULT_COUNT = 100
 MAX_COUNT = 10_000
 """Largest count sent upstream; one request returned all 8756 daily bars of SH000001."""
+HISTORY_RUNAWAY_PAGES = 20
+"""``kline_history`` fails past this many requests for one symbol."""
 
 BarDate = Annotated[date, Field(ge=date(1900, 1, 1), le=date(2100, 12, 31))]
 """A range date, 1900-01-01 to 2100-12-31."""
@@ -166,6 +169,9 @@ def _table(data: dict[str, Any]) -> tuple[list[str], list[list[Any]]]:
     rows: Any = data.get("item")
     if not isinstance(names, list) or not isinstance(rows, list):
         raise ValueError("kline data needs column and item lists")
+    if not names and not rows:
+        # Minute bars older than the upstream keeps, measured 2026-11-05: no columns, no rows.
+        return [], []
     checked_names = [name for name in cast(list[Any], names) if isinstance(name, str)]
     if len(checked_names) != len(cast(list[Any], names)) or "timestamp" not in checked_names:
         raise ValueError("kline column must be strings including timestamp")
@@ -182,6 +188,93 @@ def _table(data: dict[str, Any]) -> tuple[list[str], list[list[Any]]]:
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def older_range(moment: datetime, period: Period) -> dict[str, Any]:
+    """The range params ending just before the bar at ``moment``: ``end`` the day before it, or
+    for minute bars ``before`` its time."""
+    if period.endswith("m"):
+        return {"end": None, "before": moment}
+    return {"end": moment.date() - timedelta(days=1), "before": None}
+
+
+class BarWalk:
+    """All bars of one symbol in a range, walking back from ``end``.
+
+    One request is enough unless it comes back full. Without ``begin`` a request asks for
+    ``MAX_COUNT`` bars; with it, for as many as the dates can hold, so a daily update does not
+    fetch the whole history.
+    """
+
+    def __init__(
+        self,
+        symbol: str,
+        *,
+        period: Period,
+        adjust: Adjust,
+        begin: date | None,
+        end: date | None,
+        now: datetime,
+    ) -> None:
+        checked = ENDPOINT.validate(
+            {"symbol": symbol, "period": period, "adjust": adjust, "begin": begin, "end": end}
+        )
+        self._zone = normalize_symbol(checked.symbol).timezone
+        self._period: Period = period
+        self._begin = begin
+        self._fetched = 0
+        self._chunks: list[Kline] = []
+        self._count = MAX_COUNT
+        if begin is not None:
+            until = end or now.astimezone(self._zone).date()
+            self._count = _bars_upper_bound(begin, until, period)
+        self.params: dict[str, Any] | None = {
+            "symbol": checked.symbol,
+            "period": period,
+            "adjust": adjust,
+            "end": end,
+            "count": self._count,
+        }
+
+    def accept(self, kline: Kline) -> None:
+        """Take the bars of the request sent; ``params`` becomes the next one, or None."""
+        self._fetched += 1
+        self._chunks.append(kline)
+        # A page one short may still be a full one, if the parse dropped a bar at the boundary.
+        if (
+            not kline
+            or len(kline) < self._count - 1
+            or (self._begin is not None and kline.timestamps[0].date() <= self._begin)
+        ):
+            self.params = None
+        elif self._fetched >= HISTORY_RUNAWAY_PAGES:
+            raise UpstreamChanged(
+                f"kline did not end within {HISTORY_RUNAWAY_PAGES} requests",
+                endpoint="kline",
+                params={"symbol": kline.symbol, "period": self._period},
+            )
+        else:
+            older = older_range(kline.timestamps[0], self._period)
+            self.params = {**(self.params or {}), **older}
+
+    def result(self) -> Kline:
+        """The bars fetched, without repeats and oldest first, from ``begin`` on."""
+        names = list(dict.fromkeys(name for chunk in self._chunks for name in chunk.columns))
+        floor = None if self._begin is None else datetime.combine(self._begin, time(), self._zone)
+        rows: dict[datetime, list[float | int | None]] = {}
+        for chunk in self._chunks:
+            for index, stamp in enumerate(chunk.timestamps):
+                if floor is None or stamp >= floor:
+                    rows.setdefault(
+                        stamp,
+                        [chunk.columns[n][index] if n in chunk.columns else None for n in names],
+                    )
+        ordered = sorted(rows)
+        columns = {
+            name: tuple(rows[stamp][position] for stamp in ordered)
+            for position, name in enumerate(names)
+        }
+        return replace(self._chunks[0], timestamps=tuple(ordered), columns=columns)
 
 
 ENDPOINT = Endpoint(

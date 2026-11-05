@@ -4,6 +4,10 @@ A result renders as ``# `` header lines (endpoint and normalized params, stats, 
 freshness, notes), then an RFC 4180 CSV body with ``\\n`` line ends, or ``key: value`` lines for
 a single record, and a last ``# next:`` line holding a copyable call or ``none``. The text never
 exceeds the character budget: rows are cut at a row boundary and the ``# next:`` line says so.
+
+``render`` takes ``Kline``, ``Financials``, ``Page``, lists, single models and anything of the
+shape of ``Series`` or ``Sectioned``, so a new endpoint needs no branch here. ``Endpoint.order``
+decides which rows a cut keeps: the latest of ``oldest_first`` rows, the first of any other.
 """
 
 from __future__ import annotations
@@ -16,20 +20,23 @@ import json
 import math
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import date, datetime, timedelta
-from typing import Any, cast
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Any, Protocol, cast, runtime_checkable
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 
 from ._finance import Financials, LineItem, ReportPeriod
-from .endpoints.kline import DEFAULT_COUNT, Kline, KlineParams
+from ._pages import Page
+from .endpoints.kline import DEFAULT_COUNT, Kline, KlineParams, older_range
 from .errors import InvalidParams, XueqiuError
 from .registry import Endpoint
 from .symbols import normalize_symbol
 
 ERROR_CHARS = 1500
 FREE_TEXT_CHARS = 400
+LABEL_CHARS = 40
 FENCE_BEGIN = "# untrusted upstream text begin"
 FENCE_END = "# untrusted upstream text end"
 DEFAULT_ZONE = ZoneInfo("Asia/Shanghai")
@@ -59,10 +66,13 @@ ERROR_KEYS = (
     "endpoint",
 )
 
-NextCall = Callable[[Mapping[str, Any]], str]
-"""Formats a call of the same endpoint with new params, for the ``# next:`` line."""
-Pager = Callable[[int, int], dict[str, Any] | None]
-"""Params of the next page, given the slice of rows shown, or None."""
+BATCH_PARAMS = ("symbols", "cube_symbols")
+"""Params naming several codes, whose result has one row per code found."""
+
+NextCall = Callable[[Mapping[str, Any], int], str]
+"""Formats a call of the same endpoint with new params and offset, for the ``# next:`` line."""
+Pager = Callable[[int, int], tuple[Mapping[str, Any], int] | None]
+"""Params and offset of the next call, given the slice of rows shown, or None."""
 
 _EMPTY = (
     "no rows. Likely causes: a wrong market prefix (indexes need SH or SZ, such as SH000001), "
@@ -81,6 +91,63 @@ _MISSING = "check the market prefix (indexes need SH or SZ, such as SH000001)."
 _TAG = re.compile(r"<[^>]*>")
 
 
+@runtime_checkable
+class Sectioned(Protocol):
+    """A result of named tables, in order.
+
+    ``header()`` is a mapping of short values for the ``# info:`` line; it may be empty and holds
+    no prose. Rows are models or mappings. The tables render as one run of rows that ``limit``
+    and ``offset`` apply to, with ``# section: <name>`` before each when more than one has rows.
+    A table's columns are the requested ones it has, or by default the default fields it has a
+    value for. A ``Page`` may have this shape too, and then rows come from ``sections()``.
+    """
+
+    def header(self) -> Mapping[str, Any]: ...
+
+    def sections(self) -> Mapping[str, Sequence[BaseModel | Mapping[str, Any]]]: ...
+
+    def __len__(self) -> int: ...
+
+
+@runtime_checkable
+class Series(Protocol):
+    """Rows in columns, one per point in time, oldest first; declare ``order="oldest_first"``.
+
+    ``index()`` gives the name and the values of the time column, ``columns`` the others. The
+    ``# stats:`` line covers every row, whichever are shown: the range, and per numeric column
+    the last value and the extremes with when they happened. ``header()`` is as in ``Sectioned``.
+    """
+
+    @property
+    def columns(self) -> Mapping[str, Sequence[Any]]: ...
+
+    def index(self) -> tuple[str, Sequence[date | datetime]]: ...
+
+    def header(self) -> Mapping[str, Any]: ...
+
+    def __len__(self) -> int: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _Table:
+    """The rows ``start`` to ``stop`` of a result, with the columns they render."""
+
+    name: str
+    start: int
+    stop: int
+    columns: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _Frame:
+    """The lines around the rows ``start`` to ``stop``, printed when one of them is shown."""
+
+    start: int
+    stop: int
+    before: tuple[str, ...]
+    after: tuple[str, ...]
+
+
 def render(
     spec: Endpoint[Any, Any],
     params: BaseModel,
@@ -91,23 +158,39 @@ def render(
     max_chars: int,
     fetched_at: datetime,
     next_call: NextCall | None,
+    offset: int = 0,
 ) -> str:
     """Render one endpoint result; raise ``InvalidParams`` for fields the result does not have.
 
-    ``fields`` defaults to the registry's ``default_fields``. At most ``limit`` rows are shown:
-    the latest bars of a kline, the first rows of anything else. A line item of a financial
-    statement renders as two columns, ``<item>`` and ``<item>.yoy``.
+    ``fields`` defaults to the registry's ``default_fields``. At most ``limit`` rows are shown,
+    after skipping the ``offset`` rows already shown by earlier calls for the same params:
+    counted back from the latest row where a cut keeps the latest, from the first row otherwise.
+    A ``Kline``, ``Financials``, a single record and a result for several codes have a ``# next:``
+    of their own and take no offset. A line item of a financial statement renders as two columns,
+    ``<item>`` and ``<item>.yoy``.
     """
     agent = spec.agent
     dump = params.model_dump(mode="json", exclude_none=True)
+    batch = next((name for name in BATCH_PARAMS if name in dump), None)
+    sectioned = isinstance(result, Sectioned)
+    record = isinstance(result, BaseModel) and not sectioned
+    if offset and (isinstance(result, Kline | Financials) or record or batch):
+        raise InvalidParams(
+            f"{spec.name} results take no offset",
+            endpoint=spec.name,
+            field="offset",
+            hint="Follow the # next line.",
+        )
+    keep_last = spec.order == "oldest_first"
     head = [f"# {spec.name} {compact_json(dump)}"]
     notes: list[str] = []
-    keep_last, pager = False, _no_pager
+    pager: Pager = _no_pager
+    named: list[tuple[str, list[dict[str, Any]]]] = []
     if isinstance(result, Kline):
         rows = _bar_rows(result)
         head.append(stats_line(kline_stats(result), agent.precision))
         bar_params = cast(KlineParams, params)
-        keep_last, pager = True, _bar_pager(bar_params, result)
+        pager = _bar_pager(bar_params, result)
         if _starts_late(bar_params, result):
             notes.append(
                 f"the first bar is on {result.timestamps[0].date()}, after begin "
@@ -116,20 +199,39 @@ def render(
     elif isinstance(result, Financials):
         rows = [_period_row(period) for period in result.periods]
         head.append(f"# statement: name={cell(result.name, 0)} currency={cell(result.currency, 0)}")
+    elif isinstance(result, Series):
+        rows = _series_rows(result)
+        head += _info_lines(result.header(), agent.precision)
+        head.append(stats_line(series_stats(result), agent.precision))
+    elif isinstance(result, Sectioned):
+        named = [
+            (name, [_row_mapping(row) for row in table])
+            for name, table in result.sections().items()
+        ]
+        rows = [row for _, table in named for row in table]
+        head += _info_lines(result.header(), agent.precision)
+        empty = [name for name, table in named if not table]
+        if rows and empty:
+            notes.append(f"empty sections: {', '.join(empty)}")
+    elif isinstance(result, Page):
+        rows = [_row_mapping(item) for item in cast(Page[Any], result)]
     elif isinstance(result, list):
         rows = [item.model_dump() for item in cast(list[BaseModel], result)]
-        if "symbols" in dump:
-            pager = _symbols_pager(dump, rows)
+        if batch:
+            pager = _symbols_pager(dump, rows, batch)
             returned = {row.get("symbol") for row in rows}
-            missing = [
-                symbol for symbol in dict.fromkeys(dump["symbols"]) if symbol not in returned
-            ]
+            missing = [code for code in dict.fromkeys(dump[batch]) if code not in returned]
             if rows and missing:
-                notes.append(f"no data for {', '.join(missing)}; {_MISSING}")
-    elif isinstance(result, BaseModel):
-        rows = [result.model_dump()]
+                advice = f"; {_MISSING}" if batch == "symbols" else ""
+                notes.append(f"no data for {', '.join(missing)}{advice}")
+    elif record:
+        rows = [cast(BaseModel, result).model_dump()]
     else:
         raise TypeError(f"cannot render a {type(result).__name__} result")
+    if isinstance(result, Page):
+        page = cast(Page[Any], result)
+        stats = {"page": page.page, "page_size": page.page_size, "total": page.total}
+        head.append(stats_line({**stats, "last_page": page.last_page}, 0, tag="page"))
     zone = _zone(params)
     head.append(
         f"# meta: fetched_at={fetched_at.astimezone(zone).isoformat(timespec='seconds')} "
@@ -160,29 +262,65 @@ def render(
         notes.append(_EMPTY_BARS if isinstance(result, Kline) else _EMPTY)
     head += [f"# note: {note}" for note in notes]
     free = [name for name in wanted if name in agent.free_text]
-    if isinstance(result, BaseModel):
-        return _record(head, rows[0], wanted, free, agent.precision, max_chars)
+    labels = [name for name in wanted if name in agent.labels]
+    if record:
+        return _record(head, rows[0], wanted, free, labels, agent.precision, max_chars)
+    if sectioned:
+        rows, tables = _lay_out(named, wanted, explicit=bool(fields))
+    else:
+        tables = [_Table("", 0, len(rows), tuple(wanted))]
+    if isinstance(result, Series | Sectioned | Page):
+        following = result.next_params if isinstance(result, Page) else None
+        pager = _row_pager(dump, len(rows), keep_last, following)
     pairs = {name for name in wanted if any(isinstance(row.get(name), LineItem) for row in rows)}
-    shown = min(limit, len(rows))
-    start = len(rows) - shown if keep_last else 0
-    lines = [
-        _row_line(row, wanted, pairs, free, agent.precision) for row in rows[start : start + shown]
-    ]
-    columns = [
-        column
-        for name in wanted
-        for column in ((name, f"{name}.yoy") if name in pairs else (name,))
-    ]
-    pre, post = list(head), []
-    if lines:
-        pre += [FENCE_BEGIN, csv_line(columns)] if free else [csv_line(columns)]
-        post = [FENCE_END] if free else []
+    if keep_last:
+        stop = max(len(rows) - offset, 0)
+        start = max(stop - limit, 0)
+    else:
+        start = min(offset, len(rows))
+        stop = min(start + limit, len(rows))
+    lines: list[str] = []
+    frames: list[_Frame] = []
+    fenced = {*free, *labels}
+    pre, post = list(head), list[str]()
+    for table in tables:
+        low, high = max(table.start, start), min(table.stop, stop)
+        if low >= high:
+            continue
+        columns = [
+            column
+            for name in table.columns
+            for column in ((name, f"{name}.yoy") if name in pairs else (name,))
+        ]
+        fence = fenced.intersection(table.columns)
+        before = (FENCE_BEGIN, csv_line(columns)) if fence else (csv_line(columns),)
+        after = (FENCE_END,) if fence else ()
+        if len(tables) > 1:
+            before = (f"# section: {table.name}", *before)
+            frames.append(_Frame(len(lines), len(lines) + high - low, before, after))
+        else:
+            pre.extend(before)
+            post.extend(after)
+        lines += [
+            _row_line(rows[index], table.columns, pairs, free, labels, agent.precision)
+            for index in range(low, high)
+        ]
 
-    def footer(first: int, stop: int) -> str | None:
-        page = pager(start + first, start + stop) if stop > first else None
-        return None if page is None or next_call is None else next_call(page)
+    def footer(first: int, last: int) -> str | None:
+        step = pager(start + first, start + last) if limit else None
+        return None if step is None or next_call is None else next_call(*step)
 
-    return fit(pre, lines, footer=footer, max_chars=max_chars, keep_last=keep_last, post=post)
+    if not lines:
+        return "\n".join([*pre, f"# next: {footer(0, 0) or 'none'}"])
+    return fit(
+        pre,
+        lines,
+        footer=footer,
+        max_chars=max_chars,
+        keep_last=keep_last,
+        post=post,
+        frames=frames,
+    )
 
 
 def render_bar_stats(
@@ -235,11 +373,13 @@ def fit(
     max_chars: int,
     keep_last: bool = False,
     post: Sequence[str] = (),
+    frames: Sequence[_Frame] = (),
 ) -> str:
     """Join ``head``, as many ``rows`` as fit in ``max_chars``, ``post`` and the ``# next:`` line.
 
     ``footer(first, stop)`` gets the slice of ``rows`` shown and returns the next call or None.
-    Rows are dropped from the end, or from the start with ``keep_last``.
+    Rows are dropped from the end, or from the start with ``keep_last``. ``frames`` wrap slices
+    of ``rows`` in lines of their own, such as the title and columns of a table.
     """
     fixed = sum(len(line) + 1 for line in (*head, *post))
     sizes = [len(row) + 1 for row in rows]
@@ -248,12 +388,19 @@ def fit(
         first = len(rows) - shown if keep_last else 0
         if shown < len(rows):
             total -= sizes[first - 1] if keep_last else sizes[shown]
-        call = footer(first, first + shown) if shown else None
+        stop = first + shown
+        framing = sum(
+            len(line) + 1
+            for frame in frames
+            if frame.start < stop and first < frame.stop
+            for line in (*frame.before, *frame.after)
+        )
+        call = footer(first, stop) if shown else None
         line = f"# next: {call or 'none'}"
         if shown < len(rows):
             line += f"; truncated to {shown} of {len(rows)} rows by the {max_chars} character limit"
-        if fixed + total + len(line) <= max_chars or shown == 0:
-            return "\n".join([*head, *rows[first : first + shown], *post, line])
+        if fixed + total + framing + len(line) <= max_chars or shown == 0:
+            return "\n".join([*head, *_framed(rows, frames, first, stop), *post, line])
     raise AssertionError("unreachable")
 
 
@@ -291,9 +438,28 @@ def kline_stats(kline: Kline) -> dict[str, Any]:
     return stats
 
 
-def stats_line(stats: Mapping[str, Any], precision: int) -> str:
+def series_stats(series: Series) -> dict[str, Any]:
+    """Stats over every row of a series: the range of its index and, per numeric column, the
+    last value and the extremes with when they happened; ties go to the earliest."""
+    name, index = series.index()
+    stats: dict[str, Any] = {"points": len(index)}
+    if index:
+        stats[f"first_{name}"], stats[f"last_{name}"] = index[0], index[-1]
+    for column, values in series.columns.items():
+        present = _present(values)
+        if not present:
+            continue
+        stats[f"{column}_last"] = present[-1][1]
+        for label, pick in (("max", max), ("min", min)):
+            where, value = pick(present, key=lambda pair: pair[1])
+            stats[f"{column}_{label}"] = value
+            stats[f"{column}_{label}_{name}"] = index[where]
+    return stats
+
+
+def stats_line(stats: Mapping[str, Any], precision: int, tag: str = "stats") -> str:
     pairs = (f"{key}={cell(value, precision)}" for key, value in stats.items() if value is not None)
-    return f"# stats: {' '.join(pairs)}"
+    return f"# {tag}: {' '.join(pairs)}"
 
 
 def bar_time(kline: Kline, moment: datetime) -> str:
@@ -363,6 +529,12 @@ def clean_text(value: object) -> str:
     return text if len(text) <= FREE_TEXT_CHARS else text[: FREE_TEXT_CHARS - 1] + "…"
 
 
+def label_text(value: object) -> str:
+    """Short text written by an owner, cleaned like prose and cut to ``LABEL_CHARS``."""
+    text = clean_text(value)
+    return text if len(text) <= LABEL_CHARS else text[: LABEL_CHARS - 1] + "…"
+
+
 def csv_line(cells: Sequence[str]) -> str:
     buffer = io.StringIO()
     csv.writer(buffer, lineterminator="\n").writerow(cells)
@@ -378,12 +550,23 @@ def _record(
     row: Mapping[str, Any],
     wanted: Sequence[str],
     free: Sequence[str],
+    labels: Sequence[str],
     precision: int,
     max_chars: int,
 ) -> str:
-    lines = [f"{name}: {cell(row.get(name), precision)}" for name in wanted if name not in free]
-    if free:
-        prose = [f"{name}: {clean_text(row.get(name) or '')}" for name in free]
+    lines = [
+        f"{name}: {cell(row.get(name), precision)}"
+        for name in wanted
+        if name not in free and name not in labels
+    ]
+    if free or labels:
+        prose = [
+            f"{name}: {clean_text(row.get(name) or '')}"
+            if name in free
+            else f"{name}: {label_text(row.get(name) or '')}"
+            for name in wanted
+            if name in free or name in labels
+        ]
         lines.append("\n".join([FENCE_BEGIN, *prose, FENCE_END]))
     return fit(head, lines, footer=lambda first, stop: None, max_chars=max_chars)
 
@@ -393,6 +576,7 @@ def _row_line(
     wanted: Sequence[str],
     pairs: set[str],
     free: Sequence[str],
+    labels: Sequence[str],
     precision: int,
 ) -> str:
     cells: list[str] = []
@@ -403,9 +587,60 @@ def _row_line(
             cells += [cell(item.value, precision), cell(item.yoy, precision)]
         elif name in free:
             cells.append("" if value is None else clean_text(value))
+        elif name in labels:
+            cells.append("" if value is None else label_text(value))
         else:
             cells.append(cell(value, precision))
     return csv_line(cells)
+
+
+def _framed(rows: Sequence[str], frames: Sequence[_Frame], first: int, stop: int) -> list[str]:
+    """The lines of the rows ``first`` to ``stop``, with the frames of those shown."""
+    if not frames:
+        return list(rows[first:stop])
+    lines: list[str] = []
+    for frame in frames:
+        shown = rows[max(frame.start, first) : min(frame.stop, stop)]
+        if shown:
+            lines += [*frame.before, *shown, *frame.after]
+    return lines
+
+
+def _lay_out(
+    named: Sequence[tuple[str, list[dict[str, Any]]]], wanted: Sequence[str], *, explicit: bool
+) -> tuple[list[dict[str, Any]], list[_Table]]:
+    """One run of rows and where each table sits in it; a table with no column to show is left
+    out. A column the caller asked for stays as long as the table has it, a default one as long
+    as the table has a value for it."""
+    rows: list[dict[str, Any]] = []
+    tables: list[_Table] = []
+    for name, table in named:
+        columns = tuple(
+            column
+            for column in wanted
+            if any((column in row) if explicit else row.get(column) is not None for row in table)
+        )
+        if columns:
+            tables.append(_Table(name, len(rows), len(rows) + len(table), columns))
+            rows += table
+    return rows, tables
+
+
+def _info_lines(header: Mapping[str, Any], precision: int) -> list[str]:
+    return [stats_line(header, precision, tag="info")] if header else []
+
+
+def _row_mapping(row: BaseModel | Mapping[str, Any]) -> dict[str, Any]:
+    return row.model_dump() if isinstance(row, BaseModel) else dict(row)
+
+
+def _series_rows(series: Series) -> list[dict[str, Any]]:
+    name, index = series.index()
+    columns = series.columns
+    return [
+        {name: moment, **{column: values[row] for column, values in columns.items()}}
+        for row, moment in enumerate(index)
+    ]
 
 
 def _bar_rows(kline: Kline) -> list[dict[str, Any]]:
@@ -425,12 +660,32 @@ def _period_row(period: ReportPeriod) -> dict[str, Any]:
     }
 
 
-def _present(column: Sequence[float | int | None] | None) -> list[tuple[int, float]]:
-    return [(index, float(value)) for index, value in enumerate(column or ()) if value is not None]
+def _present(column: Sequence[Any] | None) -> list[tuple[int, float]]:
+    """The numbers of a column, with their positions."""
+    return [
+        (index, float(value))
+        for index, value in enumerate(column or ())
+        if isinstance(value, int | float) and not isinstance(value, bool)
+    ]
 
 
-def _no_pager(first: int, stop: int) -> dict[str, Any] | None:
+def _no_pager(first: int, stop: int) -> tuple[Mapping[str, Any], int] | None:
     return None
+
+
+def _row_pager(
+    dump: Mapping[str, Any], total: int, keep_last: bool, following: Mapping[str, Any] | None
+) -> Pager:
+    """The same params with the rows shown so far as the offset while some are left, then
+    ``following``, the params of the next page if there is one."""
+
+    def pager(first: int, stop: int) -> tuple[Mapping[str, Any], int] | None:
+        seen = total - first if keep_last else stop
+        if seen < total:
+            return dump, seen
+        return None if following is None else (following, 0)
+
+    return pager
 
 
 def _bar_pager(params: KlineParams, kline: Kline) -> Pager:
@@ -442,18 +697,14 @@ def _bar_pager(params: KlineParams, kline: Kline) -> Pager:
     """
     count = params.count or DEFAULT_COUNT
 
-    def pager(first: int, stop: int) -> dict[str, Any] | None:
+    def pager(first: int, stop: int) -> tuple[Mapping[str, Any], int] | None:
         if first == 0 and (params.begin is not None or len(kline) < count):
             return None
-        moment = kline.timestamps[first]
-        if kline.period.endswith("m"):
-            update: dict[str, Any] = {"end": None, "before": moment}
-        else:
-            end = moment.date() - timedelta(days=1)
-            if params.begin is not None and end < params.begin:
-                return None
-            update = {"end": end, "before": None}
-        return params.model_copy(update=update).model_dump(mode="json", exclude_none=True)
+        update = older_range(kline.timestamps[first], kline.period)
+        end = update["end"]
+        if end is not None and params.begin is not None and end < params.begin:
+            return None
+        return params.model_copy(update=update).model_dump(mode="json", exclude_none=True), 0
 
     return pager
 
@@ -469,12 +720,12 @@ def _starts_late(params: KlineParams, kline: Kline) -> bool:
     )
 
 
-def _symbols_pager(dump: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> Pager:
-    """The symbols of the rows not shown."""
+def _symbols_pager(dump: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], batch: str) -> Pager:
+    """The codes of the rows not shown."""
 
-    def pager(first: int, stop: int) -> dict[str, Any] | None:
+    def pager(first: int, stop: int) -> tuple[Mapping[str, Any], int] | None:
         rest = [str(row.get("symbol")) for row in rows[stop:]]
-        return {**dump, "symbols": rest} if rest else None
+        return ({**dump, batch: rest}, 0) if rest else None
 
     return pager
 
