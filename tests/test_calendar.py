@@ -283,6 +283,14 @@ def test_status_id_gives_the_phase_and_unknown_values_are_kept(
         ),
         pytest.param(
             "SH600000",
+            7,
+            datetime(2026, 11, 6, 15, 0, tzinfo=SHANGHAI),
+            datetime(2026, 11, 7, 16, 0, tzinfo=SHANGHAI),
+            False,
+            id="cn-friday-quote-read-on-saturday",
+        ),
+        pytest.param(
+            "SH600000",
             9,
             None,
             datetime(2026, 11, 5, 18, 0, tzinfo=SHANGHAI),
