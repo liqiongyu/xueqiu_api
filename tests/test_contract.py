@@ -4,19 +4,27 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import fields, is_dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx2
 import pytest
+from pydantic import BaseModel
 
-from xueqiu_api import REGISTRY, UpstreamChanged, UpstreamError
+from xueqiu_api import REGISTRY, Page, UpstreamChanged, UpstreamError
+from xueqiu_api._core import unwrap
+from xueqiu_api._finance import Financials
+from xueqiu_api._model import UpstreamModel
+from xueqiu_api._render import Sectioned, Series
 from xueqiu_api._replay import ReplayTransport
+from xueqiu_api.endpoints.kline import Kline
 from xueqiu_api.registry import Endpoint, Envelope
 from xueqiu_api.sites import SITES
 
@@ -25,6 +33,25 @@ from .harness import FAKE_LOGIN, REPLAY_DIR, Harness, json_reply
 HERE = Path(__file__).parent
 NOW = datetime(2026, 11, 5, 2, 0, tzinfo=UTC)
 ENDPOINTS = sorted(REGISTRY)
+ONE_ENDPOINT_PER_HOST = sorted({spec.host: name for name, spec in REGISTRY.items()}.values())
+TIME_ORDERED = sorted(
+    name for name, spec in REGISTRY.items() if spec.order in ("oldest_first", "newest_first")
+)
+TIME_NAME = re.compile(r"date|time|_at$|^ts$")
+"""Field names that say a value is a point in time."""
+ROW_TIME_FIELDS = (
+    "timestamp",
+    "trade_date",
+    "month",
+    "report_date",
+    "chg_date",
+    "change_date",
+    "repurchase_date",
+    "ex_date",
+    "event_date",
+    "date",
+)
+"""Fields that order the rows of a table, whichever one the table has."""
 ROUTE_HOSTS = {
     route["name"]: route["host"]
     for route in json.loads((HERE / "snapshots" / "endpoint_routes.json").read_text("utf-8"))
@@ -94,6 +121,24 @@ def test_requests_use_the_profile_of_the_site(make: Callable[..., Harness], name
         assert request.headers["cookie"] == FAKE_LOGIN
     else:
         assert "xq_a_token=replay-anonymous" in request.headers["cookie"]
+
+
+@pytest.mark.parametrize("name", ONE_ENDPOINT_PER_HOST)
+def test_site_headers_leave_host_and_encoding_to_the_http_client(
+    make: Callable[..., Harness], name: str
+) -> None:
+    spec = REGISTRY[name]
+    transport = RecordingReplay(REPLAY_DIR)
+    h = make(token=token_for(spec), transport=transport)
+
+    h.call(name, **spec.agent.examples[0])
+
+    [request] = [sent for sent in transport.seen if sent.url.path != "/"]
+    with httpx2.Client() as plain:
+        assert request.headers["accept-encoding"] == plain.headers["accept-encoding"]
+    assert request.headers["host"] == request.url.host
+    written = {header.lower() for header in SITES[spec.host].headers}
+    assert not written & {"host", "accept-encoding", "cookie"}
 
 
 @pytest.mark.parametrize("name", ENDPOINTS)
@@ -193,3 +238,120 @@ def test_a_sample_that_does_not_parse_its_endpoint_fails(tmp_path: Path) -> None
     assert len(failures) == 2, result.stdout
     assert all("test_without_the_call" in line for line in failures)
     assert "marked as a sample of ['quotec']" in result.stdout
+
+
+def parsed_fixtures(name: str) -> list[Any]:
+    """What ``parse`` makes of each replay fixture of an endpoint, under its example's params."""
+    spec = REGISTRY[name]
+    results: list[Any] = []
+    for path in sorted((REPLAY_DIR / name).glob("*.json")):
+        case = json.loads(path.read_text(encoding="utf-8"))
+        params = dict(spec.agent.examples[0])
+        if "symbol" in spec.params.model_fields and "symbol" in case.get("params", {}):
+            params["symbol"] = case["params"]["symbol"]
+        results.append(spec.parse(unwrap(spec.envelope, case["body"]), spec.validate(params)))
+    return results
+
+
+def leaves(value: Any, name: str = "", declared: bool = False) -> Iterator[tuple[str, Any, bool]]:
+    """Every value in a result, with its field name and whether a class declares that field."""
+    if isinstance(value, BaseModel):
+        for field in type(value).model_fields:
+            yield from leaves(getattr(value, field), field, True)
+        yield from leaves(value.model_extra or {})
+    elif is_dataclass(value) and not isinstance(value, type):
+        for field in fields(value):
+            yield from leaves(getattr(value, field.name), field.name, True)
+    elif isinstance(value, Mapping):
+        for key, item in value.items():  # pyright: ignore[reportUnknownVariableType]
+            yield from leaves(item, str(key))  # pyright: ignore[reportUnknownArgumentType]
+    elif isinstance(value, list | tuple):
+        for item in value:  # pyright: ignore[reportUnknownVariableType]
+            yield from leaves(item, name, declared)
+    else:
+        yield name, value, declared
+
+
+def raw_ms(value: object) -> bool:
+    if isinstance(value, str):
+        return re.fullmatch(r"\d{11,14}", value) is not None
+    return isinstance(value, int | float) and not isinstance(value, bool) and 1e11 <= value < 1e14
+
+
+def misplaced_times(result: object) -> list[tuple[str, Any]]:
+    """Fields named like a time that hold raw milliseconds or, when declared, anything but a date.
+
+    Undeclared fields stay as the upstream sent them, so only raw milliseconds count against them.
+    """
+    return [
+        (name, value)
+        for name, value, declared in leaves(result)
+        if TIME_NAME.search(name)
+        and (raw_ms(value) or (declared and value is not None and not isinstance(value, date)))
+    ]
+
+
+@pytest.mark.parametrize("name", ENDPOINTS)
+def test_no_model_keeps_a_raw_ms_int(name: str) -> None:
+    for result in parsed_fixtures(name):
+        assert misplaced_times(result) == []
+
+
+def test_the_time_scan_looks_through_pages_models_and_undeclared_fields() -> None:
+    class Row(UpstreamModel):
+        report_date: Any = None
+        total_assets: float | None = None
+
+    row = Row.model_validate(
+        {
+            "report_date": "2026三季报",
+            "total_assets": 1e13,
+            "updated_at": 1790352000000,
+            "ts": "1790352000000",
+        }
+    )
+
+    assert misplaced_times(Page(items=(row,), page=1, page_size=1)) == [
+        ("report_date", "2026三季报"),
+        ("updated_at", 1790352000000),
+        ("ts", "1790352000000"),
+    ]
+
+
+def cell(row: Any, field: str) -> Any:
+    return (
+        cast(Mapping[str, Any], row).get(field)
+        if isinstance(row, Mapping)
+        else getattr(row, field, None)
+    )
+
+
+def table_times(table: Sequence[Any]) -> list[date]:
+    """The times in a table, from the first of ``ROW_TIME_FIELDS`` it has."""
+    for field in ROW_TIME_FIELDS:
+        times = [cell(row, field) for row in table if cell(row, field) is not None]
+        if times:
+            return times
+    return []
+
+
+def time_columns(result: Any) -> list[Sequence[date]]:
+    """The times of a result in row order, one sequence per table."""
+    if isinstance(result, Kline):
+        return [result.timestamps]
+    if isinstance(result, Financials):
+        return [[period.report_date for period in result.periods]]
+    if isinstance(result, Series):
+        return [result.index()[1]]
+    tables = result.sections().values() if isinstance(result, Sectioned) else [result]
+    return [table_times(list(table)) for table in tables]
+
+
+@pytest.mark.parametrize("name", TIME_ORDERED)
+def test_series_order_matches_declaration(name: str) -> None:
+    newest_first = REGISTRY[name].order == "newest_first"
+    columns = [times for result in parsed_fixtures(name) for times in time_columns(result)]
+
+    for times in columns:
+        assert list(times) == sorted(times, reverse=newest_first)
+    assert any(len(set(times)) > 1 for times in columns)

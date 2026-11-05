@@ -228,6 +228,23 @@ def test_a_token_client_reuses_the_cached_anonymous_cookies(
     assert "xq_a_token=fake-anon-token-0001" in h.upstream.sent[0].headers["cookie"]
 
 
+def test_two_clients_keep_their_own_credentials(
+    make: Callable[..., Harness], register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(auth="required"))
+    tokens = [f"xq_a_token=fake-login-{name}; u=fake-u-{name}" for name in ("first", "second")]
+    variables = set(os.environ)
+
+    first, second = (make(token=token) for token in tokens)
+    first.upstream.route(STOCK, spec.path, json_reply({"data": {"value": 7}, "error_code": 0}))
+    for client in (first, second, first):
+        client.call(spec.name, symbol="SH600000")
+
+    sent = first.upstream.requests(STOCK, spec.path)
+    assert [request.headers["cookie"] for request in sent] == [tokens[0], tokens[1], tokens[0]]
+    assert set(os.environ) == variables
+
+
 def test_raw_requests_send_the_token_and_write_nothing(
     make: Callable[..., Harness], session_path: Path
 ) -> None:

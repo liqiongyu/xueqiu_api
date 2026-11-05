@@ -546,6 +546,17 @@ def test_a_redirect_loop_on_the_home_page_stops_after_a_few_hops(h: Harness) -> 
     assert paths(h) == ["xueqiu.com/"] * 4
 
 
+def test_redirect_on_an_api_path_is_not_followed(h: Harness) -> None:
+    elsewhere = {"Location": "https://other.example/kline.json"}
+    h.upstream.route(STOCK, KLINE, lambda request: httpx2.Response(301, headers=elsewhere))
+
+    with pytest.raises(UpstreamChanged) as caught:
+        h.kline("SH600000")
+
+    assert (caught.value.status, caught.value.message) == (301, f"{STOCK} returned HTTP 301")
+    assert paths(h) == [*BOOTSTRAP, f"{STOCK}{KLINE}"]
+
+
 def test_every_error_is_a_xueqiu_error_with_a_payload(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, json_reply({}, 429, {"Retry-After": "3"}))
 
