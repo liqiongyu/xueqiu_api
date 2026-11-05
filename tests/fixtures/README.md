@@ -10,7 +10,6 @@ The upstream data belongs to Xueqiu (雪球), Danjuan and the original rights ho
 covered by the MIT License of this repository.
 
 - `replay/<endpoint>/*.json`: responses in the layout of the replay transport
-  (`xueqiu_api._replay.ReplayTransport`): `params` to match on, optional `status`, and `body`.
-  Every body is a reduced sample from 2026-11-04. The finance fixtures keep 8 or 9 line items
-  per report period; the F10 company fixtures carry synthetic text and contact details.
+  (`xueqiu_api._replay.ReplayTransport`). A file holds `body`, optional `params` to match on and
+  optional `status`, and nothing else. The directory name is a registered endpoint name.
 - `waf_challenge.html`: a synthetic page with the markers of the Aliyun WAF challenge page.

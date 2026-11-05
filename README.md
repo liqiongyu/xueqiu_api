@@ -29,9 +29,9 @@ with Client() as client:
     print(latest.report_name, latest.items["total_revenue"].value)
 ```
 
-`AsyncClient` 有同样的方法。目前支持批量行情（`quotec`、`batch_quote`）、行情详情、K 线、证券搜索、利润表、资产负债表、现金流量表、财务指标和 F10 公司资料，都不需要登录。
+`AsyncClient` 有同样的方法。目前支持批量行情（`quotec`、`batch_quote`）、行情详情、K 线、证券搜索、利润表、资产负债表、现金流量表、财务指标、F10 公司资料、大宗交易、基金净值历史和组合净值，都不需要登录。
 
-`AsyncClient` has the same methods. Supported so far: batch quotes (`quotec`, `batch_quote`), quote detail, kline, security search, income statement, balance sheet, cash flow statement, financial indicators and the F10 company profile, all without login.
+`AsyncClient` has the same methods. Supported so far: batch quotes (`quotec`, `batch_quote`), quote detail, kline, security search, income statement, balance sheet, cash flow statement, financial indicators, the F10 company profile, block trades, fund NAV history and cube NAV, all without login.
 
 ```bash
 xueqiu doctor   # 逐个调用端点并报告状态 / call every endpoint once and report

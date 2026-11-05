@@ -22,46 +22,55 @@ import os
 import re
 import shutil
 import sys
-from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 from zoneinfo import ZoneInfo
 
 import httpx2
 from mcp import Client, MCPError, StdioServerParameters
 from mcp.types import INVALID_PARAMS, TextContent
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from xueqiu_api import REGISTRY, LoginRequired
 from xueqiu_api._async import AsyncClient, AsyncRuntime
-from xueqiu_api._render import STATS_COLUMNS
+from xueqiu_api._model import UpstreamModel
+from xueqiu_api._pages import Page
+from xueqiu_api._render import STATS_COLUMNS, compact_json
 from xueqiu_api._replay import ReplayTransport
 from xueqiu_api._time import to_ms
-from xueqiu_api.mcp import McpOptions
-from xueqiu_api.mcp import server as mcp_server
-from xueqiu_api.mcp import tools as mcp_tools
-from xueqiu_api.mcp.server import build_server
-from xueqiu_api.mcp.tools import (
+from xueqiu_api.mcp_server import MIN_MAX_CHARS, McpOptions
+from xueqiu_api.mcp_server import server as mcp_server
+from xueqiu_api.mcp_server import tools as mcp_tools
+from xueqiu_api.mcp_server.server import build_server
+from xueqiu_api.mcp_server.tools import (
     DEDICATED,
     DESCRIBE_NAMES,
     DISCLAIMER,
     INSTRUCTIONS_PREFIX,
     REAUTH_HINT,
+    SHOWCASE,
+    TITLE_LINE_CHARS,
     TOOLS,
     Toolbox,
 )
+from xueqiu_api.registry import CATEGORY_TITLES, Category, Endpoint, Pagination
+from xueqiu_api.symbols import SymbolCode
 
 from .harness import (
     REPLAY_DIR,
     FakeClock,
     FakeUpstream,
+    Register,
     Reply,
     error_reply,
     json_reply,
     raise_reply,
     replay_body,
+    synthetic_endpoint,
     text_reply,
     waf_reply,
 )
@@ -165,6 +174,11 @@ def references(text: str) -> set[str]:
 
 def body_lines(text: str) -> list[str]:
     return [line for line in text.splitlines() if not line.startswith("#")]
+
+
+def summary_names(text: str) -> list[str]:
+    """Endpoint names of the rows of a catalog summary."""
+    return [name for line in body_lines(text)[1:] for name in line.split(",")[3].split()]
 
 
 def stats_of(text: str) -> dict[str, str]:
@@ -300,7 +314,12 @@ async def test_excluded_endpoints_leave_no_trace_in_the_instructions_or_descript
     for word in ("利润表", "资产负债表", "现金流量表", "财务指标", "公司资料", "财报", ".yoy"):
         assert word not in text, word
     assert "利润表" in full and "公司资料" in full
-    assert "其他数据（行情详情、实时行情等）先用 xq_endpoints" in instructions
+    shown = [
+        REGISTRY[name].agent.title_zh
+        for name in SHOWCASE
+        if name in REGISTRY and name != "f10_company" and not name.startswith("finance_")
+    ]
+    assert f"其他数据（{'、'.join(shown[:3])}等）先用 xq_endpoints" in instructions
 
 
 ARGS: dict[str, tuple[type[BaseModel], dict[str, type[BaseModel]]]] = {
@@ -393,6 +412,18 @@ async def test_tool_definitions_pass_the_lint(connect: Connect, exclude: tuple[s
     assert len(instructions) <= 3500
     assert instructions.startswith(INSTRUCTIONS_PREFIX) and instructions.endswith(DISCLAIMER)
     assert references(instructions) <= names
+    enabled = [
+        spec
+        for spec in REGISTRY.values()
+        if not any(fnmatch.fnmatchcase(spec.name, p) for p in exclude)
+    ]
+    title_line = instructions.splitlines()[0]
+    assert len(title_line) <= TITLE_LINE_CHARS
+    assert all(spec.agent.title_zh in title_line for spec in enabled)
+    for tool in tools:
+        if tool.name in ("xq_endpoints", "xq_call"):
+            keywords = (tool.description or "").splitlines()[0]
+            assert all(CATEGORY_TITLES[spec.agent.category] in keywords for spec in enabled)
 
 
 @pytest.mark.anyio
@@ -445,11 +476,12 @@ async def test_xq_call_reaches_exactly_the_enabled_endpoints(
 
     schema = tools["xq_call"].input_schema["properties"]
     assert schema["endpoint"]["enum"] == enabled
-    assert tools["xq_endpoints"].input_schema["properties"]["name"]["items"]["enum"] == enabled
-    assert [line.split(",")[0] for line in body_lines(catalog)[1:]] == enabled
+    assert "enum" not in tools["xq_endpoints"].input_schema["properties"]["name"]["items"]
+    assert {name for name in summary_names(catalog)} == set(enabled)
     for payload in [*refused, *described]:
         assert payload["error_code"] == "disabled_by_config"
-        assert payload["valid_values"] == enabled
+        assert "valid_values" not in payload
+        assert len(payload.get("candidates", ())) <= 5
     for tool, endpoint in DEDICATED.items():
         assert (tool in tools) == (endpoint in enabled and tool not in exclude)
 
@@ -474,7 +506,7 @@ async def test_every_example_works_and_the_dedicated_tool_text_is_identical(
     agent = REGISTRY[name].agent
     example = dict(agent.examples[0])
     options = {"limit": example["count"]} if agent.mcp_tool == "xq_kline" else {}
-    async with connect() as client:
+    async with connect(token=TOKEN if REGISTRY[name].auth == "required" else None) as client:
         through_call = await call(
             client, "xq_call", {"endpoint": name, "params": example, **options}
         )
@@ -737,7 +769,7 @@ async def test_concurrent_tool_calls_share_the_per_host_limiter(
 async def test_an_exclude_pattern_that_matches_nothing_is_logged(
     connect: Connect, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING, logger="xueqiu_api.mcp"):
+    with caplog.at_level(logging.WARNING, logger="xueqiu_api.mcp_server"):
         async with connect(exclude=("klien",)) as client:
             names = [tool.name for tool in (await client.list_tools()).tools]
 
@@ -839,13 +871,21 @@ async def test_endpoint_details_fit_the_smallest_budget(connect: Connect) -> Non
 @pytest.mark.anyio
 async def test_a_cut_catalog_continues_with_the_rows_left_out() -> None:
     async with AsyncClient(session_path=Path(os.devnull)) as client:
-        toolbox = Toolbox(McpOptions(max_chars=700), client=client, now=lambda: NOW)
-        text, is_error = await toolbox.call("xq_endpoints", {})
+        toolbox = Toolbox(McpOptions(max_chars=300), client=client, now=lambda: NOW)
+        summary, summary_error = await toolbox.call("xq_endpoints", {})
+        toolbox = Toolbox(McpOptions(max_chars=450), client=client, now=lambda: NOW)
+        rows, rows_error = await toolbox.call("xq_endpoints", {"category": "finance"})
 
-    shown = [line.split(",")[0] for line in body_lines(text)[1:]]
-    left_out = [name for name in REGISTRY if name not in shown]
-    assert not is_error and shown and left_out
-    assert next_call(text) == ("xq_endpoints", {"name": left_out[:DESCRIBE_NAMES]})
+    categories = [line.split(",")[0] for line in body_lines(summary)[1:]]
+    used = list(dict.fromkeys(spec.agent.category for spec in REGISTRY.values()))
+    ordered = [category for category in get_args(Category) if category in used]
+    assert not summary_error and categories and categories != ordered
+    assert next_call(summary) == ("xq_endpoints", {"category": ordered[len(categories)]})
+
+    finance = [name for name in REGISTRY if name.startswith("finance_")]
+    shown = [line.split(",")[0] for line in body_lines(rows)[1:]]
+    assert not rows_error and shown and shown != finance
+    assert next_call(rows) == ("xq_endpoints", {"name": finance[len(shown) :][:DESCRIBE_NAMES]})
 
 
 @pytest.mark.anyio
@@ -862,7 +902,7 @@ async def test_endpoint_catalog_and_details_never_show_upstream_paths(connect: C
     for text in (catalog, found, nothing, *details):
         assert "xueqiu.com" not in text and "/v5/" not in text and "/query/" not in text
         assert "danjuan" not in text.lower()
-    assert [line.split(",")[0] for line in body_lines(found)[1:]] == ["finance_income"]
+    assert "finance_income" in [line.split(",")[0] for line in body_lines(found)[1:]]
     assert "rows=0" in nothing and "# note: no endpoint matches" in nothing
     for name in REGISTRY:
         assert any(f"# endpoint {name}: " in text for text in details)
@@ -882,9 +922,9 @@ async def test_empty_results_are_successes_with_a_note(
 
     for text in (bars_text, search):
         assert "rows=0" in text
-        assert "wrong market prefix" in text
         assert body_lines(text) == []
         assert text.splitlines()[-1] == "# next: none"
+    assert "wrong market prefix" in bars_text and "wrong market prefix" not in search
     assert "about 3 trading days (1m)" in bars_text and "# stats: bars=0" in bars_text
 
 
@@ -980,6 +1020,25 @@ async def test_xq_search_stops_at_the_limit(connect: Connect) -> None:
         text = await call(client, "xq_search", {"query": "AAPL", "limit": 2})
 
     assert body_lines(text) == ["symbol,name,stock_type", "AAPL,苹果,0", "XVAP,AAPL与目标收益,4"]
+    assert next_call(text) == (
+        "xq_call",
+        {"endpoint": "suggest_stock", "params": {"query": "AAPL"}, "limit": 2, "offset": 2},
+    )
+
+
+@pytest.mark.anyio
+async def test_xq_search_without_xq_call_shows_rows_a_limit_cut_with_a_larger_limit(
+    connect: Connect,
+) -> None:
+    async with connect(exclude=("xq_call",)) as client:
+        text = await call(client, "xq_search", {"query": "AAPL", "limit": 2})
+        assert len(body_lines(text)) == 3
+        assert next_call(text) == ("xq_search", {"query": "AAPL", "limit": 10})
+
+        wider = await call(client, "xq_search", {"query": "AAPL", "limit": 10})
+
+    assert len(body_lines(wider)) == 4
+    assert next_call(wider) is None
 
 
 @pytest.mark.anyio
@@ -1028,8 +1087,8 @@ MATRIX = [
         KLINE,
         error_reply(60201, "用户id无效"),
         TOKEN,
-        "auth_expired",
-        "reauth",
+        "upstream_changed",
+        "none",
         None,
     ),
     (
@@ -1048,8 +1107,8 @@ MATRIX = [
         SUGGEST,
         error_reply("21101", "用户id无效", 400),
         TOKEN,
-        "auth_expired",
-        "reauth",
+        "upstream_changed",
+        "none",
         None,
     ),
     (
@@ -1068,8 +1127,8 @@ MATRIX = [
         SUGGEST,
         error_reply("400016", "", 400),
         TOKEN,
-        "auth_expired",
-        "reauth",
+        "upstream_changed",
+        "none",
         None,
     ),
     (
@@ -1196,15 +1255,15 @@ async def test_upstream_failures_become_error_results(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    ("path", "reply", "reauth"),
+    ("path", "reply"),
     [
-        (KLINE, error_reply(60201, "用户id无效"), True),
-        (QUOTEC, error_reply(60201, "用户id无效"), False),
+        (KLINE, error_reply(60201, "用户id无效")),
+        (QUOTEC, error_reply(60201, "用户id无效")),
     ],
     ids=["cookies", "no-cookies"],
 )
-async def test_login_codes_on_anonymous_calls_point_to_a_token_only_where_cookies_go(
-    connect: Connect, upstream: FakeUpstream, path: str, reply: Reply, reauth: bool
+async def test_login_codes_on_anonymous_calls_do_not_ask_for_a_token(
+    connect: Connect, upstream: FakeUpstream, path: str, reply: Reply
 ) -> None:
     upstream.route(STOCK, path, reply)
     tool, arguments = TOOL_FOR_PATH[path]
@@ -1212,7 +1271,32 @@ async def test_login_codes_on_anonymous_calls_point_to_a_token_only_where_cookie
         payload = await fail(client, tool, arguments)
 
     assert (payload["error_code"], payload["recoverable"]) == ("upstream_changed", "none")
-    assert (REAUTH_HINT in payload["hint"]) is reauth
+    assert REAUTH_HINT not in payload["hint"]
+    assert "XUEQIU_TOKEN" not in payload["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("token", "code"), [(None, "login_required"), (TOKEN, "auth_expired")], ids=["none", "token"]
+)
+async def test_login_only_endpoints_ask_for_a_token_in_the_server_configuration(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    token: str | None,
+    code: str,
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(auth="required"))
+    upstream.route(STOCK, spec.path, error_reply(60201, "用户id无效"))
+    async with connect(replay=False, token=token) as client:
+        payload = await fail(
+            client, "xq_call", {"endpoint": spec.name, "params": {"symbol": "SH600000"}}
+        )
+
+    assert (payload["error_code"], payload["recoverable"]) == (code, "reauth")
+    assert payload["hint"] == REAUTH_HINT
+    assert len(upstream.requests(STOCK, spec.path)) == (0 if token is None else 1)
+    assert TOKEN not in json.dumps(payload)
 
 
 @pytest.mark.anyio
@@ -1238,8 +1322,9 @@ async def test_unknown_and_excluded_tools_are_protocol_errors(connect: Connect) 
 @pytest.mark.parametrize(
     ("tool", "arguments", "code", "field", "valid", "candidates"),
     [
-        ("xq_call", {}, "invalid_params", "endpoint", "kline", None),
-        ("xq_call", {"endpoint": "klines"}, "unknown_endpoint", "endpoint", "kline", ["kline"]),
+        ("xq_call", {}, "invalid_params", "endpoint", None, None),
+        ("xq_call", {"endpoint": "klines"}, "unknown_endpoint", "endpoint", None, ["kline"]),
+        ("xq_call", {"endpoint": "kline", "offset": -1}, "invalid_params", "offset", None, None),
         (
             "xq_call",
             {"endpoint": "kline", "params": {"symbol": "SH600000", "start": "2026-01-01"}},
@@ -1266,9 +1351,9 @@ async def test_unknown_and_excluded_tools_are_protocol_errors(connect: Connect) 
         ),
         (
             "xq_call",
-            {"endpoint": "finance_income", "params": {"symbol": "SH600000", "type": "Q1"}},
+            {"endpoint": "finance_income", "params": {"symbol": "SH600000", "report_type": "Q1"}},
             "invalid_params",
-            "type",
+            "report_type",
             "annual",
             None,
         ),
@@ -1339,7 +1424,8 @@ async def test_unknown_and_excluded_tools_are_protocol_errors(connect: Connect) 
             None,
         ),
         ("xq_search", {"query": "  "}, "invalid_params", "query", None, None),
-        ("xq_endpoints", {"name": ["klines"]}, "unknown_endpoint", "name", "kline", ["kline"]),
+        ("xq_endpoints", {"name": ["klines"]}, "unknown_endpoint", "name", None, ["kline"]),
+        ("xq_endpoints", {"category": "cubes"}, "invalid_params", "category", "cube", ["cube"]),
     ],
 )
 async def test_bad_arguments_are_error_results(
@@ -1358,6 +1444,8 @@ async def test_bad_arguments_are_error_results(
     assert payload.get("field") == field
     if valid is not None:
         assert valid in payload["valid_values"]
+    if code == "unknown_endpoint":
+        assert "valid_values" not in payload
     if candidates is not None:
         assert payload["candidates"][: len(candidates)] == candidates
     if code == "symbol_not_found":
@@ -1424,7 +1512,7 @@ async def test_unexpected_exceptions_become_internal_errors_with_an_event_id(
         raise RuntimeError("secret internals")
 
     monkeypatch.setattr(mcp_tools, "render", broken)
-    with caplog.at_level(logging.ERROR, logger="xueqiu_api.mcp"):
+    with caplog.at_level(logging.ERROR, logger="xueqiu_api.mcp_server"):
         async with connect() as client:
             payload = await fail(client, "xq_quote", {"symbols": ["SH600000"]})
 
@@ -1500,6 +1588,812 @@ async def test_lenient_arguments_give_the_canonical_text(
         assert await call(client, tool, loose) == await call(client, tool, strict)
 
 
+class ChoiceParams(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    symbol: SymbolCode
+    step: Literal[1, 5] = 1
+    window: Literal[10, 20] | None = None
+    count: int = 1
+    enabled: bool = False
+    ratio: float = 0.0
+    code: str = "007"
+
+
+def choice_query(params: ChoiceParams, now: datetime) -> dict[str, str]:
+    values = params.model_dump(mode="json", exclude_none=True)
+    return {key: str(value) for key, value in values.items()}
+
+
+CHOICE_BODY = {"data": {"value": 7}, "error_code": 0}
+
+
+@pytest.mark.anyio
+async def test_numbers_and_booleans_may_come_as_strings(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(params=ChoiceParams, build_query=choice_query))
+    upstream.route(STOCK, spec.path, json_reply(CHOICE_BODY))
+    loose = {
+        "symbol": "600000",
+        "step": "5",
+        "window": "20",
+        "count": "3",
+        "enabled": "true",
+        "ratio": "1.5",
+        "code": "008",
+    }
+    strict = {**loose, "step": 5, "window": 20, "count": 3, "enabled": True, "ratio": 1.5}
+    async with connect(replay=False) as client:
+        through_text = await call(client, "xq_call", {"endpoint": spec.name, "params": loose})
+        through_values = await call(client, "xq_call", {"endpoint": spec.name, "params": strict})
+        refused = await fail(
+            client, "xq_call", {"endpoint": spec.name, "params": {"symbol": "600000", "step": "3"}}
+        )
+
+    assert through_text == through_values
+    first, _second = upstream.requests(STOCK, spec.path)
+    assert (first.params["step"], first.params["symbol"], first.params["code"]) == (
+        "5",
+        "SH600000",
+        "008",
+    )
+    assert refused["field"] == "step" and refused["valid_values"] == ["1", "5"]
+
+
+# Paging through xq_call
+
+
+ROW = re.compile(r"^r\d{4}\b", re.MULTILINE)
+"""The first cell of a row of the synthetic lists."""
+DATE_ROW = re.compile(r"^\d{4}-\d{2}-\d{2}\b", re.MULTILINE)
+LIST_SIZE = 95
+BUDGETS = [600, 1000, 20_000]
+LIMITS = [1, 7, 50]
+
+Walk = Callable[..., Awaitable[list[str]]]
+
+
+class ListParams(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=500)
+
+
+class ListRow(UpstreamModel):
+    code: str
+    pad: str = ""
+
+
+def list_rows(count: int = LIST_SIZE) -> list[dict[str, str]]:
+    """Rows of different widths, so that a character budget cuts pages unevenly."""
+    return [{"code": f"r{index:04d}", "pad": "x" * (index % 17)} for index in range(count)]
+
+
+def codes_of(rows: Sequence[Mapping[str, str]]) -> list[str]:
+    return [row["code"] for row in rows]
+
+
+def list_query(params: ListParams, now: datetime) -> dict[str, str]:
+    return {"page": str(params.page), "size": str(params.page_size)}
+
+
+def list_parse(payload: Any, params: ListParams) -> Page[ListRow]:
+    rows = tuple(ListRow.model_validate(row) for row in payload["items"])
+    return Page(rows, page=params.page, page_size=params.page_size, total=payload.get("total"))
+
+
+def list_endpoint(
+    end: Literal["total", "short", "empty"] = "empty", **fields: Any
+) -> Endpoint[Any, Any]:
+    options: dict[str, Any] = {
+        "path": "/v5/synthetic_list.json",
+        "params": ListParams,
+        "build_query": list_query,
+        "parse": list_parse,
+        "pagination": Pagination(style="page", end=end),
+        "order": "newest_first",
+        "agent": replace(
+            synthetic_endpoint().agent,
+            default_fields=("code", "pad"),
+            row_default=50,
+            row_cap=500,
+            upstream_cap=500,
+            examples=({},),
+        ),
+    }
+    return synthetic_endpoint("quote_synthetic_list", **{**options, **fields})
+
+
+def list_reply(
+    rows: Sequence[Mapping[str, str]],
+    *,
+    total: bool = False,
+    silent_cap: int | None = None,
+    pages_by_requested_size: bool = False,
+) -> Reply:
+    """One page of ``rows``. Above ``silent_cap`` the upstream serves 30 rows without saying so,
+    counting pages by the rows served or, with ``pages_by_requested_size``, by the size asked."""
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        page, asked = int(request.url.params["page"]), int(request.url.params["size"])
+        size = 30 if silent_cap is not None and asked > silent_cap else asked
+        start = (page - 1) * (asked if pages_by_requested_size else size)
+        data: dict[str, Any] = {"items": rows[start : start + size]}
+        if total:
+            data["total"] = len(rows)
+        return httpx2.Response(200, json={"data": data, "error_code": 0})
+
+    return reply
+
+
+@pytest.fixture
+def walk(upstream: FakeUpstream, clock: FakeClock) -> Walk:
+    """Follow # next from an xq_call of ``spec`` to none and return the rows shown, in order.
+
+    Every call must send exactly one upstream request, and the calls must not exceed the rows
+    shown plus the pages visited plus one.
+    """
+
+    async def follow(
+        client: Client,
+        spec: Endpoint[Any, Any],
+        *,
+        row: re.Pattern[str] = ROW,
+        host: str = STOCK,
+        path: str | None = None,
+        **arguments: Any,
+    ) -> list[str]:
+        sent_before = len(upstream.requests(host, path or spec.path))
+        shown: list[str] = []
+        pages: set[int] = set()
+        calls = 0
+        step: tuple[str, dict[str, Any]] | None = (
+            "xq_call",
+            {"endpoint": spec.name, **arguments},
+        )
+        while step is not None:
+            pages.add(step[1].get("params", {}).get("page", 1))
+            text = await call(client, *step)
+            shown += row.findall(text)
+            calls += 1
+            assert calls <= 2 * LIST_SIZE + 20, "the # next chain makes no progress"
+            clock.advance(1)  # a tool call starts on the fake clock, after the last request's slot
+            step = next_call(text)
+        assert len(upstream.requests(host, path or spec.path)) - sent_before == calls
+        assert calls <= len(shown) + len(pages) + 1
+        return shown
+
+    return follow
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("end", ["total", "short", "empty"])
+@pytest.mark.parametrize("page_size", [5, 7, 20])
+@pytest.mark.parametrize("limit", LIMITS)
+@pytest.mark.parametrize("max_chars", BUDGETS)
+async def test_following_next_shows_each_row_of_a_list_once(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    walk: Walk,
+    end: Literal["total", "short", "empty"],
+    page_size: int,
+    limit: int,
+    max_chars: int,
+) -> None:
+    spec = register_endpoint(list_endpoint(end))
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, list_reply(rows, total=end == "total"))
+    async with connect(replay=False, max_chars=max_chars) as client:
+        shown = await walk(client, spec, params={"page_size": page_size}, limit=limit)
+
+    assert shown == codes_of(rows)
+
+
+@pytest.mark.anyio
+async def test_a_walk_from_page_3_starts_at_the_41st_row(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register, walk: Walk
+) -> None:
+    spec = register_endpoint(list_endpoint())
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, list_reply(rows))
+    async with connect(replay=False) as client:
+        shown = await walk(client, spec, params={"page": 3, "page_size": 20}, limit=7)
+
+    assert shown == codes_of(rows)[40:]
+
+
+@pytest.mark.anyio
+async def test_a_walk_through_a_real_page_endpoint_shows_each_row_once(
+    connect: Connect, upstream: FakeUpstream, walk: Walk
+) -> None:
+    spec = REGISTRY["fund_nav_history"]
+    path = spec.path.format(fund_code="008975")
+    days = [(date(2026, 1, 1) + timedelta(days=index)).isoformat() for index in range(8)]
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        page, size = int(request.url.params["page"]), int(request.url.params["size"])
+        data = {
+            "items": [
+                {"date": day, "nav": "1.0", "value": "1.0", "percentage": "0.1"}
+                for day in days[(page - 1) * size : page * size]
+            ],
+            "current_page": page,
+            "size": size,
+            "total_items": len(days),
+            "total_pages": math.ceil(len(days) / size),
+        }
+        return httpx2.Response(200, json={"data": data, "result_code": 0})
+
+    upstream.route("danjuanfunds.com", path, reply)
+    async with connect(replay=False) as client:
+        shown = await walk(
+            client,
+            spec,
+            row=DATE_ROW,
+            host="danjuanfunds.com",
+            path=path,
+            params={"fund_code": "008975", "page_size": 3},
+            limit=2,
+        )
+
+    assert shown == days
+
+
+def nested_parse(payload: Any, params: ListParams) -> Page[ListRow]:
+    rows = tuple(ListRow.model_validate(row) for outer in payload["items"] for row in outer["rows"])
+    return Page(rows, page=params.page, page_size=params.page_size)
+
+
+def nested_reply(rows: Sequence[Mapping[str, str]], counts: str) -> Reply:
+    """Two inner rows per outer row; ``size`` counts either the outer or the inner ones."""
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        page, size = int(request.url.params["page"]), int(request.url.params["size"])
+        per_outer = 2 if counts == "outer" else 1
+        chosen = rows[(page - 1) * size * per_outer : page * size * per_outer]
+        outers = [{"rows": chosen[start : start + 2]} for start in range(0, len(chosen), 2)]
+        return httpx2.Response(200, json={"data": {"items": outers}, "error_code": 0})
+
+    return reply
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("counts", ["outer", "inner"])
+@pytest.mark.parametrize("limit", LIMITS)
+async def test_a_nested_list_loses_no_row_however_the_page_size_counts(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    walk: Walk,
+    counts: str,
+    limit: int,
+) -> None:
+    rule = Pagination(style="page", end="empty", guard_short=False)
+    spec = register_endpoint(list_endpoint(parse=nested_parse, pagination=rule))
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, nested_reply(rows, counts))
+    async with connect(replay=False, max_chars=1000) as client:
+        shown = await walk(client, spec, params={"page_size": 10}, limit=limit)
+
+    assert shown == codes_of(rows)
+
+
+@dataclass(frozen=True)
+class TwoTables:
+    """A whole result of two tables."""
+
+    first: tuple[ListRow, ...]
+    second: tuple[ListRow, ...]
+
+    def header(self) -> Mapping[str, Any]:
+        return {}
+
+    def sections(self) -> Mapping[str, Sequence[BaseModel | Mapping[str, Any]]]:
+        return {"first": self.first, "second": self.second}
+
+    def __len__(self) -> int:
+        return len(self.first) + len(self.second)
+
+
+@dataclass(frozen=True, slots=True)
+class TablesPage(Page[ListRow]):
+    """A page of two tables, the second one only on page 1."""
+
+    extra: tuple[ListRow, ...] = ()
+
+    def header(self) -> Mapping[str, Any]:
+        return {}
+
+    def sections(self) -> Mapping[str, Sequence[BaseModel | Mapping[str, Any]]]:
+        return {"items": self.items, "extra": self.extra}
+
+
+def two_tables_parse(payload: Any, params: ListParams) -> TwoTables:
+    rows = tuple(ListRow.model_validate(row) for row in payload["items"])
+    return TwoTables(rows[:30], rows[30:])
+
+
+def tables_page_parse(payload: Any, params: ListParams) -> TablesPage:
+    rows = tuple(ListRow.model_validate(row) for row in payload["items"])
+    extra = tuple(ListRow.model_validate(row) for row in payload.get("extra", ()))
+    return TablesPage(rows, page=params.page, page_size=params.page_size, extra=extra)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", LIMITS)
+@pytest.mark.parametrize("max_chars", BUDGETS)
+async def test_following_next_shows_each_row_of_several_tables_once(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    walk: Walk,
+    limit: int,
+    max_chars: int,
+) -> None:
+    spec = register_endpoint(list_endpoint(parse=two_tables_parse, pagination=None))
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, json_reply({"data": {"items": rows}, "error_code": 0}))
+    async with connect(replay=False, max_chars=max_chars) as client:
+        shown = await walk(client, spec, limit=limit)
+
+    assert shown == codes_of(rows)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", LIMITS)
+async def test_following_next_shows_each_row_of_a_page_of_tables_once(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    walk: Walk,
+    limit: int,
+) -> None:
+    spec = register_endpoint(list_endpoint(parse=tables_page_parse))
+    rows = list_rows()
+    extra = [{"code": f"r{index:04d}", "pad": ""} for index in range(9000, 9012)]
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        page, size = int(request.url.params["page"]), int(request.url.params["size"])
+        data: dict[str, Any] = {"items": rows[(page - 1) * size : page * size]}
+        if page == 1:
+            data["extra"] = extra
+        return httpx2.Response(200, json={"data": data, "error_code": 0})
+
+    upstream.route(STOCK, spec.path, reply)
+    async with connect(replay=False, max_chars=1000) as client:
+        shown = await walk(client, spec, params={"page_size": 20}, limit=limit)
+
+    assert shown == codes_of(rows)[:20] + codes_of(extra) + codes_of(rows)[20:]
+
+
+@dataclass(frozen=True)
+class Flow:
+    """A series, oldest first."""
+
+    dates: tuple[date, ...]
+    columns: Mapping[str, tuple[float | None, ...]]
+
+    def index(self) -> tuple[str, tuple[date, ...]]:
+        return "date", self.dates
+
+    def header(self) -> Mapping[str, Any]:
+        return {}
+
+    def __len__(self) -> int:
+        return len(self.dates)
+
+
+def flow_parse(payload: Any, params: ListParams) -> Flow:
+    dates = tuple(date.fromisoformat(row["date"]) for row in payload["items"])
+    return Flow(dates, {"value": tuple(float(row["value"]) for row in payload["items"])})
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", LIMITS)
+@pytest.mark.parametrize("max_chars", BUDGETS)
+async def test_following_next_shows_each_row_of_a_series_once_latest_first(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    walk: Walk,
+    limit: int,
+    max_chars: int,
+) -> None:
+    agent = replace(list_endpoint().agent, default_fields=("date", "value"))
+    spec = register_endpoint(
+        list_endpoint(parse=flow_parse, pagination=None, order="oldest_first", agent=agent)
+    )
+    days = [(date(2026, 1, 1) + timedelta(days=index)).isoformat() for index in range(LIST_SIZE)]
+    items = [{"date": day, "value": index} for index, day in enumerate(days)]
+    upstream.route(STOCK, spec.path, json_reply({"data": {"items": items}, "error_code": 0}))
+    async with connect(replay=False, max_chars=max_chars) as client:
+        first = await call(client, "xq_call", {"endpoint": spec.name, "limit": limit})
+        shown = await walk(client, spec, row=DATE_ROW, limit=limit)
+
+    assert sorted(shown) == days
+    assert DATE_ROW.findall(first)[-1] == days[-1]
+
+
+def plain_parse(payload: Any, params: ListParams) -> list[ListRow]:
+    return [ListRow.model_validate(row) for row in payload["items"]]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", LIMITS)
+@pytest.mark.parametrize("max_chars", BUDGETS)
+async def test_a_whole_list_is_cut_locally(
+    connect: Connect,
+    upstream: FakeUpstream,
+    register_endpoint: Register,
+    walk: Walk,
+    limit: int,
+    max_chars: int,
+) -> None:
+    spec = register_endpoint(list_endpoint(parse=plain_parse, pagination=None, order=None))
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, json_reply({"data": {"items": rows}, "error_code": 0}))
+    async with connect(replay=False, max_chars=max_chars) as client:
+        shown = await walk(client, spec, limit=limit)
+
+    assert shown == codes_of(rows)
+
+
+@pytest.mark.anyio
+async def test_limit_zero_shows_no_rows_and_no_next(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(list_endpoint())
+    upstream.route(STOCK, spec.path, list_reply(list_rows()))
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", {"endpoint": spec.name, "limit": 0})
+
+    assert ROW.findall(text) == []
+    assert next_call(text) is None
+    assert len(upstream.requests(STOCK, spec.path)) == 1
+
+
+@pytest.mark.anyio
+async def test_an_offset_past_the_page_moves_to_the_next_page_without_another_request(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(list_endpoint())
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, list_reply(rows))
+    arguments = {"endpoint": spec.name, "params": {"page_size": 20}, "offset": 25}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", arguments)
+        assert ROW.findall(text) == []
+        assert len(upstream.requests(STOCK, spec.path)) == 1
+        step = next_call(text)
+        assert step is not None
+        assert step == ("xq_call", {"endpoint": spec.name, "params": {"page": 2, "page_size": 20}})
+        following = await call(client, *step)
+
+    assert ROW.findall(following)[0] == rows[20]["code"]
+    assert len(upstream.requests(STOCK, spec.path)) == 2
+
+
+@pytest.mark.anyio
+async def test_a_silent_page_size_fallback_gets_a_note_and_loses_no_row_on_served_sizes(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register, walk: Walk
+) -> None:
+    spec = register_endpoint(list_endpoint())
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, list_reply(rows, silent_cap=50))
+    params = {"page_size": 100}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", {"endpoint": spec.name, "params": params})
+        shown = await walk(client, spec, params=params)
+
+    [note] = [line for line in text.splitlines() if line.startswith("# note: this page has")]
+    assert "30 of 100 rows" in note and "page size cap may be lower" in note
+    assert shown == codes_of(rows)
+
+
+@pytest.mark.anyio
+async def test_a_silent_page_size_fallback_on_requested_sizes_only_gets_the_note(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register, walk: Walk
+) -> None:
+    """A known limit: an upstream that serves 30 rows but counts pages by the size asked skips
+    rows, and one call cannot tell. The note is all a reader gets until the cap is measured."""
+    spec = register_endpoint(list_endpoint())
+    rows = list_rows()
+    upstream.route(STOCK, spec.path, list_reply(rows, silent_cap=50, pages_by_requested_size=True))
+    params = {"page_size": 100}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", {"endpoint": spec.name, "params": params})
+        shown = await walk(client, spec, params=params)
+
+    assert "# note: this page has 30 of 100 rows" in text
+    assert shown == codes_of(rows)[:30]
+
+
+@pytest.mark.anyio
+async def test_a_capped_page_says_so_and_how_to_get_the_rest(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    rule = Pagination(style="page", end="total", total_cap=60, cap_hint="Split the list by board.")
+    spec = register_endpoint(list_endpoint(pagination=rule))
+    upstream.route(STOCK, spec.path, list_reply(list_rows(), total=True))
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", {"endpoint": spec.name})
+
+    assert (
+        f"# note: the upstream counts {LIST_SIZE} rows and serves at most 60. "
+        "Split the list by board." in text
+    )
+
+
+@pytest.mark.anyio
+async def test_an_empty_result_gets_the_hint_of_its_endpoint(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    agent = replace(list_endpoint().agent, empty_hint="the group is empty")
+    spec = register_endpoint(list_endpoint(agent=agent))
+    upstream.route(STOCK, spec.path, list_reply([]))
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", {"endpoint": spec.name})
+
+    assert "# note: the group is empty" in text
+    assert "market prefix" not in text and "this page has" not in text
+
+
+@pytest.mark.anyio
+async def test_an_empty_page_after_the_first_says_the_list_ended(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(list_endpoint())
+    upstream.route(STOCK, spec.path, list_reply([]))
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", {"endpoint": spec.name, "params": {"page": 3}})
+
+    assert "# note: no rows on page 3: the list ended before it." in text
+    assert next_call(text) is None
+
+
+@pytest.mark.anyio
+async def test_an_empty_list_without_a_symbol_does_not_blame_the_market_prefix(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    empty: dict[str, Any] = {
+        "items": [],
+        "current_page": 1,
+        "size": 3,
+        "total_items": 0,
+        "total_pages": 0,
+    }
+    path = REGISTRY["fund_nav_history"].path.format(fund_code="008975")
+    upstream.route("danjuanfunds.com", path, json_reply({"data": empty, "result_code": 0}))
+    async with connect(replay=False) as client:
+        text = await call(
+            client, "xq_call", {"endpoint": "fund_nav_history", "params": {"fund_code": "008975"}}
+        )
+
+    assert "rows=0" in text and "market prefix" not in text
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "name", ["kline", "finance_income", "f10_company", "quote_detail", "quotec"]
+)
+async def test_results_with_their_own_next_take_no_offset(
+    connect: Connect, upstream: FakeUpstream, name: str
+) -> None:
+    arguments = {"endpoint": name, "params": REGISTRY[name].agent.examples[0], "offset": 1}
+    async with connect(replay=False) as client:
+        payload = await fail(client, "xq_call", arguments)
+
+    assert (payload["error_code"], payload["field"]) == ("invalid_params", "offset")
+    assert "raise limit or narrow fields" in payload["hint"]
+    assert upstream.sent == []
+
+
+# The catalog at its final size, and what one more endpoint changes
+
+
+def many_endpoints(count: int) -> list[Endpoint[Any, Any]]:
+    categories: tuple[Category, ...] = get_args(Category)
+    base = synthetic_endpoint().agent
+    specs: list[Endpoint[Any, Any]] = []
+    for index in range(count):
+        category = categories[index % len(categories)]
+        agent = replace(base, category=category, title_zh=f"合成端点{index:03d}")
+        specs.append(synthetic_endpoint(f"{category}_synthetic_name_{index:03d}", agent=agent))
+    return specs
+
+
+@pytest.mark.anyio
+async def test_the_summary_of_100_endpoints_fits_the_smallest_budget_and_names_them_all(
+    connect: Connect, register_endpoint: Register
+) -> None:
+    added = [register_endpoint(spec) for spec in many_endpoints(100 - len(REGISTRY))]
+    async with connect(max_chars=MIN_MAX_CHARS) as client:
+        text = await call(client, "xq_endpoints")
+        unknown = await fail(client, "xq_call", {"endpoint": "no_such_endpoint_at_all"})
+        close = await fail(client, "xq_endpoints", {"name": ["quote_synthetic_name_000x"]})
+        instructions = client.instructions or ""
+
+    assert len(text) <= MIN_MAX_CHARS
+    assert set(summary_names(text)) == {*REGISTRY, *(spec.name for spec in added)}
+    assert next_call(text) is None
+    for payload in (unknown, close):
+        assert "valid_values" not in payload
+        assert len(payload.get("candidates", ())) <= 5
+    assert close["candidates"][0] == "quote_synthetic_name_000"
+    assert "xq_endpoints" in close["hint"]
+    assert len(instructions.splitlines()[0]) <= TITLE_LINE_CHARS
+
+
+@pytest.mark.anyio
+async def test_the_summary_and_a_category_list_what_is_enabled(connect: Connect) -> None:
+    excluded = ("finance_balance", "kline")
+    async with connect(exclude=excluded) as client:
+        summary = await call(client, "xq_endpoints")
+        finance = await call(client, "xq_endpoints", {"category": "finance"})
+        narrowed = await call(client, "xq_endpoints", {"category": "finance", "query": "利润"})
+        tools = (await client.list_tools()).tools
+        emptied = await fail(client, "xq_endpoints", {"category": "kline"})
+
+    per_category: dict[str, list[str]] = {}
+    for name, spec in REGISTRY.items():
+        if name not in excluded:
+            per_category.setdefault(spec.agent.category, []).append(name)
+    categories = [category for category in get_args(Category) if category in per_category]
+    assert body_lines(summary) == [
+        "category,title,count,endpoints",
+        *(
+            f"{category},{CATEGORY_TITLES[category]},{len(per_category[category])},"
+            f"{' '.join(per_category[category])}"
+            for category in categories
+        ),
+    ]
+    assert next_call(summary) is None
+
+    assert body_lines(finance)[0] == "name,title,summary,auth,freshness,tool"
+    assert [line.split(",")[0] for line in body_lines(finance)[1:]] == per_category["finance"]
+    assert "finance_income" in [line.split(",")[0] for line in body_lines(narrowed)[1:]]
+    assert '"category":"finance"' in narrowed and '"query":"利润"' in narrowed
+
+    [listed] = [tool for tool in tools if tool.name == "xq_endpoints"]
+    assert listed.input_schema["properties"]["category"]["enum"] == categories
+    assert emptied["field"] == "category" and emptied["valid_values"] == categories
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("name", "markets", "pagination"),
+    [
+        ("kline", "CN, HK, US", "for older bars the # next line"),
+        ("finance_income", "CN, HK, US", "count chooses how many of the most recent rows"),
+        ("capital_block_trades", "CN", "numbered pages:"),
+        ("capital_block_trades", "CN", "a short page ends the list"),
+        ("fund_nav_history", None, "the upstream's total ends the list"),
+        ("quotec", "CN, HK, US", "names the codes not shown"),
+        ("batch_quote", "CN, HK, US", "names the codes not shown"),
+        ("f10_company", "CN, HK, US", "one call returns one record"),
+        ("quote_detail", "CN, HK, US", "one call returns one record"),
+        ("cube_nav_daily", None, "one call fetches the whole result"),
+        ("suggest_stock", None, "repeats the call with offset"),
+    ],
+)
+async def test_details_state_the_markets_and_how_rows_are_reached(
+    connect: Connect, name: str, markets: str | None, pagination: str
+) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"name": [name]})
+
+    lines = text.splitlines()
+    assert (
+        (f"markets: {markets}" in lines)
+        if markets
+        else not any(line.startswith("markets:") for line in lines)
+    )
+    [line] = [line for line in lines if line.startswith("pagination: ")]
+    assert pagination in line and "every row" not in line
+
+
+@pytest.mark.anyio
+async def test_page_details_name_the_cap_and_how_to_get_the_rest(
+    connect: Connect, register_endpoint: Register
+) -> None:
+    rule = Pagination(style="page", end="empty", total_cap=5000, cap_hint="Split it by board.")
+    spec = register_endpoint(list_endpoint(pagination=rule))
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"name": [spec.name]})
+
+    assert "only an empty page ends the list" in text
+    assert "serves at most 5000 rows. Split it by board." in text
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", list(REGISTRY))
+async def test_each_detail_block_fits_the_smallest_budget(connect: Connect, name: str) -> None:
+    async with connect(max_chars=4000) as client:
+        text = await call(client, "xq_endpoints", {"name": [name]})
+
+    assert f"# endpoint {name}: " in text and "example" in text
+    assert next_call(text) is None
+
+
+@pytest.mark.anyio
+async def test_a_login_only_endpoint_needs_a_token_also_under_replay(
+    connect: Connect, upstream: FakeUpstream, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(auth="required"))
+    upstream.route(STOCK, spec.path, json_reply({"data": {"value": 7}, "error_code": 0}))
+    arguments = {"endpoint": spec.name, "params": {"symbol": "SH600000"}}
+    async with connect(replay=False, token=TOKEN) as client:
+        text = await call(client, "xq_call", arguments)
+        details = await call(client, "xq_endpoints", {"name": [spec.name]})
+        others = await call(client, "xq_endpoints", {"name": ["quote_detail"]})
+    async with connect() as client:
+        without_token = await fail(client, "xq_call", arguments)
+    async with connect(token=TOKEN) as client:
+        with_token = await fail(client, "xq_call", arguments)
+
+    assert "value: 7" in text and "rows=1" in text
+    assert "login_required" in details and "--replay" in details and "XUEQIU_TOKEN" in details
+    assert "login_required" not in others
+    assert without_token["error_code"] == "login_required"
+    # With a token the call gets past the login check and asks the replay fixtures.
+    assert with_token["error_code"] != "login_required"
+
+
+def listed_tools(tools: Sequence[Any]) -> list[str]:
+    dumped = [tool.model_dump(by_alias=True, mode="json", exclude_none=True) for tool in tools]
+    return json.dumps(dumped, ensure_ascii=False, indent=2).splitlines()
+
+
+@pytest.mark.anyio
+async def test_one_more_endpoint_adds_one_enum_line_and_changes_the_first_instruction_line(
+    connect: Connect, register_endpoint: Register
+) -> None:
+    async with connect() as client:
+        tools_before = listed_tools((await client.list_tools()).tools)
+        instructions_before = (client.instructions or "").splitlines()
+    spec = register_endpoint(synthetic_endpoint())
+    async with connect() as client:
+        tools_after = listed_tools((await client.list_tools()).tools)
+        instructions_after = (client.instructions or "").splitlines()
+
+    added = [line for line in tools_after if line not in tools_before]
+    removed = [line for line in tools_before if line not in tools_after]
+    assert [line.strip() for line in added] == [f'"{spec.name}",'] and removed == []
+    assert len(tools_after) == len(tools_before) + 1
+    assert instructions_after[1:] == instructions_before[1:]
+    assert spec.agent.title_zh in instructions_after[0]
+    assert spec.agent.title_zh not in instructions_before[0]
+
+
+def test_grouped_tools_report() -> None:
+    """What each grouped tool of the next phase would merge: its params, whether they are more
+    than 8, and the names with different types. Reviewed when it changes; no limit applies yet."""
+    groups: dict[str, dict[str, dict[str, list[str]]]] = {}
+    for name, spec in REGISTRY.items():
+        if spec.agent.group is None:
+            continue
+        params = groups.setdefault(spec.agent.group, {})
+        for key, prop in spec.params.model_json_schema()["properties"].items():
+            kind = compact_json(
+                {k: v for k, v in prop.items() if k not in ("default", "description", "title")}
+            )
+            params.setdefault(key, {}).setdefault(kind, []).append(name)
+    report = {
+        group: {
+            "params": sorted(params),
+            "over_8_params": len(params) > 8,
+            "mixed_types": {key: kinds for key, kinds in sorted(params.items()) if len(kinds) > 1},
+        }
+        for group, params in sorted(groups.items())
+    }
+    check_snapshot(
+        "grouped_tools_report.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    )
+
+
 # Logging
 
 
@@ -1546,3 +2440,134 @@ async def test_xueqiu_mcp_serves_the_replay_fixtures_over_stdio() -> None:
     assert content.text.startswith('# batch_quote {"symbols":["SH600000","00700","AAPL"]}')
     assert "SH600000,浦发银行," in content.text
     assert content.text.splitlines()[-1] == "# next: none"
+
+
+# A range that holds more bars than one request returns
+
+
+async def bar_walk(client: Client, arguments: Mapping[str, Any]) -> list[str]:
+    """Follow # next from an xq_kline call to none; the first column of the rows shown."""
+    shown: list[str] = []
+    step: tuple[str, Mapping[str, Any]] | None = ("xq_kline", arguments)
+    for _ in range(100):
+        assert step is not None
+        text = await call(client, *step)
+        shown += [line.split(",")[0] for line in body_lines(text)[1:]]
+        step = next_call(text)
+        if step is None:
+            return shown
+    raise AssertionError("no progress")
+
+
+@pytest.mark.anyio
+async def test_a_range_over_the_request_cap_starts_at_the_latest_and_pages_back(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    body = bars(10_300)
+    newest = datetime.fromtimestamp(body["item"][-1][0] / 1000, SHANGHAI).date().isoformat()
+    upstream.route(STOCK, KLINE, window_reply(body))
+    arguments = {"symbols": ["SH600000"], "begin": "1990-01-01", "limit": 500}
+    async with connect(replay=False) as client:
+        first = await call(client, "xq_kline", arguments)
+        shown = await bar_walk(client, arguments)
+
+    assert upstream.requests(STOCK, KLINE)[0].params["count"] == "-10000"
+    assert body_lines(first)[-1].startswith(newest)
+    assert "one request returns at most 10000 bars" in first
+    assert stats_of(first)["bars"] == "10000"
+    assert len(shown) == len(set(shown)) == 10_300
+
+
+@pytest.mark.anyio
+async def test_a_range_over_the_request_cap_says_so_when_only_stats_are_asked_for(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    upstream.route(STOCK, KLINE, window_reply(bars(10_300)))
+    arguments = {"symbols": ["SH600000"], "begin": "1990-01-01", "limit": 0}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_kline", arguments)
+
+    assert "# stats cover only those" in text
+    assert text.splitlines()[-1] == "# next: none"
+
+
+@pytest.mark.anyio
+async def test_comparing_a_range_over_the_request_cap_names_the_symbol_it_cut(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    long, short = window_reply(bars(10_300)), window_reply(bars(50))
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        return (long if request.url.params["symbol"] == "SH600000" else short)(request)
+
+    upstream.route(STOCK, KLINE, reply)
+    arguments = {"symbols": ["SH600000", "SZ000001"], "begin": "1990-01-01", "limit": 0}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_kline", arguments)
+
+    [note] = [line for line in text.splitlines() if "at most 10000 bars" in line]
+    assert note.startswith("# note: the bars of SH600000 start after begin")
+
+
+def rounding_reply(body: Mapping[str, Any]) -> Reply:
+    """Like ``window_reply``, on an upstream that rounds ``begin`` up to a whole minute, so that
+    a request going back returns a bar the parse then drops."""
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        begin, count = int(request.url.params["begin"]), int(request.url.params["count"])
+        rounded = -(-begin // 60_000) * 60_000
+        chosen = [item for item in body["item"] if item[0] <= rounded][count:]
+        return httpx2.Response(200, json={"data": {**body, "item": chosen}, "error_code": 0})
+
+    return reply
+
+
+@pytest.mark.anyio
+async def test_a_page_of_bars_one_short_does_not_end_the_walk(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    start = datetime(2026, 11, 4, 9, 30, tzinfo=SHANGHAI)
+    moments = [start + timedelta(minutes=5 * index) for index in range(35)]
+    upstream.route(STOCK, KLINE, rounding_reply(minute_bars(moments)))
+    async with connect(replay=False) as client:
+        shown = await bar_walk(client, {"symbols": ["SH600000"], "period": "5m", "limit": 10})
+
+    assert len(shown) == len(set(shown)) == 35
+
+
+# Catalog and empty results
+
+
+@pytest.mark.anyio
+async def test_an_endpoints_query_is_bounded(connect: Connect) -> None:
+    async with connect() as client:
+        payload = await fail(client, "xq_endpoints", {"query": "x" * 51})
+
+    assert (payload["error_code"], payload["field"]) == ("invalid_params", "query")
+
+
+@pytest.mark.anyio
+async def test_a_catalog_cut_by_the_budget_says_how_to_reach_the_rest(
+    connect: Connect, register_endpoint: Register
+) -> None:
+    for spec in many_endpoints(60):
+        register_endpoint(spec)
+    async with connect(max_chars=4000) as client:
+        text = await call(client, "xq_endpoints", {"query": "synthetic_name"})
+
+    last = text.splitlines()[-1]
+    assert " rows by the 4000 character limit; narrow by category or query" in last
+    assert next_call(text) is not None
+
+
+@pytest.mark.anyio
+async def test_block_trades_of_a_stock_without_any_do_not_blame_the_prefix(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    path = REGISTRY["capital_block_trades"].path
+    upstream.route(STOCK, path, json_reply({"data": {"items": []}, "error_code": 0}))
+    arguments = {"endpoint": "capital_block_trades", "params": {"symbol": "SH688517"}}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", arguments)
+
+    assert "no block trade" in text and "market prefix" not in text

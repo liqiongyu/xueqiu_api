@@ -7,7 +7,11 @@ from ..registry import AgentInfo
 
 ENDPOINT = finance_endpoint(
     "indicator",
+    doc="Key financial indicators, latest report period first.",
     agent=AgentInfo(
+        category="finance",
+        group="xq_financials",
+        section="indicator",
         title_zh="财务指标",
         title_en="Financial indicators",
         summary=(

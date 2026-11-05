@@ -4,9 +4,9 @@ import asyncio
 import contextlib
 import os
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Self, TypeVar
 
 import httpx2
@@ -24,22 +24,10 @@ from ._core import (
     next_step,
     request_headers,
 )
-from ._finance import Financials, ReportType
-from .endpoints.batch_quote import ENDPOINT as BATCH_QUOTE
-from .endpoints.f10_company import ENDPOINT as F10_COMPANY
-from .endpoints.f10_company import Company
-from .endpoints.finance_balance import ENDPOINT as FINANCE_BALANCE
-from .endpoints.finance_cash_flow import ENDPOINT as FINANCE_CASH_FLOW
-from .endpoints.finance_income import ENDPOINT as FINANCE_INCOME
-from .endpoints.finance_indicator import ENDPOINT as FINANCE_INDICATOR
+from ._endpoints_async import AsyncEndpoints
+from ._pages import PageT, PageWalk, start_walk
 from .endpoints.kline import ENDPOINT as KLINE
-from .endpoints.kline import Adjust, Kline, Period
-from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
-from .endpoints.quote_detail import QuoteDetail
-from .endpoints.quotec import ENDPOINT as QUOTEC
-from .endpoints.quotec import Quote
-from .endpoints.suggest_stock import ENDPOINT as SUGGEST_STOCK
-from .endpoints.suggest_stock import StockSuggestion
+from .endpoints.kline import Adjust, BarWalk, Kline, Period
 from .errors import XueqiuError
 from .registry import Endpoint
 from .sites import Host
@@ -57,7 +45,7 @@ class AsyncRuntime:
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
 
 
-class AsyncClient(ClientBase):
+class AsyncClient(ClientBase, AsyncEndpoints):
     """Asynchronous (asyncio) client with the same surface as ``Client``; methods are coroutines.
 
     Concurrent tasks share one per-host limiter, circuit breaker and session. Arguments are
@@ -87,19 +75,7 @@ class AsyncClient(ClientBase):
         )
         self._session_lock = asyncio.Lock()
 
-    async def quotec(self, symbols: str | Sequence[str]) -> list[Quote]:
-        """Realtime quotes of up to 50 symbols in one request; a string may be comma-separated."""
-        return await self._call(QUOTEC, {"symbols": symbols})
-
-    async def batch_quote(self, symbols: str | Sequence[str]) -> list[QuoteDetail]:
-        """Quotes of up to 20 symbols in one request, with names and market status."""
-        return await self._call(BATCH_QUOTE, {"symbols": symbols})
-
-    async def quote_detail(self, symbol: str) -> QuoteDetail:
-        """Full quote of one symbol, with its name, valuation fields and market status."""
-        return await self._call(QUOTE_DETAIL, {"symbol": symbol})
-
-    async def kline(
+    async def kline_history(
         self,
         symbol: str,
         *,
@@ -107,66 +83,14 @@ class AsyncClient(ClientBase):
         adjust: Adjust = "before",
         begin: date | None = None,
         end: date | None = None,
-        before: datetime | None = None,
-        count: int | None = None,
     ) -> Kline:
-        """Bars of one symbol in one request; see ``KlineParams`` for how the range is chosen."""
-        return await self._call(
-            KLINE,
-            {
-                "symbol": symbol,
-                "period": period,
-                "adjust": adjust,
-                "begin": begin,
-                "end": end,
-                "before": before,
-                "count": count,
-            },
+        """Every bar of one symbol in a range, oldest first, in as many requests as that takes."""
+        walk = BarWalk(
+            symbol, period=period, adjust=adjust, begin=begin, end=end, now=datetime.now(UTC)
         )
-
-    async def suggest_stock(self, *, query: str) -> list[StockSuggestion]:
-        """Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``."""
-        return await self._call(SUGGEST_STOCK, {"query": query})
-
-    async def finance_income(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
-    ) -> Financials:
-        """Income statement, latest report period first; see ``FinanceParams``."""
-        return await self._call(
-            FINANCE_INCOME,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
-        )
-
-    async def finance_balance(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
-    ) -> Financials:
-        """Balance sheet, latest report period first; see ``FinanceParams``."""
-        return await self._call(
-            FINANCE_BALANCE,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
-        )
-
-    async def finance_cash_flow(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
-    ) -> Financials:
-        """Cash flow statement, latest report period first; see ``FinanceParams``."""
-        return await self._call(
-            FINANCE_CASH_FLOW,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
-        )
-
-    async def finance_indicator(
-        self, symbol: str, *, type: ReportType = "all", is_detail: bool = True, count: int = 5
-    ) -> Financials:
-        """Key financial indicators, latest report period first; see ``FinanceParams``."""
-        return await self._call(
-            FINANCE_INDICATOR,
-            {"symbol": symbol, "type": type, "is_detail": is_detail, "count": count},
-        )
-
-    async def f10_company(self, symbol: str) -> Company:
-        """Company profile of one listed company."""
-        return await self._call(F10_COMPANY, {"symbol": symbol})
+        while walk.params is not None:
+            walk.accept(await self._call(KLINE, walk.params))
+        return walk.result()
 
     async def call(self, endpoint: str, /, **params: Any) -> Any:
         """Call any registered endpoint by name and return its parsed result."""
@@ -197,6 +121,21 @@ class AsyncClient(ClientBase):
         call = self._endpoint_call(spec, validated)
         return self._finish(spec, validated, call, await self._run(call, deadline))
 
+    def _pages(
+        self,
+        spec: Endpoint[P, PageT],
+        params: Mapping[str, Any],
+        *,
+        max_pages: int | None = None,
+        max_items: int | None = None,
+    ) -> AsyncIterator[PageT]:
+        """Pages one at a time, each one call; bad params raise here, before any request."""
+        return self._walk(spec, start_walk(spec, params, max_pages, max_items))
+
+    async def _walk(self, spec: Endpoint[P, PageT], walk: PageWalk) -> AsyncIterator[PageT]:
+        while walk.params is not None:
+            yield walk.accept(await self._call(spec, walk.params))
+
     async def _run(self, call: Call, deadline: float) -> Any:
         attempt, refreshed, last = 0, False, None
         earliest = self._clock()
@@ -212,13 +151,7 @@ class AsyncClient(ClientBase):
             if isinstance(outcome, Ok):
                 return outcome.value
             self._note_failure(call, outcome)
-            step = next_step(
-                outcome,
-                call=call,
-                attempt=attempt,
-                refreshed=refreshed,
-                credentials=self._session.has_credentials,
-            )
+            step = next_step(outcome, call=call, attempt=attempt, refreshed=refreshed)
             if isinstance(step, XueqiuError):
                 raise step
             if step.refresh:
@@ -234,7 +167,7 @@ class AsyncClient(ClientBase):
             "GET",
             call.url,
             params=call.query,
-            headers=request_headers(call, self._session.cookie_header()),
+            headers=request_headers(call, self._session.cookie_header(call.credentials)),
             timeout=self._timeout(deadline),
         )
         try:
@@ -246,16 +179,21 @@ class AsyncClient(ClientBase):
         return classify(call, result, self._session.secrets())
 
     async def _ensure_session(self, call: Call, deadline: float) -> None:
-        if self._session.ready:
+        seen = self._session.generation
+        if self._session.ready(call):
             return
         async with self._session_locked(call, deadline):
-            if not self._session.ready:
+            if self._session.generation == seen:
                 await self._bootstrap(deadline)
+        if not self._session.ready(call):
+            raise self._cookie_error(call)
 
     async def _refresh(self, call: Call, seen: int, deadline: float) -> None:
         async with self._session_locked(call, deadline):
             if self._session.generation == seen:
                 await self._bootstrap(deadline)
+        if not self._session.ready(call):
+            raise self._cookie_error(call)
 
     @contextlib.asynccontextmanager
     async def _session_locked(self, call: Call, deadline: float) -> AsyncGenerator[None]:

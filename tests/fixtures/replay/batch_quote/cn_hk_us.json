@@ -1,5 +1,5 @@
 {
-  "params": {},
+  "params": {"symbol": "SH600000,00700,AAPL"},
   "body": {
     "data": {
       "items": [

@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
+from .._model import UpstreamModel
 from ..registry import AgentInfo, Endpoint
 
 RESULT_CAP = 10
@@ -23,11 +24,9 @@ class SuggestStockParams(BaseModel):
     """Code, pinyin initials or name, such as 600000, pfyh, 浦发银行 or AAPL."""
 
 
-class StockSuggestion(BaseModel):
+class StockSuggestion(UpstreamModel):
     """One search result. Unknown upstream fields (``label``, ``state``, ``type``) are kept in
     ``model_extra``."""
-
-    model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     symbol: str = Field(validation_alias="code")
     """Xueqiu symbol, such as SH600000 or AAPL (upstream ``code``)."""
@@ -50,6 +49,7 @@ def _parse(payload: Any, params: SuggestStockParams) -> list[StockSuggestion]:
 
 ENDPOINT = Endpoint(
     name="suggest_stock",
+    doc="Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``.",
     host="www.xueqiu.com",
     path="/query/v1/suggest_stock.json",
     params=SuggestStockParams,
@@ -61,6 +61,7 @@ ENDPOINT = Endpoint(
     # Without cookies www answers HTTP 200 {"code": 400016, "success": false} (2026-11-05).
     verified_on=date(2026, 11, 5),
     agent=AgentInfo(
+        category="search",
         title_zh="证券搜索",
         title_en="Security search",
         summary="按代码、拼音首字母或名称查证券的雪球代码和名称，只知道名称时先用它。",

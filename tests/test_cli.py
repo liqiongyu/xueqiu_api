@@ -26,11 +26,20 @@ import xueqiu_api
 from xueqiu_api import ERROR_TABLE, REGISTRY, cli
 from xueqiu_api._replay import ReplayTransport
 from xueqiu_api._sync import SyncRuntime
-from xueqiu_api.mcp import McpOptions
+from xueqiu_api.mcp_server import McpOptions
+from xueqiu_api.sites import SITES, Host
 
-from .harness import REPLAY_DIR, FakeClock
+from .harness import (
+    REPLAY_DIR,
+    FakeClock,
+    FakeUpstream,
+    Register,
+    home_page,
+    synthetic_endpoint,
+)
 
 LOGIN_ERROR = {"body": {"error_code": 60201, "error_description": "synthetic login error"}}
+TOKEN_REJECTED = {"status": 400, "body": {"error_code": "400016", "error_description": ""}}
 
 
 def replay_runtime(directory: Path) -> Callable[[], SyncRuntime]:
@@ -85,10 +94,38 @@ def replay_with(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **cases: dict[s
     root = tmp_path / "replay"
     shutil.copytree(REPLAY_DIR, root)
     for endpoint, case in cases.items():
-        shutil.rmtree(root / endpoint)
+        shutil.rmtree(root / endpoint, ignore_errors=True)
         (root / endpoint).mkdir()
         (root / endpoint / "case.json").write_text(json.dumps(case), encoding="utf-8")
     monkeypatch.setattr(cli, "_runtime", replay_runtime(root))
+
+
+def expected_rows() -> list[list[str]]:
+    """Status and seconds of each check of a first anonymous run over the registry.
+
+    A check waits for the slot of its host, and the first one that sends cookies also for the
+    bootstrap on www.xueqiu.com. A login-only endpoint is refused before it takes a slot.
+    """
+    now = 0.0
+    free: dict[Host, float] = {}
+    bootstrapped = False
+
+    def take(host: Host) -> None:
+        nonlocal now
+        now = max(now, free.get(host, 0.0))
+        free[host] = now + SITES[host].min_interval_s
+
+    rows: list[list[str]] = []
+    for name, spec in REGISTRY.items():
+        start = now
+        if spec.auth != "required":
+            if SITES[spec.host].cookies and spec.cookies and not bootstrapped:
+                take("www.xueqiu.com")
+                bootstrapped = True
+            take(spec.host)
+        status = "needs_login" if spec.auth == "required" else "ok"
+        rows.append([name, status, f"{now - start:.2f}s"])
+    return rows
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -153,12 +190,7 @@ def test_doctor_checks_every_endpoint_once_spaced_by_the_limiter(
         f"session cache: {session_cache} (missing)",
     ]
     assert lines[3].split() == ["endpoint", "status", "elapsed", "detail"]
-    # The cookie bootstrap and suggest_stock go to www.xueqiu.com; after the first request
-    # each stock.xueqiu.com check waits 1 s for its slot.
-    elapsed = ["0.00s", *["1.00s"] * 8, "0.00s"]
-    assert table(out) == [
-        [name, "ok", seconds] for name, seconds in zip(REGISTRY, elapsed, strict=True)
-    ]
+    assert [row[:3] for row in table(out)] == expected_rows()
 
 
 def test_offline_tests_cannot_reach_a_real_transport() -> None:
@@ -222,6 +254,28 @@ def test_doctor_counts_empty_results_as_success(
     ]
 
 
+def test_doctor_does_not_read_a_home_page_with_an_empty_u_as_an_empty_kline(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = FakeClock()
+    upstream = FakeUpstream(clock)
+    upstream.route(
+        "www.xueqiu.com", "/", home_page({"xq_a_token": "fake-anon-token-0001", "u": ""})
+    )
+    monkeypatch.setattr(
+        cli,
+        "_runtime",
+        lambda: SyncRuntime(transport=upstream.transport, clock=clock.now, sleep=clock.sleep),
+    )
+
+    code, out, _ = run(capsys, "doctor", "--endpoint", "kline")
+
+    assert code != 0
+    assert table(out)[0][:2] == ["kline", "error"]
+    assert "u cookie" in out
+    assert upstream.requests("stock.xueqiu.com") == []
+
+
 def test_doctor_reports_a_blocked_host_and_sends_nothing_more_to_it(
     capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -230,12 +284,16 @@ def test_doctor_reports_a_blocked_host_and_sends_nothing_more_to_it(
     code, out, err = run(capsys, "--format", "json", "doctor")
 
     rows = {row["endpoint"]: row for row in json.loads(out)}
-    later = [name for name in REGISTRY if name.startswith(("finance_", "kline", "quote"))]
+    order = list(REGISTRY)
+    later = [
+        name
+        for name in order[order.index("f10_company") + 1 :]
+        if REGISTRY[name].host == "stock.xueqiu.com" and REGISTRY[name].auth != "required"
+    ]
     assert {name: row["status"] for name, row in rows.items()} == {
-        "batch_quote": "ok",
+        **{row[0]: row[1] for row in expected_rows()},
         "f10_company": "blocked",
         **dict.fromkeys(later, "blocked"),
-        "suggest_stock": "ok",
     }
     # The 418 opened the breaker of stock.xueqiu.com, so the later checks fail fast.
     for name in later:
@@ -248,20 +306,88 @@ def test_doctor_reports_a_blocked_host_and_sends_nothing_more_to_it(
 
 
 def test_doctor_reports_rejected_credentials_as_needs_login(
-    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    register_endpoint: Register,
 ) -> None:
     monkeypatch.setenv("XUEQIU_TOKEN", "fake-token")
-    replay_with(tmp_path, monkeypatch, finance_income=LOGIN_ERROR)
+    spec = register_endpoint(synthetic_endpoint("quote_login_only", auth="required"))
+    replay_with(tmp_path, monkeypatch, quote_login_only=LOGIN_ERROR)
 
-    code, out, err = run(capsys, "doctor", "--endpoint", "finance_income", "--endpoint", "quotec")
+    code, out, err = run(capsys, "doctor", "--endpoint", spec.name, "--endpoint", "quotec")
 
     rows = table(out)
     assert out.splitlines()[1] == "credentials: env"
-    assert rows[0][:4] == ["finance_income", "needs_login", "0.00s", "auth_expired:"]
+    assert rows[0][:4] == ["quote_login_only", "needs_login", "0.00s", "auth_expired:"]
     assert rows[1] == ["quotec", "ok", "1.00s"]
     assert code == ERROR_TABLE["auth_expired"].exit_code
     assert error_json(err)["error_code"] == "auth_expired"
     assert "fake-token" not in out + err
+
+
+def test_doctor_does_not_count_a_login_only_endpoint_without_credentials(
+    capsys: pytest.CaptureFixture[str], register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint("quote_login_only", auth="required"))
+
+    code, out, err = run(capsys, "doctor", "--endpoint", spec.name)
+
+    assert (code, err) == (0, "")
+    assert table(out)[0][:4] == ["quote_login_only", "needs_login", "0.00s", "login_required:"]
+
+
+@pytest.mark.parametrize(
+    ("auth", "case", "status", "detail"),
+    [
+        ("anonymous", None, "error", "upstream_changed:"),
+        ("required", TOKEN_REJECTED, "needs_login", "auth_expired:"),
+    ],
+    ids=["no-fixture", "token-rejected"],
+)
+def test_doctor_shows_unverified_failures_without_counting_them(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    register_endpoint: Register,
+    auth: str,
+    case: dict[str, Any] | None,
+    status: str,
+    detail: str,
+) -> None:
+    monkeypatch.setenv("XUEQIU_TOKEN", "fake-token")
+    spec = synthetic_endpoint("quote_unverified", auth=auth, verified_on=None)
+    register_endpoint(spec)
+    replay_with(tmp_path, monkeypatch, **({"quote_unverified": case} if case else {}))
+
+    code, out, err = run(capsys, "doctor", "--endpoint", "quote_unverified")
+
+    assert (code, err) == (0, "")
+    assert table(out)[0][:5] == ["quote_unverified", status, "0.00s", "unverified", detail]
+
+    code, out, err = run(capsys, "--format", "json", "doctor", "--endpoint", "quote_unverified")
+
+    [row] = json.loads(out)
+    assert (code, err) == (0, "")
+    assert (row["status"], row["unverified"]) == (status, True)
+    assert row["error"]["error_code"] == detail.removesuffix(":")
+
+
+def test_doctor_marks_an_unverified_endpoint_that_answers(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    register_endpoint: Register,
+) -> None:
+    spec = synthetic_endpoint("quote_unverified", verified_on=None)
+    register_endpoint(spec)
+    case = {"body": {"data": {"value": 1}, "error_code": 0}}
+    replay_with(tmp_path, monkeypatch, quote_unverified=case)
+
+    code, out, _ = run(capsys, "doctor", "--endpoint", spec.name)
+
+    assert code == 0
+    assert table(out) == [["quote_unverified", "ok", "0.00s", "unverified"]]
 
 
 def test_doctor_reports_login_errors_of_anonymous_endpoints_as_upstream_changes(
@@ -280,14 +406,18 @@ def test_doctor_reports_login_errors_of_anonymous_endpoints_as_upstream_changes(
 
 
 def test_doctor_exits_with_the_most_severe_failure(
-    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    register_endpoint: Register,
 ) -> None:
     monkeypatch.setenv("XUEQIU_TOKEN", "fake-token")
+    spec = register_endpoint(synthetic_endpoint("quote_login_only", auth="required"))
     replay_with(
         tmp_path,
         monkeypatch,
         quotec={"status": 429, "body": {}},
-        kline=LOGIN_ERROR,
+        quote_login_only=LOGIN_ERROR,
         quote_detail={"body": {"data": "not a quote", "error_code": 0}},
     )
 
@@ -295,11 +425,11 @@ def test_doctor_exits_with_the_most_severe_failure(
     code, out, err = run(
         capsys,
         "doctor",
-        *("--endpoint", "kline", "--endpoint", "quote_detail", "--endpoint", "quotec"),
+        *("--endpoint", spec.name, "--endpoint", "quote_detail", "--endpoint", "quotec"),
     )
 
     assert [row[:2] for row in table(out)] == [
-        ["kline", "needs_login"],
+        ["quote_login_only", "needs_login"],
         ["quote_detail", "error"],
         ["quotec", "rate_limited"],
     ]
@@ -341,7 +471,7 @@ def test_doctor_reports_a_bug_in_one_check_and_runs_the_others(
 
     rows = {row["endpoint"]: row for row in json.loads(out)}
     assert {name: row["status"] for name, row in rows.items()} == {
-        **dict.fromkeys(REGISTRY, "ok"),
+        **{row[0]: row[1] for row in expected_rows()},
         "f10_company": "error",
     }
     payload = error_json(err)
@@ -448,7 +578,7 @@ def test_mcp_without_the_extra_says_how_to_install_it(
     real_import = importlib.import_module
 
     def import_module(name: str, package: str | None = None) -> types.ModuleType:
-        if name == "xueqiu_api.mcp.server":
+        if name == "xueqiu_api.mcp_server.server":
             raise ModuleNotFoundError("No module named 'mcp'", name="mcp")
         return real_import(name, package)
 
@@ -465,7 +595,7 @@ def test_mcp_without_the_extra_says_how_to_install_it(
 def test_mcp_reports_other_import_errors_as_bugs(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setitem(sys.modules, "xueqiu_api.mcp.server", None)
+    monkeypatch.setitem(sys.modules, "xueqiu_api.mcp_server.server", None)
 
     code, _, err = run(capsys, "mcp")
 
@@ -476,16 +606,16 @@ def test_mcp_reports_other_import_errors_as_bugs(
 
 @pytest.fixture
 def served(monkeypatch: pytest.MonkeyPatch) -> list[McpOptions]:
-    """Options the CLI hands to a fake ``xueqiu_api.mcp.server`` module."""
+    """Options the CLI hands to a fake ``xueqiu_api.mcp_server.server`` module."""
     received: list[McpOptions] = []
 
     def main(options: McpOptions) -> int:
         received.append(options)
         return 0
 
-    server = types.ModuleType("xueqiu_api.mcp.server")
+    server = types.ModuleType("xueqiu_api.mcp_server.server")
     monkeypatch.setattr(server, "main", main, raising=False)
-    monkeypatch.setitem(sys.modules, "xueqiu_api.mcp.server", server)
+    monkeypatch.setitem(sys.modules, "xueqiu_api.mcp_server.server", server)
     return received
 
 

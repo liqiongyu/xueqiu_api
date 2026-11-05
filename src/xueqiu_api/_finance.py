@@ -11,8 +11,10 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from ._model import without_keys
 from ._time import from_ms
-from .registry import AgentInfo, Endpoint
+from .errors import SymbolNotFound
+from .registry import AgentInfo, Endpoint, Pagination
 from .symbols import SymbolCode, normalize_symbol
 
 ReportType = Literal["all", "annual"]
@@ -32,7 +34,7 @@ class FinanceParams(BaseModel):
 
     symbol: SymbolCode
     """A-share, Hong Kong or US stock; the request goes to the region of its market."""
-    type: ReportType = "all"
+    report_type: ReportType = "all"
     """all (quarterly, half-year and annual reports) or annual (annual reports only)."""
     is_detail: bool = True
     """Every line item, or only the upstream's short list (8 items for A-share indicators)."""
@@ -99,13 +101,16 @@ def _build_query(params: FinanceParams, now: datetime) -> dict[str, str]:
     return {
         "region": normalize_symbol(params.symbol).region,
         "symbol": params.symbol,
-        "type": _UPSTREAM_TYPES[params.type],
+        "type": _UPSTREAM_TYPES[params.report_type],
         "is_detail": "true" if params.is_detail else "false",
         "count": str(params.count),
     }
 
 
 def _parse(payload: Any, params: FinanceParams, items: ItemFixes) -> Financials:
+    if payload == {}:
+        # What an unknown code gets, measured 2026-11-05 on the income statement.
+        raise SymbolNotFound(f"the upstream has no statements for {params.symbol}")
     data = cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
     rows: Any = data.get("list")
     if not isinstance(rows, list):
@@ -116,7 +121,7 @@ def _parse(payload: Any, params: FinanceParams, items: ItemFixes) -> Financials:
         name=_TEXT.validate_python(data.get("quote_name")),
         currency=_TEXT.validate_python(data.get("currency")),
         periods=tuple(_period(row, tz, items) for row in cast(list[Any], rows)),
-        extra={key: value for key, value in data.items() if key not in _HEADER_KEYS},
+        extra=without_keys({k: v for k, v in data.items() if k not in _HEADER_KEYS}),
     )
 
 
@@ -134,11 +139,13 @@ def _period(row: Any, tz: ZoneInfo, items: ItemFixes) -> ReportPeriod:
         line_items[item] = LineItem(
             None if value is None else value * factor, None if yoy is None else yoy * 100
         )
-    extra = {
-        key: value
-        for key, value in fields.items()
-        if key not in _PERIOD_KEYS and not isinstance(value, list)
-    }
+    extra = without_keys(
+        {
+            key: value
+            for key, value in fields.items()
+            if key not in _PERIOD_KEYS and not isinstance(value, list)
+        }
+    )
     if extra.get("ctime") is not None:
         extra["ctime"] = from_ms(extra["ctime"], tz)
     return ReportPeriod(
@@ -150,7 +157,7 @@ def _period(row: Any, tz: ZoneInfo, items: ItemFixes) -> ReportPeriod:
 
 
 def finance_endpoint(
-    statement: str, *, agent: AgentInfo, items: ItemFixes = MappingProxyType({})
+    statement: str, *, doc: str, agent: AgentInfo, items: ItemFixes = MappingProxyType({})
 ) -> Endpoint[FinanceParams, Financials]:
     """Spec of ``/v5/stock/finance/{region}/<statement>.json``, named ``finance_<statement>``.
 
@@ -163,6 +170,7 @@ def finance_endpoint(
 
     return Endpoint(
         name=f"finance_{statement}",
+        doc=doc,
         host="stock.xueqiu.com",
         path=f"/v5/stock/finance/{{region}}/{statement}.json",
         params=FinanceParams,
@@ -172,5 +180,8 @@ def finance_endpoint(
         freshness="daily",
         envelope="xueqiu",
         verified_on=date(2026, 11, 4),
+        pagination=Pagination(style="latest"),
+        markets=("CN", "HK", "US"),
+        order="newest_first",
         agent=agent,
     )

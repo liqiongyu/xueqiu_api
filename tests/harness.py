@@ -8,21 +8,31 @@ import json
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
 import httpx2
+import pytest
 
-from xueqiu_api import AsyncClient, Client
+from xueqiu_api import AsyncClient, AuthExpired, Client, LoginRequired, SymbolNotFound
 from xueqiu_api._async import AsyncRuntime
+from xueqiu_api._model import UpstreamModel
 from xueqiu_api._replay import ReplayTransport
 from xueqiu_api._sync import SyncRuntime
+from xueqiu_api.registry import AgentInfo, Endpoint
+from xueqiu_api.sites import SITES, Host
+from xueqiu_api.symbols import SymbolParams
 
 FIXTURES = Path(__file__).parent / "fixtures"
 REPLAY_DIR = FIXTURES / "replay"
 
+FAKE_LOGIN = "xq_a_token=fake-login-token-0001; u=fake-login-u-0001"
+
 Kind = Literal["sync", "async"]
 Reply = Callable[[httpx2.Request], httpx2.Response]
+Register = Callable[[Endpoint[Any, Any]], Endpoint[Any, Any]]
+"""The type of the ``register_endpoint`` fixture."""
 
 
 def fixture(name: str) -> Any:
@@ -235,6 +245,51 @@ class Harness:
     def request(self, **params: Any) -> Any:
         return self.run("request", **params)
 
+    def pages(self, method: str, *args: Any, **kwargs: Any) -> list[Any]:
+        """Every page a generated ``<name>_pages`` method yields."""
+        walk = getattr(self.client, method)(*args, **kwargs)
+        if self._runner is None:
+            return list(walk)
+
+        async def drain() -> list[Any]:
+            return [page async for page in walk]
+
+        return self._runner.run(drain())
+
+    def walk(
+        self, spec: Endpoint[Any, Any], *, stop_after: int | None = None, **params: Any
+    ) -> tuple[list[Any], Exception | None]:
+        """Consume the pages of ``spec`` and return what was delivered and the first error.
+
+        ``stop_after`` breaks out of the loop after that many pages; ``max_pages`` and
+        ``max_items`` go along with ``params``.
+        """
+        limits = {key: params.pop(key) for key in ("max_pages", "max_items") if key in params}
+        pages: list[Any] = []
+        client = self.client
+        if isinstance(client, Client):
+            try:
+                for page in client._pages(spec, params, **limits):  # pyright: ignore[reportPrivateUsage]
+                    pages.append(page)
+                    if len(pages) == stop_after:
+                        break
+            except Exception as exc:
+                return pages, exc
+            return pages, None
+
+        async def drain() -> Exception | None:
+            try:
+                async for page in client._pages(spec, params, **limits):  # pyright: ignore[reportPrivateUsage]
+                    pages.append(page)
+                    if len(pages) == stop_after:
+                        break
+            except Exception as exc:
+                return exc
+            return None
+
+        assert self._runner is not None
+        return pages, self._runner.run(drain())
+
     def concurrently(
         self, calls: Sequence[tuple[str, tuple[Any, ...], Mapping[str, Any]]]
     ) -> list[Any]:
@@ -275,3 +330,72 @@ class Harness:
         elif self._runner is not None:
             self._runner.run(self.client.close())
             self._runner.close()
+
+
+class SyntheticRow(UpstreamModel):
+    value: int
+
+
+def _synthetic_query(params: SymbolParams, now: datetime) -> dict[str, str]:
+    return {"symbol": params.symbol}
+
+
+def _synthetic_parse(payload: Any, params: SymbolParams) -> SyntheticRow:
+    """One record; an empty payload is the shape this endpoint gets for an unknown code."""
+    if not payload:
+        raise SymbolNotFound(f"no data for {params.symbol}")
+    return SyntheticRow.model_validate(payload)
+
+
+def synthetic_endpoint(
+    name: str = "quote_synthetic",
+    *,
+    host: Host = "stock.xueqiu.com",
+    path: str = "/v5/synthetic.json",
+    **fields: Any,
+) -> Endpoint[Any, Any]:
+    """An endpoint no fixture directory knows, for ``register_endpoint``; ``fields`` override it."""
+    options: dict[str, Any] = {
+        "doc": "A synthetic endpoint.",
+        "params": SymbolParams,
+        "build_query": _synthetic_query,
+        "parse": _synthetic_parse,
+        "auth": "anonymous",
+        "freshness": "daily",
+        "envelope": "xueqiu",
+        "verified_on": date(2026, 11, 5),
+        "agent": AgentInfo(
+            category="quote",
+            title_zh="合成端点",
+            title_en="Synthetic endpoint",
+            summary="测试用的合成端点。",
+            keywords=("合成端点", "synthetic"),
+            default_fields=("value",),
+            row_default=1,
+            row_cap=1,
+            upstream_cap=1,
+            examples=({"symbol": "SH600000"},),
+        ),
+    }
+    return Endpoint(name=name, host=host, path=path, **{**options, **fields})
+
+
+def check_login_only_endpoint(make: Callable[..., Harness], spec: Endpoint[Any, Any]) -> None:
+    """Without credentials nothing is sent; with a token every login code of the host means
+    the token was rejected, on the first answer."""
+    params = spec.agent.examples[0]
+    anonymous = make(token="")
+    with pytest.raises(LoginRequired) as missing:
+        anonymous.call(spec.name, **params)
+    assert missing.value.endpoint == spec.name
+    assert anonymous.upstream.sent == []
+
+    for code in sorted(SITES[spec.host].login_codes):
+        h = make(token=FAKE_LOGIN)
+        h.upstream.route(spec.host, spec.path, error_reply(code, "synthetic login error", 400))
+        before = len(h.upstream.sent)
+        with pytest.raises(AuthExpired) as rejected:
+            h.call(spec.name, **params)
+        assert (rejected.value.endpoint, rejected.value.upstream_code) == (spec.name, code)
+        [sent] = h.upstream.sent[before:]
+        assert sent.headers["cookie"] == FAKE_LOGIN

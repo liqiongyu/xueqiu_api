@@ -1,4 +1,4 @@
-"""Session state: configured credentials or the anonymous cookie set, and its cache file."""
+"""Session state: the configured credentials, the anonymous cookie set and its cache file."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from ._core import COOKIE_NAME, COOKIE_VALUE, log, usable_cookie
+from ._core import COOKIE_NAME, COOKIE_VALUE, Call, log, usable_cookie
 
 TOKEN_ENV = "XUEQIU_TOKEN"
 _VERSION = 1
@@ -75,7 +75,7 @@ class SessionStore:
         if not isinstance(data, dict) or cast(dict[str, Any], data).get("version") != _VERSION:
             return None
         cookies: Any = cast(dict[str, Any], data).get("cookies")
-        if not isinstance(cookies, dict) or "xq_a_token" not in cookies:
+        if not isinstance(cookies, dict) or not cast(dict[Any, Any], cookies).get("xq_a_token"):
             return None
         items = cast(dict[Any, Any], cookies).items()
         if not all(
@@ -105,31 +105,32 @@ class SessionStore:
 class Session:
     """Cookies one client sends to the Xueqiu hosts.
 
-    With credentials, those are sent and never written to disk. Without, the anonymous cookie
-    set is loaded from the store, or fetched by the client's bootstrap and saved there.
-    ``generation`` changes whenever the anonymous set is replaced.
+    Two independent sets: the configured credentials, never written to disk, and the anonymous
+    set, loaded from the store or fetched by the client's bootstrap and saved there. Each call
+    says which one it uses. ``generation`` changes whenever the anonymous set is replaced.
     """
 
     def __init__(self, *, credentials: dict[str, str] | None, store: SessionStore) -> None:
         self._credentials = credentials
         self._store = store
-        self._anonymous = None if credentials is not None else store.load()
+        self._anonymous = store.load()
         self.generation = 0
 
     @property
     def has_credentials(self) -> bool:
         return self._credentials is not None
 
-    @property
-    def ready(self) -> bool:
-        return self._credentials is not None or self._anonymous is not None
+    def ready(self, call: Call) -> bool:
+        """Whether the set this call uses is there and holds a value for each cookie it needs."""
+        cookies = self._cookies(call.credentials)
+        return cookies is not None and all(cookies.get(name) for name in call.needs_cookies)
 
     @property
     def kind(self) -> str:
         return "token" if self._credentials is not None else "anonymous"
 
-    def cookie_header(self) -> str | None:
-        cookies = self._credentials if self._credentials is not None else self._anonymous
+    def cookie_header(self, credentials: bool) -> str | None:
+        cookies = self._cookies(credentials)
         if not cookies:
             return None
         return "; ".join(f"{name}={value}" for name, value in cookies.items())
@@ -146,6 +147,9 @@ class Session:
             self._store.save(cookies)
         except OSError as exc:
             log.warning("could not write the session cache %s: %s", self._store.path, exc.strerror)
+
+    def _cookies(self, credentials: bool) -> dict[str, str] | None:
+        return self._credentials if credentials else self._anonymous
 
     def __repr__(self) -> str:
         return f"Session(kind={self.kind!r})"

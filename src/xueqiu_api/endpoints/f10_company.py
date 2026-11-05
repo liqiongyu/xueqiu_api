@@ -2,29 +2,30 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, cast
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 
-from .._time import from_ms
+from .._f10 import region_query
+from .._model import UpstreamModel
+from .._time import date_from_ms
+from ..errors import SymbolNotFound
 from ..registry import AgentInfo, Endpoint
-from ..symbols import SymbolParams, exchange_timezone, normalize_symbol
+from ..symbols import SymbolParams, exchange_timezone
 
 
 def _named(name: str, hong_kong: str) -> Any:
     return Field(default=None, validation_alias=AliasChoices(name, hong_kong))
 
 
-class Company(BaseModel):
+class Company(UpstreamModel):
     """Company profile. Field names follow the A-share and US responses.
 
     Hong Kong responses use other names; the ones with a clear counterpart are read into the
     fields below (``comcnname``, ``comenname``, ``mbu``, ``comintr``, ``incdate``,
     ``lsdateipo``, ``web_site``). Every other upstream field is kept in ``model_extra``.
     """
-
-    model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     symbol: str
     """The requested symbol."""
@@ -49,13 +50,7 @@ class Company(BaseModel):
     @field_validator("established_date", "listed_date", mode="before")
     @classmethod
     def _exchange_date(cls, value: Any, info: ValidationInfo) -> Any:
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return from_ms(value, exchange_timezone(info.data.get("symbol"))).date()
-        return value
-
-
-def _build_query(params: SymbolParams, now: datetime) -> dict[str, str]:
-    return {"region": normalize_symbol(params.symbol).region, "symbol": params.symbol}
+        return date_from_ms(value, exchange_timezone(info.data.get("symbol")))
 
 
 def _parse(payload: Any, params: SymbolParams) -> Company:
@@ -64,21 +59,30 @@ def _parse(payload: Any, params: SymbolParams) -> Company:
     )
     if not isinstance(company, dict):
         raise ValueError("f10 company data needs a company object")
-    return Company.model_validate({**cast(dict[str, Any], company), "symbol": params.symbol})
+    fields = cast(dict[str, Any], company)
+    # An unknown code gets a company object with every value null, measured 2026-11-05.
+    if all(value is None for value in fields.values()):
+        raise SymbolNotFound(f"the upstream has no company profile for {params.symbol}")
+    return Company.model_validate({**fields, "symbol": params.symbol})
 
 
 ENDPOINT = Endpoint(
     name="f10_company",
+    doc="Company profile of one listed company.",
     host="stock.xueqiu.com",
     path="/v5/stock/f10/{region}/company.json",
     params=SymbolParams,
-    build_query=_build_query,
+    build_query=region_query,
     parse=_parse,
     auth="anonymous",
     freshness="static",
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
+    markets=("CN", "HK", "US"),
     agent=AgentInfo(
+        category="f10",
+        group="xq_company",
+        section="company",
         title_zh="公司资料",
         title_en="Company profile",
         summary=(

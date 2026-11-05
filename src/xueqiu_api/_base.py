@@ -28,9 +28,18 @@ from ._core import (
     log,
     unwrap,
 )
+from ._pages import Page, finish
 from ._session import TOKEN_ENV, Session, SessionStore, default_session_path, parse_credentials
 from .endpoints import REGISTRY
-from .errors import Blocked, InvalidParams, RateLimited, UnknownEndpoint, UpstreamChanged
+from .errors import (
+    Blocked,
+    InvalidParams,
+    LoginRequired,
+    RateLimited,
+    SymbolNotFound,
+    UnknownEndpoint,
+    UpstreamChanged,
+)
 from .registry import Endpoint
 from .sites import SITES, Host
 
@@ -84,17 +93,33 @@ class ClientBase:
         return spec
 
     def _endpoint_call(self, spec: Endpoint[P, Any], params: P) -> Call:
+        """The call of validated params; ``LoginRequired`` when it cannot be sent as it needs."""
         site = SITES[spec.host]
         path, query = _fill_path(spec.path, spec.build_query(params, datetime.now(UTC)))
-        return Call(
+        cookies = site.cookies and spec.cookies
+        call = Call(
             site=site,
             url=f"https://{site.host}{path}",
             query=query,
             endpoint=spec.name,
             auth=spec.auth,
-            cookies=site.cookies and spec.cookies,
+            cookies=cookies,
             params=params.model_dump(mode="json", exclude_none=True),
+            credentials=cookies and self._session.has_credentials and spec.auth != "anonymous",
+            needs_cookies=spec.needs_cookies,
+            not_found=spec.not_found,
         )
+        if spec.auth == "required" and not self._session.has_credentials:
+            raise LoginRequired(
+                f"{spec.name} needs a logged-in session", endpoint=spec.name, params=call.params
+            )
+        if call.credentials and not self._session.ready(call):
+            raise LoginRequired(
+                f"{spec.name} needs the {_cookie_names(call)} in the configured credentials",
+                endpoint=spec.name,
+                params=call.params,
+            )
+        return call
 
     def _raw_call(
         self, host: str, path: str, params: Mapping[str, str | int | float] | None
@@ -106,6 +131,12 @@ class ClientBase:
             )
         if not path.startswith("/"):
             raise InvalidParams("path must start with /", params={"path": path[:200]})
+        if "?" in path:
+            raise InvalidParams(
+                "path must not hold a query",
+                params={"path": path[:200]},
+                hint="Pass the query values in params.",
+            )
         query = {str(key): _query_value(value) for key, value in (params or {}).items()}
         url = f"https://{site.host}{path}"
         try:
@@ -122,11 +153,18 @@ class ClientBase:
             auth=None,
             cookies=site.cookies,
             params={"host": host, "path": path, **query},
+            credentials=site.cookies and self._session.has_credentials,
         )
 
     def _finish(self, spec: Endpoint[P, R], params: P, call: Call, body: Any) -> R:
         try:
-            return spec.parse(unwrap(spec.envelope, body), params)
+            payload = unwrap(spec.envelope, body, may_lack_data=spec.not_found is not None)
+            result = spec.parse(payload, params)
+            if spec.pagination is not None and isinstance(result, Page):
+                return cast(R, finish(spec.pagination, cast(Page[Any], result), call.params))
+            return result
+        except SymbolNotFound as exc:
+            raise SymbolNotFound(exc.message, endpoint=spec.name, params=call.params) from None
         except (ValueError, TypeError) as exc:
             raise UpstreamChanged(
                 f"{spec.name} response does not match the expected shape: {_reason(exc)}",
@@ -177,6 +215,14 @@ class ClientBase:
                 retry_after_s=round(paused, 1),
                 params=call.params,
             )
+
+    def _cookie_error(self, call: Call) -> UpstreamChanged:
+        """The error of a call whose needed cookies a fresh anonymous set still lacks."""
+        return UpstreamChanged(
+            f"the home page did not set the {_cookie_names(call)} that {call.endpoint} needs",
+            endpoint=call.endpoint,
+            params=call.params,
+        )
 
     def _session_wait_error(self, call: Call) -> RateLimited:
         """The error of a call whose deadline passed while it waited for the session cookies."""
@@ -246,6 +292,10 @@ def _fill_path(template: str, values: Mapping[str, str]) -> tuple[str, dict[str,
         return template, dict(values)
     path = template.format_map({name: quote(values[name], safe="") for name in names})
     return path, {key: value for key, value in values.items() if key not in names}
+
+
+def _cookie_names(call: Call) -> str:
+    return f"{', '.join(call.needs_cookies)} cookie"
 
 
 def _reason(exc: Exception) -> str:

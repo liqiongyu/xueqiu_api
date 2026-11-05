@@ -11,12 +11,11 @@ import pytest
 
 from xueqiu_api import (
     InvalidParams,
-    Kline,
-    Quote,
     SymbolNotFound,
     UnknownEndpoint,
     UpstreamError,
 )
+from xueqiu_api.models import Kline, Quote
 
 from .harness import Harness, error_reply, fixture_reply, json_reply
 
@@ -26,6 +25,7 @@ KLINE = "/v5/stock/chart/kline.json"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
+@pytest.mark.sample("quotec")
 def test_quotec_sends_one_batch_request_without_cookies(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
 
@@ -50,6 +50,7 @@ def test_quotec_accepts_a_comma_separated_string(h: Harness) -> None:
     assert [sent.params for sent in h.upstream.sent] == [{"symbol": "SH600000,00700"}] * 2
 
 
+@pytest.mark.sample("kline")
 def test_kline_bootstraps_cookies_and_parses_bars(h: Harness) -> None:
     h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
 
@@ -207,6 +208,14 @@ def test_request_rejects_an_invalid_url_before_the_session_and_the_limiter(
     assert not session_path.exists()
 
 
+def test_request_rejects_a_query_in_the_path(h: Harness) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        h.request(host=STOCK, path=f"{QUOTEC}?symbol=SH600000", params={"extend": "detail"})
+
+    assert "params" in caught.value.hint
+    assert h.upstream.sent == []
+
+
 def test_request_encodes_control_characters_in_param_values(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, json_reply({"data": [], "error_code": 0}))
 
@@ -230,6 +239,7 @@ def test_empty_kline_shape_is_a_success(h: Harness) -> None:
 
     assert len(bars) == 0
     assert bars.columns == {}
+    assert "u=fake-anon-u-0001" in h.upstream.requests(STOCK, KLINE)[0].headers["cookie"]
 
 
 def test_errors_from_the_upstream_keep_their_code(h: Harness) -> None:

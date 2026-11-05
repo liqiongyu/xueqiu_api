@@ -15,6 +15,7 @@ from pydantic import (
     field_validator,
 )
 
+from .._model import UpstreamModel
 from .._time import from_ms
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolCode, exchange_timezone, split_symbols
@@ -42,10 +43,8 @@ def exchange_time(value: Any, info: ValidationInfo) -> Any:
     return value
 
 
-class Quote(BaseModel):
+class Quote(UpstreamModel):
     """Realtime quote of one symbol. Unknown upstream fields are kept in ``model_extra``."""
-
-    model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     symbol: str
     """Xueqiu symbol, such as SH600519, 00700 or AAPL."""
@@ -100,6 +99,7 @@ def _parse(payload: Any, params: QuotecParams) -> list[Quote]:
 
 ENDPOINT = Endpoint(
     name="quotec",
+    doc="Realtime quotes of up to 50 symbols in one request; a string may be comma-separated.",
     host="stock.xueqiu.com",
     path="/v5/stock/realtime/quotec.json",
     params=QuotecParams,
@@ -110,7 +110,9 @@ ENDPOINT = Endpoint(
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
     cookies=False,
+    markets=("CN", "HK", "US"),
     agent=AgentInfo(
+        category="quote",
         title_zh="实时行情",
         title_en="Realtime quotes",
         summary="一次请求取多只股票或指数的最新价、涨跌幅、成交量和成交额。",
