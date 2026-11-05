@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Any, ClassVar
+from typing import Annotated, Any, ClassVar, cast
 
 from pydantic import BeforeValidator, Field
 
 from .._model import UpstreamModel
 from .._values import WholeNumber
+from ..errors import SymbolNotFound
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolParams
 
@@ -64,6 +65,10 @@ def _build_query(params: SymbolParams, now: datetime) -> dict[str, str]:
 def _parse(payload: Any, params: SymbolParams) -> StockHeat:
     if payload == {}:
         raise ValueError("the upstream sent no popularity data")
+    fields = cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
+    if fields.get("rank") == 0 and not fields.get("rank_history"):
+        # What an unknown code gets, with every count at 0, measured 2026-11-05.
+        raise SymbolNotFound(f"the upstream has no popularity data for {params.symbol}")
     return StockHeat.model_validate({**payload, "symbol": params.symbol})
 
 

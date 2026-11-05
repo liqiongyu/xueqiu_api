@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -110,9 +110,9 @@ def _build_query(params: BusinessParams, now: datetime) -> dict[str, str]:
 
 
 def _parse(payload: Any, params: BusinessParams) -> RevenueBreakdown:
-    if payload == {}:
-        # What an unknown code gets on the income statement, measured 2026-11-05; this path was
-        # not measured, but shares the family's envelope.
+    fields = cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
+    if fields.get("quote_name") is None and not fields.get("list"):
+        # What an unknown code gets, measured 2026-11-05.
         raise SymbolNotFound(f"the upstream has no revenue breakdown for {params.symbol}")
     return RevenueBreakdown.model_validate(
         {**payload, "symbol": params.symbol}, context={"tz": REPORT_DATE_ZONE}

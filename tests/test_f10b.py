@@ -338,7 +338,8 @@ def test_finance_business_turns_fractions_into_percent_points(h: Harness) -> Non
 
 
 def test_finance_business_of_an_unknown_code_is_symbol_not_found(h: Harness) -> None:
-    h.upstream.route(STOCK, BUSINESS_CN, json_reply({"data": {}, "error_code": 0}))
+    body: dict[str, Any] = {"data": {"quote_name": None, "list": []}, "error_code": 0}
+    h.upstream.route(STOCK, BUSINESS_CN, json_reply(body))
 
     with pytest.raises(SymbolNotFound) as caught:
         h.call("finance_business", symbol="SH999999")
@@ -402,7 +403,7 @@ def test_finance_business_limit_continues_with_an_offset(h: Harness) -> None:
 
 
 def test_finance_business_with_no_periods_is_falsy(h: Harness) -> None:
-    h.upstream.route(STOCK, BUSINESS_CN, ok({"list": []}))
+    h.upstream.route(STOCK, BUSINESS_CN, ok({"quote_name": "示例", "list": []}))
 
     assert not h.call("finance_business", symbol="SH600000")
 

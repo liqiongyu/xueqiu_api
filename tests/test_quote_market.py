@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from xueqiu_api import InvalidParams, UpstreamChanged, UpstreamError
+from xueqiu_api import InvalidParams, SymbolNotFound, UpstreamChanged, UpstreamError
 from xueqiu_api._async import AsyncClient, AsyncRuntime
 from xueqiu_api.endpoints import REGISTRY
 from xueqiu_api.endpoints.market_bj_indexes import BoardIndexQuote
@@ -474,6 +474,16 @@ def test_quote_heat_of_an_empty_payload_is_no_blank_record(h: Harness) -> None:
 
     with pytest.raises(UpstreamChanged):
         h.call("quote_heat", symbol="SH600000")
+
+
+def test_quote_heat_of_an_unknown_code_is_symbol_not_found(h: Harness) -> None:
+    empty: dict[str, Any] = {"rank": 0, "total": 32041, "visitors": 0, "rank_history": []}
+    answer(h.upstream, "quote_heat", xueqiu(empty))
+
+    with pytest.raises(SymbolNotFound) as caught:
+        h.call("quote_heat", symbol="SH999999")
+
+    assert caught.value.endpoint == "quote_heat"
 
 
 def test_quote_heat_leaves_the_award_out(h: Harness, mcp_call: McpCall) -> None:
