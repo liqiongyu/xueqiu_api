@@ -642,7 +642,7 @@ def _requests_of(
 def test_a_loose_form_of_a_param_sends_the_same_request(
     call: Call, loose: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("xueqiu_api._base.datetime", _FrozenDatetime)
+    monkeypatch.setattr("xueqiu_api._async.datetime", _FrozenDatetime)
 
     original = _requests_of(tmp_path, call.endpoint, call.params)
 

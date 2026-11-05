@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from .._index import in_range
 from .._model import UpstreamModel
+from .._result import Fetched
 from .._values import FractionPoints, Number
 from ..registry import AgentInfo, Endpoint
 from .kline import BarDate, check_range
@@ -33,7 +34,7 @@ class StockBondParams(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class StockBondPercentile:
+class StockBondPercentile(Fetched):
     """Danjuan's stock-bond percentile in columns, oldest first.
 
     ``columns`` holds ``percentile`` (percent points; how Danjuan computes it is not documented)

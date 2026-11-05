@@ -2,24 +2,27 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import os
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, ParamSpec, Self, TypeVar
+from typing import Any, ParamSpec, Self, TypeVar, cast
 
 import httpx2
 from pydantic import BaseModel
 
 from ._base import (
     DEFAULT_DEADLINE_S,
+    CachePlan,
     ClientBase,
     exchange_yesterday,
     http_result,
     market_symbol,
     no_cookie_jar,
+    restamp,
 )
 from ._core import (
     HOME_CALL,
@@ -34,9 +37,11 @@ from ._core import (
 )
 from ._endpoints_async import AsyncEndpoints
 from ._pages import PageT, PageWalk, start_walk
+from ._result import Rows
 from ._shared import LEASE_POLL_S, default_state_path
 from ._status import ClientStatus
 from .adjust import AdjustFactors, derive_factors
+from .cache import CacheBackend, MemoryCache
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import MAX_COUNT, Adjust, BarWalk, Kline, Period
 from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
@@ -54,6 +59,7 @@ from .universe import SecuritySnapshot, Segment, SnapshotWalk
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
+T = TypeVar("T")
 A = ParamSpec("A")
 
 
@@ -84,7 +90,7 @@ class AsyncClient(ClientBase, AsyncEndpoints):
     Concurrent tasks share one per-host limiter, circuit breaker and session. Arguments are
     the same as for ``Client``; the deadline also bounds a response that is still arriving.
     While the shared state file is in use, it and the session file are read and written in
-    worker threads.
+    worker threads, and so is a cache other than a ``MemoryCache``.
     """
 
     def __init__(
@@ -94,6 +100,8 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         session_path: str | os.PathLike[str] | None = None,
         min_intervals: Mapping[str, float] | None = None,
         deadline: float = DEFAULT_DEADLINE_S,
+        cache: CacheBackend | None = None,
+        stale_if_error: float | None = None,
         _runtime: AsyncRuntime | None = None,
     ) -> None:
         runtime = _runtime or AsyncRuntime()
@@ -105,12 +113,15 @@ class AsyncClient(ClientBase, AsyncEndpoints):
             clock=runtime.clock,
             wall=runtime.wall,
             state_path=default_state_path() if _runtime is None else runtime.state_path,
+            cache=cache,
+            stale_if_error=stale_if_error,
         )
         self._sleep = runtime.sleep
         self._http = httpx2.AsyncClient(
             transport=runtime.transport, cookies=no_cookie_jar(), max_redirects=MAX_REDIRECTS
         )
         self._session_lock = asyncio.Lock()
+        self._flights: dict[str, asyncio.Task[tuple[Any, float]]] = {}
 
     async def kline_history(
         self,
@@ -120,14 +131,31 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         adjust: Adjust = "before",
         begin: date | None = None,
         end: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Kline:
-        """Every bar of one symbol in a range, oldest first, in as many requests as that takes."""
-        walk = BarWalk(
-            symbol, period=period, adjust=adjust, begin=begin, end=end, now=datetime.now(UTC)
-        )
-        while walk.params is not None:
-            walk.accept(await self._call(KLINE, walk.params))
-        return walk.result()
+        """Every bar of one symbol in a range, oldest first, in as many requests as that takes.
+
+        Only a range one request covers can come from the cache, as a cached window is never
+        joined to new ones. The result carries the fetch facts of the first request.
+        """
+        now = self._now()
+
+        def start() -> BarWalk:
+            return BarWalk(symbol, period=period, adjust=adjust, begin=begin, end=end, now=now)
+
+        walk, first = start(), None
+        while (params := walk.params) is not None:
+            if first is not None and first.from_cache:
+                # A second window is needed: start again, this time without reading.
+                walk, first, max_age = start(), None, 0
+                continue
+            bars = await self._call(
+                KLINE, params, cache=cache, max_age=max_age if first is None else 0
+            )
+            walk.accept(bars)
+            first = bars if first is None else first
+        return restamp(walk.result(), first)
 
     async def security_snapshot(
         self, market: Market, *, segments: Sequence[Segment] | None = None
@@ -141,10 +169,11 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         ``SecuritySnapshot.complete`` says whether all rows came;
         ``xueqiu_api.universe.check_snapshot`` checks the rest.
         """
-        walk = SnapshotWalk(market, segments=segments, fetched_at=datetime.now(UTC))
+        walk = SnapshotWalk(market, segments=segments, fetched_at=self._now())
         while (request := walk.next_request()) is not None:
             try:
-                walk.feed(await self.call(request.endpoint, **request.params))
+                # Pages fetched at different moments can drop rows, so none comes from the cache.
+                walk.feed(await self.call(request.endpoint, cache=False, **request.params))
             except XueqiuError:
                 if not request.optional:
                     raise
@@ -160,7 +189,8 @@ class AsyncClient(ClientBase, AsyncEndpoints):
             "adjust": "normal",
             "count": MAX_COUNT,
         }
-        return calendar_from_kline(await self._call(KLINE, params), fetched_at=datetime.now(UTC))
+        bars = await self._call(KLINE, params)
+        return calendar_from_kline(bars, fetched_at=self._fetched_at(bars))
 
     async def market_state(self, market: Market) -> MarketState:
         """Whether ``market`` is trading now, from one quote of its ``CALENDAR_SOURCES`` symbol.
@@ -169,7 +199,7 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         traded while that stock is suspended.
         """
         quote = await self._call(QUOTE_DETAIL, {"symbol": market_symbol(market)})
-        return market_state_from_quote(quote, now=datetime.now(UTC))
+        return market_state_from_quote(quote, now=self._now())
 
     async def adjust_factors(self, symbol: str, *, end: date | None = None) -> AdjustFactors:
         """Adjustment factors of ``symbol`` up to ``end``, from its unadjusted and backward-adjusted
@@ -178,14 +208,18 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         ``end`` defaults to yesterday on the symbol's exchange, because today's bar can change
         between the two requests.
         """
-        last = exchange_yesterday(symbol, datetime.now(UTC)) if end is None else end
+        last = exchange_yesterday(symbol, self._now()) if end is None else end
         normal = await self.kline_history(symbol, adjust="normal", end=last)
         after = await self.kline_history(symbol, adjust="after", end=last)
-        return derive_factors(normal, after, fetched_at=datetime.now(UTC))
+        fetched_at = min(self._fetched_at(normal), self._fetched_at(after))
+        return derive_factors(normal, after, fetched_at=fetched_at)
 
-    async def call(self, endpoint: str, /, **params: Any) -> Any:
-        """Call any registered endpoint by name and return its parsed result."""
-        return await self._call(self._endpoint(endpoint), params)
+    async def call(
+        self, endpoint: str, /, *, cache: bool = True, max_age: float | None = None, **params: Any
+    ) -> Any:
+        """Call any registered endpoint by name and return its parsed result; ``cache`` and
+        ``max_age`` work as on the endpoint methods."""
+        return await self._call(self._endpoint(endpoint), params, cache=cache, max_age=max_age)
 
     async def request(
         self, *, host: Host, path: str, params: Mapping[str, str | int | float] | None = None
@@ -199,8 +233,10 @@ class AsyncClient(ClientBase, AsyncEndpoints):
 
     async def status(self) -> ClientStatus:
         """What this client knows locally: credentials, the last login error, the limits of
-        each host and the shared state file. Sends no request."""
-        return await self._offload(self._state is not None, self._status)
+        each host, the shared state file and the response cache. Sends no request."""
+        cache = self._cache
+        thread = self._state is not None or (cache is not None and _in_threads(cache))
+        return await self._offload(thread, self._status)
 
     async def close(self) -> None:
         await self._http.aclose()
@@ -213,11 +249,84 @@ class AsyncClient(ClientBase, AsyncEndpoints):
     async def __aexit__(self, *exc_info: object) -> None:
         await self.close()
 
-    async def _call(self, spec: Endpoint[P, R], params: Mapping[str, Any]) -> R:
+    async def _call(
+        self,
+        spec: Endpoint[P, R],
+        params: Mapping[str, Any],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> R:
         deadline = self._clock() + self._deadline_s
         validated = spec.validate(params)
         call = self._endpoint_call(spec, validated)
-        return self._finish(spec, validated, call, await self._run(call, deadline))
+        plan = self._plan(spec, call, cache, max_age)
+        if plan is None:
+            body = await self._run(call, deadline)
+            return self._fetched(self._finish(spec, validated, call, body), self._wall())
+        thread = _in_threads(plan.backend)
+        if plan.read:
+            found = await self._offload(
+                thread, self._from_entry, spec, validated, call, plan, max_age=max_age
+            )
+            if found is not None:
+                return found
+        try:
+            body, fetched, leader = await self._fly(plan, call, deadline)
+        except XueqiuError as error:
+            found = await self._offload(
+                thread, self._stale_result, spec, validated, call, plan, error
+            )
+            if found is None:
+                raise
+            return found
+        result = self._fetched(self._finish(spec, validated, call, body), fetched)
+        if leader and plan.write:
+            await self._offload(thread, self._store, plan, spec, body, result, fetched)
+        return result
+
+    async def _rows(
+        self,
+        spec: Endpoint[P, list[T]],
+        params: Mapping[str, Any],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[T]:
+        """``_call`` of an endpoint whose result is a list, which comes back as ``Rows``."""
+        return cast(Rows[T], await self._call(spec, params, cache=cache, max_age=max_age))
+
+    async def _fly(self, plan: CachePlan, call: Call, deadline: float) -> tuple[Any, float, bool]:
+        """The body of the call, when it came on the wall clock and whether this call sent
+        the request; another task's request in flight for the same key is shared.
+
+        The request runs in a task of its own, so that cancelling the call that sent it leaves
+        it to the others.
+        """
+        if not plan.coalesce:
+            return await self._run(call, deadline), self._wall(), True
+        flight = self._flights.get(plan.key)
+        if flight is not None:
+            try:
+                async with asyncio.timeout(max(0.0, deadline - self._clock())):
+                    body, fetched = await asyncio.shield(flight)
+            except TimeoutError:
+                raise self._flight_wait_error(call) from None
+            return body, fetched, False
+        flight = self._flights[plan.key] = asyncio.ensure_future(self._fetch(call, deadline))
+        flight.add_done_callback(functools.partial(self._landed, plan.key))
+        body, fetched = await asyncio.shield(flight)
+        return body, fetched, True
+
+    async def _fetch(self, call: Call, deadline: float) -> tuple[Any, float]:
+        return await self._run(call, deadline), self._wall()
+
+    def _landed(self, key: str, flight: asyncio.Task[tuple[Any, float]]) -> None:
+        """Forget a finished flight, and take its exception in case no caller is left to."""
+        if self._flights.get(key) is flight:
+            del self._flights[key]
+        if not flight.cancelled():
+            flight.exception()
 
     def _pages(
         self,
@@ -232,7 +341,9 @@ class AsyncClient(ClientBase, AsyncEndpoints):
 
     async def _walk(self, spec: Endpoint[P, PageT], walk: PageWalk) -> AsyncIterator[PageT]:
         while walk.params is not None:
-            yield walk.accept(await self._call(spec, walk.params))
+            # Every page is fetched anew: pages of different moments can drop or repeat rows.
+            page = await self._call(spec, walk.params, max_age=0)
+            yield restamp(walk.accept(page), page)
 
     async def _run(self, call: Call, deadline: float) -> Any:
         thread = self._state is not None
@@ -365,6 +476,11 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         if thread:
             return await asyncio.to_thread(fn, *args, **kwargs)
         return fn(*args, **kwargs)
+
+
+def _in_threads(backend: CacheBackend) -> bool:
+    """Whether calls of ``backend`` go to worker threads: all but a ``MemoryCache`` may block."""
+    return not isinstance(backend, MemoryCache)
 
 
 async def _wait_out(task: asyncio.Future[Any]) -> None:

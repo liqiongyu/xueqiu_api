@@ -15,6 +15,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from ._finance import REPORT_DATE_ZONE
 from ._model import UpstreamModel
+from ._result import Fetched
 from ._time import date_from_ms, from_ms
 from ._values import FractionPoints, Number
 from .endpoints.kline import BarDate, check_range
@@ -120,7 +121,7 @@ class ValuationHistoryParams(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class ValuationHistory:
+class ValuationHistory(Fetched):
     """PE or PB of one index over time in columns, oldest first.
 
     ``columns`` holds one column, ``pe`` or ``pb``, as a multiple; a 0 from the upstream is None.

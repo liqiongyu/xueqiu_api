@@ -10,6 +10,7 @@ from typing import Any, Self
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from .._model import UpstreamModel
+from .._result import Fetched
 from .._values import Number
 from ..registry import AgentInfo, Endpoint
 from ..symbols import CubeCode
@@ -35,7 +36,7 @@ class CubeNavParams(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class CubeNav:
+class CubeNav(Fetched):
     """Daily values of one portfolio and its benchmark in columns, oldest first.
 
     ``columns`` holds ``nav`` (net value per unit; the first row is not always 1), ``total_gain``

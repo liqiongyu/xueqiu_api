@@ -5,21 +5,24 @@ import os
 import threading
 import time
 from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Self, TypeVar
+from typing import Any, Self, TypeVar, cast
 
 import httpx2
 from pydantic import BaseModel
 
 from ._base import (
     DEFAULT_DEADLINE_S,
+    CachePlan,
     ClientBase,
     exchange_yesterday,
     http_result,
     market_symbol,
     no_cookie_jar,
+    restamp,
 )
 from ._core import (
     HOME_CALL,
@@ -34,9 +37,11 @@ from ._core import (
 )
 from ._endpoints_sync import SyncEndpoints
 from ._pages import PageT, PageWalk, start_walk
+from ._result import Rows
 from ._shared import LEASE_POLL_S, default_state_path
 from ._status import ClientStatus
 from .adjust import AdjustFactors, derive_factors
+from .cache import CacheBackend
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import MAX_COUNT, Adjust, BarWalk, Kline, Period
 from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
@@ -54,6 +59,7 @@ from .universe import SecuritySnapshot, Segment, SnapshotWalk
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
+T = TypeVar("T")
 
 
 def _wall() -> float:
@@ -103,6 +109,16 @@ class Client(ClientBase, SyncEndpoints):
         deadline: seconds a call may take, queueing and retries included. A response that
             keeps arriving after the deadline is given up when its next chunk comes, which
             can be up to one 10 s read timeout later.
+        cache: where responses are kept for reuse, such as ``MemoryCache()`` or
+            ``SqliteCache()`` from ``xueqiu_api.cache``. By default there is none and every
+            call asks the upstream. Results are fresh for a time that depends on the
+            endpoint's freshness and its market's trading hours; ``cache`` and ``max_age`` on
+            each method change that for one call. Realtime results are never stored, and
+            identical calls in flight at the same time share one request. Results sent with
+            login cookies stay in a private in-memory cache of this client.
+        stale_if_error: with a cache, when the upstream fails with an error worth backing off
+            from (rate limited, blocked or unavailable), return a stored result up to this
+            many seconds old instead, marked ``stale``. Off by default.
     """
 
     def __init__(
@@ -112,6 +128,8 @@ class Client(ClientBase, SyncEndpoints):
         session_path: str | os.PathLike[str] | None = None,
         min_intervals: Mapping[str, float] | None = None,
         deadline: float = DEFAULT_DEADLINE_S,
+        cache: CacheBackend | None = None,
+        stale_if_error: float | None = None,
         _runtime: SyncRuntime | None = None,
     ) -> None:
         runtime = _runtime or SyncRuntime()
@@ -123,12 +141,16 @@ class Client(ClientBase, SyncEndpoints):
             clock=runtime.clock,
             wall=runtime.wall,
             state_path=default_state_path() if _runtime is None else runtime.state_path,
+            cache=cache,
+            stale_if_error=stale_if_error,
         )
         self._sleep = runtime.sleep
         self._http = httpx2.Client(
             transport=runtime.transport, cookies=no_cookie_jar(), max_redirects=MAX_REDIRECTS
         )
         self._session_lock = threading.Lock()
+        self._flights: dict[str, Future[tuple[Any, float]]] = {}
+        self._flights_lock = threading.Lock()
 
     def kline_history(
         self,
@@ -138,14 +160,29 @@ class Client(ClientBase, SyncEndpoints):
         adjust: Adjust = "before",
         begin: date | None = None,
         end: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Kline:
-        """Every bar of one symbol in a range, oldest first, in as many requests as that takes."""
-        walk = BarWalk(
-            symbol, period=period, adjust=adjust, begin=begin, end=end, now=datetime.now(UTC)
-        )
-        while walk.params is not None:
-            walk.accept(self._call(KLINE, walk.params))
-        return walk.result()
+        """Every bar of one symbol in a range, oldest first, in as many requests as that takes.
+
+        Only a range one request covers can come from the cache, as a cached window is never
+        joined to new ones. The result carries the fetch facts of the first request.
+        """
+        now = self._now()
+
+        def start() -> BarWalk:
+            return BarWalk(symbol, period=period, adjust=adjust, begin=begin, end=end, now=now)
+
+        walk, first = start(), None
+        while (params := walk.params) is not None:
+            if first is not None and first.from_cache:
+                # A second window is needed: start again, this time without reading.
+                walk, first, max_age = start(), None, 0
+                continue
+            bars = self._call(KLINE, params, cache=cache, max_age=max_age if first is None else 0)
+            walk.accept(bars)
+            first = bars if first is None else first
+        return restamp(walk.result(), first)
 
     def security_snapshot(
         self, market: Market, *, segments: Sequence[Segment] | None = None
@@ -159,10 +196,11 @@ class Client(ClientBase, SyncEndpoints):
         ``SecuritySnapshot.complete`` says whether all rows came;
         ``xueqiu_api.universe.check_snapshot`` checks the rest.
         """
-        walk = SnapshotWalk(market, segments=segments, fetched_at=datetime.now(UTC))
+        walk = SnapshotWalk(market, segments=segments, fetched_at=self._now())
         while (request := walk.next_request()) is not None:
             try:
-                walk.feed(self.call(request.endpoint, **request.params))
+                # Pages fetched at different moments can drop rows, so none comes from the cache.
+                walk.feed(self.call(request.endpoint, cache=False, **request.params))
             except XueqiuError:
                 if not request.optional:
                     raise
@@ -178,7 +216,8 @@ class Client(ClientBase, SyncEndpoints):
             "adjust": "normal",
             "count": MAX_COUNT,
         }
-        return calendar_from_kline(self._call(KLINE, params), fetched_at=datetime.now(UTC))
+        bars = self._call(KLINE, params)
+        return calendar_from_kline(bars, fetched_at=self._fetched_at(bars))
 
     def market_state(self, market: Market) -> MarketState:
         """Whether ``market`` is trading now, from one quote of its ``CALENDAR_SOURCES`` symbol.
@@ -187,7 +226,7 @@ class Client(ClientBase, SyncEndpoints):
         traded while that stock is suspended.
         """
         quote = self._call(QUOTE_DETAIL, {"symbol": market_symbol(market)})
-        return market_state_from_quote(quote, now=datetime.now(UTC))
+        return market_state_from_quote(quote, now=self._now())
 
     def adjust_factors(self, symbol: str, *, end: date | None = None) -> AdjustFactors:
         """Adjustment factors of ``symbol`` up to ``end``, from its unadjusted and backward-adjusted
@@ -196,14 +235,18 @@ class Client(ClientBase, SyncEndpoints):
         ``end`` defaults to yesterday on the symbol's exchange, because today's bar can change
         between the two requests.
         """
-        last = exchange_yesterday(symbol, datetime.now(UTC)) if end is None else end
+        last = exchange_yesterday(symbol, self._now()) if end is None else end
         normal = self.kline_history(symbol, adjust="normal", end=last)
         after = self.kline_history(symbol, adjust="after", end=last)
-        return derive_factors(normal, after, fetched_at=datetime.now(UTC))
+        fetched_at = min(self._fetched_at(normal), self._fetched_at(after))
+        return derive_factors(normal, after, fetched_at=fetched_at)
 
-    def call(self, endpoint: str, /, **params: Any) -> Any:
-        """Call any registered endpoint by name and return its parsed result."""
-        return self._call(self._endpoint(endpoint), params)
+    def call(
+        self, endpoint: str, /, *, cache: bool = True, max_age: float | None = None, **params: Any
+    ) -> Any:
+        """Call any registered endpoint by name and return its parsed result; ``cache`` and
+        ``max_age`` work as on the endpoint methods."""
+        return self._call(self._endpoint(endpoint), params, cache=cache, max_age=max_age)
 
     def request(
         self, *, host: Host, path: str, params: Mapping[str, str | int | float] | None = None
@@ -217,7 +260,7 @@ class Client(ClientBase, SyncEndpoints):
 
     def status(self) -> ClientStatus:
         """What this client knows locally: credentials, the last login error, the limits of
-        each host and the shared state file. Sends no request."""
+        each host, the shared state file and the response cache. Sends no request."""
         return self._status()
 
     def close(self) -> None:
@@ -231,11 +274,76 @@ class Client(ClientBase, SyncEndpoints):
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
-    def _call(self, spec: Endpoint[P, R], params: Mapping[str, Any]) -> R:
+    def _call(
+        self,
+        spec: Endpoint[P, R],
+        params: Mapping[str, Any],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> R:
         deadline = self._clock() + self._deadline_s
         validated = spec.validate(params)
         call = self._endpoint_call(spec, validated)
-        return self._finish(spec, validated, call, self._run(call, deadline))
+        plan = self._plan(spec, call, cache, max_age)
+        if plan is None:
+            body = self._run(call, deadline)
+            return self._fetched(self._finish(spec, validated, call, body), self._wall())
+        if plan.read:
+            found = self._from_entry(spec, validated, call, plan, max_age=max_age)
+            if found is not None:
+                return found
+        try:
+            body, fetched, leader = self._fly(plan, call, deadline)
+        except XueqiuError as error:
+            found = self._stale_result(spec, validated, call, plan, error)
+            if found is None:
+                raise
+            return found
+        result = self._fetched(self._finish(spec, validated, call, body), fetched)
+        if leader and plan.write:
+            self._store(plan, spec, body, result, fetched)
+        return result
+
+    def _rows(
+        self,
+        spec: Endpoint[P, list[T]],
+        params: Mapping[str, Any],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[T]:
+        """``_call`` of an endpoint whose result is a list, which comes back as ``Rows``."""
+        return cast(Rows[T], self._call(spec, params, cache=cache, max_age=max_age))
+
+    def _fly(self, plan: CachePlan, call: Call, deadline: float) -> tuple[Any, float, bool]:
+        """The body of the call, when it came on the wall clock and whether this call sent
+        the request; another thread's request in flight for the same key is shared."""
+        if not plan.coalesce:
+            return self._run(call, deadline), self._wall(), True
+        with self._flights_lock:
+            flight = self._flights.get(plan.key)
+            leader = flight is None
+            if flight is None:
+                flight = self._flights[plan.key] = Future()
+        if not leader:
+            wait = min(max(0.0, deadline - self._clock()), threading.TIMEOUT_MAX)
+            try:
+                body, fetched = flight.result(timeout=wait)
+            except TimeoutError:
+                raise self._flight_wait_error(call) from None
+            return body, fetched, False
+        try:
+            body, fetched = self._run(call, deadline), self._wall()
+        except BaseException as exc:
+            flight.set_exception(exc)
+            raise
+        else:
+            flight.set_result((body, fetched))
+        finally:
+            with self._flights_lock:
+                del self._flights[plan.key]
+        return body, fetched, True
 
     def _pages(
         self,
@@ -250,7 +358,9 @@ class Client(ClientBase, SyncEndpoints):
 
     def _walk(self, spec: Endpoint[P, PageT], walk: PageWalk) -> Iterator[PageT]:
         while walk.params is not None:
-            yield walk.accept(self._call(spec, walk.params))
+            # Every page is fetched anew: pages of different moments can drop or repeat rows.
+            page = self._call(spec, walk.params, max_age=0)
+            yield restamp(walk.accept(page), page)
 
     def _run(self, call: Call, deadline: float) -> Any:
         attempt, refreshed, last = 0, False, None

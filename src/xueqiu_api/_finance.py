@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ._model import without_keys
+from ._result import Fetched
 from ._time import from_ms
 from .errors import SymbolNotFound
 from .registry import AgentInfo, Endpoint, Pagination
@@ -73,7 +74,7 @@ class ReportPeriod:
 
 
 @dataclass(frozen=True, slots=True)
-class Financials:
+class Financials(Fetched):
     """Report periods of one statement of one company, latest first."""
 
     symbol: str

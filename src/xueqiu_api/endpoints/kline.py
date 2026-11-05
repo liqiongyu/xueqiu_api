@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from .._result import Fetched
 from .._time import from_ms, to_ms
 from ..errors import SymbolNotFound, UpstreamChanged
 from ..registry import AgentInfo, Endpoint, Freshness, Pagination
@@ -83,7 +84,7 @@ class KlineParams(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class Kline:
+class Kline(Fetched):
     """Bars of one symbol in columns, oldest first.
 
     ``columns`` holds every upstream column except ``timestamp`` under its upstream name,

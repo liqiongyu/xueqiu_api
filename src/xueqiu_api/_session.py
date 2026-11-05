@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import hmac
 import json
 import math
 import os
+import secrets
 import tempfile
 import time
 from collections.abc import Mapping
@@ -18,6 +21,8 @@ from ._paths import cache_dir
 
 TOKEN_ENV = "XUEQIU_TOKEN"
 _VERSION = 1
+_SALT = secrets.token_bytes(32)
+"""Key of the identity HMAC, made for this process and never stored."""
 
 
 def parse_credentials(token: str) -> dict[str, str]:
@@ -144,6 +149,14 @@ class Session:
         if not cookies:
             return None
         return "; ".join(f"{name}={value}" for name, value in cookies.items())
+
+    def identity(self, credentials: bool) -> str:
+        """Who a call is sent as, for cache keys: ``anonymous``, or for the configured
+        credentials the first 32 hex digits of an HMAC of their cookie string."""
+        cookies = self.cookie_header(credentials) if credentials else None
+        if cookies is None:
+            return "anonymous"
+        return hmac.new(_SALT, cookies.encode(), hashlib.sha256).hexdigest()[:32]
 
     def secrets(self) -> list[str]:
         """Cookie values long enough to be worth scrubbing from text."""

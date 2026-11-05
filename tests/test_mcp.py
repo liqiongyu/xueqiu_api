@@ -41,6 +41,7 @@ from xueqiu_api._model import UpstreamModel
 from xueqiu_api._pages import Page
 from xueqiu_api._render import STATS_COLUMNS, compact_json
 from xueqiu_api._replay import ReplayTransport
+from xueqiu_api._result import Fetched
 from xueqiu_api._search import EndpointIndex
 from xueqiu_api._time import to_ms
 from xueqiu_api.mcp_server import MIN_MAX_CHARS, McpOptions
@@ -2030,7 +2031,7 @@ async def test_a_nested_list_loses_no_row_however_the_page_size_counts(
 
 
 @dataclass(frozen=True)
-class TwoTables:
+class TwoTables(Fetched):
     """A whole result of two tables."""
 
     first: tuple[ListRow, ...]
@@ -2118,7 +2119,7 @@ async def test_following_next_shows_each_row_of_a_page_of_tables_once(
 
 
 @dataclass(frozen=True)
-class Flow:
+class Flow(Fetched):
     """A series, oldest first."""
 
     dates: tuple[date, ...]

@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from .._model import QuoteRow, UpstreamModel
+from .._result import Fetched
 from .._values import Number
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolCode
@@ -44,7 +45,7 @@ class IndustryPeer(QuoteRow):
 
 
 @dataclass(frozen=True, slots=True)
-class IndustryStocks:
+class IndustryStocks(Fetched):
     """The board of one A-share and stocks in it, as the upstream ranks them.
 
     The rows need not be A-shares or close peers: for SH600000, a bank, the upstream listed Hong
