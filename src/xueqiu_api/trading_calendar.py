@@ -53,9 +53,11 @@ CALENDAR_SOURCES: Mapping[Market, CalendarSource] = MappingProxyType(
     {
         # Equal day by day to XSHG in exchange_calendars 4.13.2, measured 2026-11-05.
         "CN": CalendarSource("SH000001", date(1990, 12, 19)),
-        # No bar off XHKG in exchange_calendars 4.13.2, but 53 XHKG sessions have no bar, the last
-        # on 2023-09-08, measured 2026-11-05. HKHSI is no source: it has placeholder rows.
-        "HK": CalendarSource("00700", date(2023, 9, 9)),
+        # No bar off XHKG in exchange_calendars 4.13.2, measured 2026-11-05. 53 XHKG sessions have
+        # no bar. The last two, 2023-09-01 and 2023-09-08, were weather closures that library
+        # lacks; before them comes 2012-10-31, when HKHSI had volume, so the stock was not trading.
+        # HKHSI is no source: it has placeholder rows.
+        "HK": CalendarSource("00700", date(2012, 11, 1)),
         # Equal day by day to XNYS in exchange_calendars 4.13.2, 7508 sessions, measured
         # 2026-11-05. .INX is no source: it has extra days and more bars than one request returns.
         "US": CalendarSource("AAPL", date(1997, 1, 2)),

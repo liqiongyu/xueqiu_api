@@ -7,51 +7,51 @@
   "metrics": {
     "all": {
       "n": 95,
-      "recall_at_1": 0.8,
+      "recall_at_1": 0.7895,
       "recall_at_3": 0.8947,
-      "mrr_at_10": 0.856,
+      "mrr_at_10": 0.8502,
       "misses": 6
     },
     "dev": {
       "n": 74,
-      "recall_at_1": 0.8784,
+      "recall_at_1": 0.8649,
       "recall_at_3": 0.9595,
-      "mrr_at_10": 0.9216,
+      "mrr_at_10": 0.9149,
       "misses": 2
     },
     "holdout": {
       "n": 21,
       "recall_at_1": 0.5238,
       "recall_at_3": 0.6667,
-      "mrr_at_10": 0.6246,
+      "mrr_at_10": 0.6222,
       "misses": 4
     },
     "zh": {
       "n": 71,
-      "recall_at_1": 0.7746,
+      "recall_at_1": 0.7606,
       "recall_at_3": 0.8873,
-      "mrr_at_10": 0.839,
+      "mrr_at_10": 0.8319,
       "misses": 5
     },
     "en": {
       "n": 24,
       "recall_at_1": 0.875,
       "recall_at_3": 0.9167,
-      "mrr_at_10": 0.9062,
+      "mrr_at_10": 0.9042,
       "misses": 1
     },
     "own_keyword": {
       "n": 61,
       "recall_at_1": 0.9344,
       "recall_at_3": 0.9672,
-      "mrr_at_10": 0.9577,
+      "mrr_at_10": 0.9568,
       "misses": 0
     },
     "no_own_keyword": {
       "n": 34,
-      "recall_at_1": 0.5588,
+      "recall_at_1": 0.5294,
       "recall_at_3": 0.7647,
-      "mrr_at_10": 0.6735,
+      "mrr_at_10": 0.6588,
       "misses": 6
     },
     "tag:adjust": {
@@ -70,9 +70,9 @@
     },
     "tag:confusable": {
       "n": 37,
-      "recall_at_1": 0.9459,
+      "recall_at_1": 0.9189,
       "recall_at_3": 0.973,
-      "mrr_at_10": 0.9649,
+      "mrr_at_10": 0.9514,
       "misses": 0
     },
     "tag:dedicated": {
@@ -100,7 +100,7 @@
       "n": 4,
       "recall_at_1": 0.0,
       "recall_at_3": 0.5,
-      "mrr_at_10": 0.3542,
+      "mrr_at_10": 0.3417,
       "misses": 0
     },
     "tag:recovery": {
@@ -126,9 +126,9 @@
     },
     "strict": {
       "n": 95,
-      "recall_at_1": 0.7263,
+      "recall_at_1": 0.7158,
       "recall_at_3": 0.8632,
-      "mrr_at_10": 0.8013,
+      "mrr_at_10": 0.7946,
       "misses": 8
     }
   },
@@ -159,16 +159,16 @@
     "no_synonyms": {
       "all": {
         "n": 95,
-        "recall_at_1": 0.7895,
+        "recall_at_1": 0.7789,
         "recall_at_3": 0.8632,
-        "mrr_at_10": 0.8328,
+        "mrr_at_10": 0.8275,
         "misses": 10
       },
       "dev": {
         "n": 74,
-        "recall_at_1": 0.8649,
+        "recall_at_1": 0.8514,
         "recall_at_3": 0.9324,
-        "mrr_at_10": 0.8986,
+        "mrr_at_10": 0.8919,
         "misses": 5
       },
       "holdout": {
@@ -182,23 +182,23 @@
     "configured": {
       "all": {
         "n": 95,
-        "recall_at_1": 0.8,
+        "recall_at_1": 0.7895,
         "recall_at_3": 0.8947,
-        "mrr_at_10": 0.856,
+        "mrr_at_10": 0.8502,
         "misses": 6
       },
       "dev": {
         "n": 74,
-        "recall_at_1": 0.8784,
+        "recall_at_1": 0.8649,
         "recall_at_3": 0.9595,
-        "mrr_at_10": 0.9216,
+        "mrr_at_10": 0.9149,
         "misses": 2
       },
       "holdout": {
         "n": 21,
         "recall_at_1": 0.5238,
         "recall_at_3": 0.6667,
-        "mrr_at_10": 0.6246,
+        "mrr_at_10": 0.6222,
         "misses": 4
       }
     }
@@ -261,7 +261,7 @@
     "fund_rank_options-zh-1": 2,
     "fund_search-zh-1": 1,
     "fund_trade_date-zh-1": 1,
-    "index_pb_history-zh-1": 1,
+    "index_pb_history-zh-1": 2,
     "index_pe_history-zh-1": 1,
     "index_stock_bond_percentile-zh-1": 1,
     "index_valuation-zh-1": 1,

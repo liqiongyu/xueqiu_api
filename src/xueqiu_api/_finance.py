@@ -61,7 +61,9 @@ class ReportPeriod:
     """Period end date. Read in Asia/Shanghai for every market: AAPL's fiscal year ending
     2026-09-26 arrives as 2026-09-26T00:00+08:00, which is still 09-25 in New York."""
     report_name: str
-    """Upstream period name, such as 2026三季报, 2026中报 or 2026年FY."""
+    """Upstream period name, such as 2026三季报, 2026中报 or 2026年FY. Income and cash flow values
+    accumulate from the start of the fiscal year and are not annualized: 2026三季报 covers nine
+    months (SH600519, measured 2026-11-05). Balance sheet values are as of the period end."""
     items: Mapping[str, LineItem]
     """Line items under their upstream names, which differ between A shares, Hong Kong and US."""
     extra: Mapping[str, Any]

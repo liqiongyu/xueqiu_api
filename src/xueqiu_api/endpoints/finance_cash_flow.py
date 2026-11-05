@@ -16,6 +16,7 @@ ENDPOINT = finance_endpoint(
         title_en="Cash flow statement",
         summary=(
             "取 A 股、港股或美股公司的现金流量表，每个科目给本期值和同比，"
+            "本期值是财年初至报告期末的累计值，"
             "可选全部报告期或只取年报，"
             "港股键 nocf 经营、ninvcf 投资、nfcgcf 筹资、icdccceq 现金增加。"
         ),

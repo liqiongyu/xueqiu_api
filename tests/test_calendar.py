@@ -55,7 +55,7 @@ def gap_calendar() -> TradingCalendar:
 def test_sources_are_the_measured_symbols_and_dates() -> None:
     assert dict(CALENDAR_SOURCES) == {
         "CN": CalendarSource("SH000001", date(1990, 12, 19)),
-        "HK": CalendarSource("00700", date(2023, 9, 9)),
+        "HK": CalendarSource("00700", date(2012, 11, 1)),
         "US": CalendarSource("AAPL", date(1997, 1, 2)),
     }
     for market, source in CALENDAR_SOURCES.items():
@@ -165,17 +165,17 @@ def test_too_few_sessions_is_an_upstream_change() -> None:
 
 
 def test_hong_kong_sessions_start_at_the_usable_date() -> None:
-    days = weekdays(date(2023, 1, 2), 1100)
+    days = weekdays(date(2012, 1, 2), 1100)
     calendar = calendar_from_kline(bars_on("00700", days), fetched_at=FETCHED_AT)
 
     assert calendar.source == "00700"
-    assert calendar.first == date(2023, 9, 11)
-    assert calendar.is_session(date(2023, 9, 8)) is None
-    assert calendar.sessions == tuple(day for day in days if day >= date(2023, 9, 9))
+    assert calendar.first == date(2012, 11, 1)
+    assert calendar.is_session(date(2012, 10, 31)) is None
+    assert calendar.sessions == tuple(day for day in days if day >= date(2012, 11, 1))
 
 
 def test_bars_only_before_the_usable_date_are_not_a_calendar() -> None:
-    days = weekdays(date(2019, 1, 1), 1100)
+    days = weekdays(date(2005, 1, 3), 1100)
     with pytest.raises(UpstreamChanged, match="0 of them"):
         calendar_from_kline(bars_on("00700", days), fetched_at=FETCHED_AT)
 

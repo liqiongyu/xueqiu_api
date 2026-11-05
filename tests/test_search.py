@@ -321,3 +321,10 @@ def test_the_adjust_values_are_no_aliases() -> None:
 def test_an_alias_reaches_an_endpoint_its_own_terms_do_not(canonical: str, alias: str) -> None:
     own = terms(alias, query=True)
     assert any(DOCUMENTS[name].isdisjoint(own) for name in reached_by_canonical(canonical))
+
+
+@pytest.mark.parametrize(
+    ("query", "name"), [("P/E ratio", "index_pe_history"), ("p/b", "index_pb_history")]
+)
+def test_the_slash_spelling_finds_the_valuation_ratios(query: str, name: str) -> None:
+    assert name in names(query)
