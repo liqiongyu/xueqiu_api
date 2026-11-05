@@ -1,0 +1,62 @@
+{
+  "params": {
+    "symbol": "SH600519"
+  },
+  "body": {
+    "data": {
+      "symbol": "SH600519",
+      "items": [
+        {
+          "symbol": "SH600519",
+          "timestamp": 1793776847860,
+          "current": 10.09,
+          "chg": 0.0,
+          "percent": 0.0,
+          "trade_volume": 500,
+          "side": 0,
+          "level": 1,
+          "trade_session": 3,
+          "trade_type": null,
+          "trade_unique_id": "26100",
+          "bid_appl_seq_num": null,
+          "offer_appl_seq_num": null,
+          "trade_type_v2": null
+        },
+        {
+          "symbol": "SH600519",
+          "timestamp": 1793776982860,
+          "current": 10.09,
+          "chg": 0.0,
+          "percent": 0.0,
+          "trade_volume": 2100,
+          "side": 0,
+          "level": 1,
+          "trade_session": 3,
+          "trade_type": null,
+          "trade_unique_id": "28200",
+          "bid_appl_seq_num": null,
+          "offer_appl_seq_num": null,
+          "trade_type_v2": null
+        },
+        {
+          "symbol": "SH600519",
+          "timestamp": 1793777384860,
+          "current": 10.09,
+          "chg": 0.0,
+          "percent": 0.0,
+          "trade_volume": 3000,
+          "side": 0,
+          "level": 1,
+          "trade_session": 3,
+          "trade_type": null,
+          "trade_unique_id": "31200",
+          "bid_appl_seq_num": null,
+          "offer_appl_seq_num": null,
+          "trade_type_v2": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

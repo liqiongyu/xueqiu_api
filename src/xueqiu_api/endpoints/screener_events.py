@@ -102,6 +102,7 @@ ENDPOINT = Endpoint(
             "除权除息",
             "stock events",
             "corporate events",
+            "earnings date",
         ),
         default_fields=("event_date", "title", "subtype"),
         row_default=PAGE_SIZE_CAP,

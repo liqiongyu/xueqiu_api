@@ -1,0 +1,80 @@
+{
+  "params": {
+    "symbol": "AAPL",
+    "period": "5d"
+  },
+  "body": {
+    "data": {
+      "last_close": 331.9,
+      "after": [],
+      "items": [
+        {
+          "current": 342.0675,
+          "volume": 3986564,
+          "avg_price": 342.015564,
+          "chg": 10.1675,
+          "percent": 3.0634,
+          "timestamp": 1793802600000,
+          "amount": 1352157264.0,
+          "high": 342.86,
+          "low": 340.99,
+          "amount_total": 1352157264.0,
+          "volume_total": 3986564,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 3986564,
+            "volume_sum_last": 6737111
+          }
+        },
+        {
+          "current": 345.63,
+          "volume": 711936,
+          "avg_price": 342.660313,
+          "chg": 13.73,
+          "percent": 4.1368,
+          "timestamp": 1793802660000,
+          "amount": 245056210.0,
+          "high": 345.7,
+          "low": 341.85,
+          "amount_total": 1597213474.0,
+          "volume_total": 4698500,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 4698500,
+            "volume_sum_last": 7398872
+          }
+        },
+        {
+          "current": 345.58,
+          "volume": 544637,
+          "avg_price": 343.135645,
+          "chg": 13.68,
+          "percent": 4.1217,
+          "timestamp": 1793802720000,
+          "amount": 188034891.0,
+          "high": 345.9,
+          "low": 344.5,
+          "amount_total": 1785248365.0,
+          "volume_total": 5243137,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 5243137,
+            "volume_sum_last": 8075144
+          }
+        }
+      ],
+      "items_size": 84
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

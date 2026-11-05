@@ -189,6 +189,7 @@ ENDPOINT = Endpoint(
             "送转",
             "增发",
             "配股",
+            "发钱",
             "dividend",
             "ex-dividend",
             "rights issue",

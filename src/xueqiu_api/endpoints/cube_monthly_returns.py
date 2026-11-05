@@ -87,6 +87,7 @@ ENDPOINT = Endpoint(
             "月收益",
             "组合收益",
             "收益统计",
+            "哪个月",
             "monthly return",
             "cube",
             "benchmark",

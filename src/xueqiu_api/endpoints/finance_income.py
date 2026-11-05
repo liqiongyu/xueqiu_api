@@ -28,6 +28,7 @@ ENDPOINT = finance_endpoint(
             "revenue",
             "net profit",
             "earnings",
+            "earn",
         ),
         default_fields=(
             "report_date",

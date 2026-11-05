@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "SZ300750"
+  },
+  "body": {
+    "data": {
+      "quote_name": "宁德时代",
+      "currency_name": "人民币",
+      "org_type": 2,
+      "last_report_name": "2026三季报",
+      "statuses": null,
+      "currency": "CNY",
+      "list": [
+        {
+          "cash_paid_for_assets": [10722000000.0, -0.34418007217566826],
+          "ctime": null,
+          "effect_of_exchange_chg_on_cce": [-4481000000.0, -2.0712816997943797],
+          "final_balance_of_cce": [290665000000.0, 0.32691631705568974],
+          "initial_balance_of_cce": [333451000000.0, 0.218646756132503],
+          "ncf_from_fa": [-241479000000.0, 0.11843560734664374],
+          "ncf_from_ia": [-65430000000.0, -2.182477002873511],
+          "ncf_from_oa": [268604000000.0, 0.6232202857211921],
+          "net_increase_in_cce": [-42786000000.0, 0.21595719338109984],
+          "report_date": 1790697600000,
+          "report_name": "2026三季报"
+        },
+        {
+          "cash_paid_for_assets": [6281000000.0, -0.27024514929708376],
+          "ctime": null,
+          "effect_of_exchange_chg_on_cce": [-3276000000.0, -3.379679144385027],
+          "final_balance_of_cce": [323303000000.0, 0.11683668358199674],
+          "initial_balance_of_cce": [333451000000.0, 0.218646756132503],
+          "ncf_from_fa": [-346611000000.0, -1.3335936605826393],
+          "ncf_from_ia": [-64565000000.0, -1.4487451261129143],
+          "ncf_from_oa": [404304000000.0, 18.019805240626617],
+          "net_increase_in_cce": [-10148000000.0, -1.6399697294570221],
+          "report_date": 1782748800000,
+          "report_name": "2026中报"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

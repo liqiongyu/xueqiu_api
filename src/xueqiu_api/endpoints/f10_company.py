@@ -99,6 +99,8 @@ ENDPOINT = Endpoint(
             "company profile",
             "company info",
             "listing date",
+            "chairman",
+            "who runs",
         ),
         default_fields=(
             "org_name_cn",

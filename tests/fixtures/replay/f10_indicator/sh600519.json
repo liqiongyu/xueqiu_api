@@ -1,0 +1,37 @@
+{
+  "params": {
+    "symbol": "SH600519"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "asset_liab_ratio": 91.9057,
+          "pledge_ratio": 0.02,
+          "net_profit_atsopc_yoy": 4.5158,
+          "operating_income_yoy": 4.4247,
+          "goodwill_in_net_assets": 0.6375740966905961,
+          "basic_eps": 1.17,
+          "net_selling_rate": 29.7749,
+          "avg_roe": 5.2,
+          "gross_selling_rate": null,
+          "float_shares": 33305838300,
+          "pb": 0.443,
+          "np_per_share": 22.8,
+          "float_market_capital": 336055908447.0,
+          "total_revenue": 138133000000.0,
+          "market_capital": 336055908447.0,
+          "pe_ttm": 6.491,
+          "dividend": 0.42,
+          "currency": "CNY",
+          "dividend_yield": 4.163,
+          "net_profit_atsopc": 40572000000.0,
+          "total_shares": 33305838300,
+          "report_date": "2026三季报"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

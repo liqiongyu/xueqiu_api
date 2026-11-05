@@ -87,6 +87,7 @@ ENDPOINT = Endpoint(
             "shares outstanding",
             "float shares",
             "share changes",
+            "share count",
         ),
         default_fields=("chg_date", "chg_reason", "total_shares", "float_shares"),
         row_default=50,

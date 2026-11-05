@@ -110,6 +110,8 @@ ENDPOINT = Endpoint(
             "股债利差",
             "风险溢价",
             "百分位",
+            "股票债券",
+            "划算",
             "stock bond",
             "equity risk premium",
         ),
