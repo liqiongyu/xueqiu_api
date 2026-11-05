@@ -427,6 +427,7 @@ def test_endpoint_methods_are_exactly_the_registry() -> None:
         "call",
         "request",
         "close",
+        "status",
         "kline_history",
         "security_snapshot",
         "trading_calendar",

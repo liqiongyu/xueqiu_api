@@ -52,8 +52,7 @@ def make(make: Callable[..., Harness], mode: str) -> Callable[..., Harness]:
 
 
 IN_MEMORY = pytest.mark.parametrize("mode", ["memory"])
-"""For concurrent callers: the FakeClock gives each its own time, and the shared file would
-take a write from a caller further ahead for a wall clock set back."""
+"""Concurrent callers keep separate FakeClock times, which the shared file reads as clock skew."""
 
 
 @IN_MEMORY
