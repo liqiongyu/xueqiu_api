@@ -1,0 +1,175 @@
+[[task]]
+id = "h01"
+lang = "zh"
+split = "holdout"
+prompt = "有只保险股名字里带平安，代码是多少来着？"
+tags = ["colloquial"]
+source = "blind"
+
+[[task]]
+id = "h02"
+lang = "zh"
+split = "holdout"
+prompt = "帮我拉一下贵州茅台最近三年的日K，要前复权的。"
+tags = ["adjust"]
+source = "blind"
+
+[[task]]
+id = "h03"
+lang = "en"
+split = "holdout"
+prompt = "Put Tencent (00700) and Apple (AAPL) side by side for me: current price, day change and P/E."
+tags = ["multi_symbol"]
+source = "blind"
+
+[[task]]
+id = "h04"
+lang = "zh"
+split = "holdout"
+prompt = "600030 的前十大股东都有谁？"
+tags = ["recovery"]
+source = "blind"
+
+[[task]]
+id = "h05"
+lang = "en"
+split = "holdout"
+prompt = "Screen A-shares for me: P/E under 10 and dividend yield above 4 percent."
+tags = []
+source = "blind"
+
+[[task]]
+id = "h06"
+lang = "zh"
+split = "holdout"
+prompt = "今天大家是在买茅台还是在卖茅台？钱是流进去了还是流出来了？"
+tags = ["colloquial"]
+source = "blind"
+
+[[task]]
+id = "h07"
+lang = "zh"
+split = "holdout"
+prompt = "浦发银行这几年分红不少，我想知道把分红算进去的话，从2020年初到现在实际涨了多少。"
+tags = ["adjust"]
+source = "blind"
+
+[[task]]
+id = "h08"
+lang = "zh"
+split = "holdout"
+prompt = "看看我雪球自选里今天涨得最好的是哪几只。"
+tags = ["login"]
+source = "blind"
+
+[[task]]
+id = "h09"
+lang = "en"
+split = "holdout"
+prompt = "What does SH601166 actually do? Give me the company background: business, headquarters and listing date."
+tags = []
+source = "blind"
+
+[[task]]
+id = "h10"
+lang = "zh"
+split = "holdout"
+prompt = "ZH2437873 这个组合最近都换了些啥股票？"
+tags = ["colloquial"]
+source = "blind"
+
+[[task]]
+id = "h11"
+lang = "zh"
+split = "holdout"
+prompt = "000001 今天收了多少点？"
+tags = ["recovery"]
+source = "blind"
+
+[[task]]
+id = "h12"
+lang = "zh"
+split = "holdout"
+prompt = "把中信证券、兴业银行、中国平安这三只现在的价格和涨跌幅一起列给我。"
+tags = ["multi_symbol"]
+source = "blind"
+
+[[task]]
+id = "h13"
+lang = "en"
+split = "holdout"
+prompt = "Tencent split its shares in 2014. Show me monthly candles from 2013 onward, and I don't want the split to show up as a crash."
+tags = ["adjust"]
+source = "blind"
+
+[[task]]
+id = "h14"
+lang = "zh"
+split = "holdout"
+prompt = "沪深300现在的估值处于历史什么位置？贵不贵？"
+tags = []
+source = "blind"
+
+[[task]]
+id = "h15"
+lang = "zh"
+split = "holdout"
+prompt = "富国那只中证消费50的ETF联接A类，代码我记不住了，帮我看下它最近一年的净值走势。"
+tags = ["multi_step"]
+source = "blind"
+
+[[task]]
+id = "h16"
+lang = "en"
+split = "holdout"
+prompt = "Pull the dividend history for 700, the Hong Kong one."
+tags = ["recovery"]
+source = "blind"
+
+[[task]]
+id = "h17"
+lang = "zh"
+split = "holdout"
+prompt = "兴业银行最近四个季度的营收和净利润，按单季度给我看看。"
+tags = []
+source = "blind"
+
+[[task]]
+id = "h18"
+lang = "zh"
+split = "holdout"
+prompt = "今天大盘整体咋样？涨的多还是跌的多？"
+tags = ["colloquial"]
+source = "blind"
+
+[[task]]
+id = "h19"
+lang = "en"
+split = "holdout"
+prompt = "Show me Apple's latest balance sheet. I mainly care about total debt versus cash."
+tags = []
+source = "blind"
+
+[[task]]
+id = "h20"
+lang = "zh"
+split = "holdout"
+prompt = "中国平安的董事长和总经理现在分别是谁？"
+tags = []
+source = "blind"
+
+[[task]]
+id = "h21"
+lang = "en"
+split = "holdout"
+prompt = "What are the biggest holdings in fund 008975 right now?"
+tags = []
+source = "blind"
+
+[[task]]
+id = "h22"
+lang = "zh"
+split = "holdout"
+prompt = "雪球上大家最近都在怎么聊中信证券？挑几条讨论度高的帖子给我看看。"
+tags = []
+source = "blind"
