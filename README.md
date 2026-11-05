@@ -4,6 +4,53 @@
 
 A Python client for Xueqiu (雪球) and Danjuan market data, with a sync and async SDK, a local data store, a CLI and an MCP server. Early development; see [PLAN.md](PLAN.md) for the roadmap.
 
+## 安装 / Install
+
+还没有发布到 PyPI，先从 GitHub 安装；不用 MCP server 时去掉 `[mcp]`。Not on PyPI yet, so install from GitHub; drop `[mcp]` if you do not need the MCP server.
+
+```bash
+pip install "xueqiu-api[mcp] @ git+https://github.com/liqiongyu/xueqiu_api"
+```
+
+## 用法 / Usage
+
+```python
+from xueqiu_api import Client
+
+with Client() as client:
+    for quote in client.batch_quote(["SH600000", "00700", "AAPL"]):
+        print(quote.symbol, quote.name, quote.current, quote.percent)
+
+    bars = client.kline("SH600000", count=3)
+    print(bars.timestamps[-1], bars.columns["close"][-1])
+
+    income = client.finance_income("SH600000", count=2)
+    latest = income.periods[0]
+    print(latest.report_name, latest.items["total_revenue"].value)
+```
+
+`AsyncClient` 有同样的方法。目前支持批量行情（`quotec`、`batch_quote`）、行情详情、K 线、证券搜索、利润表、资产负债表、现金流量表、财务指标和 F10 公司资料，都不需要登录。
+
+`AsyncClient` has the same methods. Supported so far: batch quotes (`quotec`, `batch_quote`), quote detail, kline, security search, income statement, balance sheet, cash flow statement, financial indicators and the F10 company profile, all without login.
+
+```bash
+xueqiu doctor   # 逐个调用端点并报告状态 / call every endpoint once and report
+xueqiu mcp      # 在 stdio 上运行 MCP server / run the MCP server on stdio
+```
+
+MCP server 提供 5 个只读工具：`xq_search`、`xq_quote`、`xq_kline`、`xq_endpoints` 和 `xq_call`。客户端配置示例：The MCP server has five read-only tools: `xq_search`, `xq_quote`, `xq_kline`, `xq_endpoints` and `xq_call`. A client configuration example:
+
+```json
+{
+  "mcpServers": {
+    "xueqiu": {
+      "command": "uvx",
+      "args": ["--from", "xueqiu-api[mcp] @ git+https://github.com/liqiongyu/xueqiu_api", "xueqiu", "mcp"]
+    }
+  }
+}
+```
+
 ## 免责声明
 
 本项目是非官方的第三方开源工具，与雪球（北京雪球信息科技有限公司）、蛋卷基金及其关联公司没有任何关联，也没有获得它们的授权或认可。
