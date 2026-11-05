@@ -1,0 +1,48 @@
+{
+  "params": {
+    "category": "CN",
+    "order_by": "follow7d",
+    "order": "desc",
+    "only_count": "0",
+    "page": "1"
+  },
+  "body": {
+    "data": {
+      "count": 5656,
+      "list": [
+        {
+          "pct": -1.56,
+          "symbol": "SH601919",
+          "current": 17.65,
+          "follow7d": 7609.0,
+          "name": "中远海控",
+          "type": 11,
+          "tick_size": 0.01,
+          "has_follow": false
+        },
+        {
+          "pct": 4.48,
+          "symbol": "SZ300750",
+          "current": 264.2,
+          "follow7d": 7272.0,
+          "name": "宁德时代",
+          "type": 11,
+          "tick_size": 0.01,
+          "has_follow": false
+        },
+        {
+          "pct": 0.23,
+          "symbol": "SH600519",
+          "current": 1449.75,
+          "follow7d": 7196.0,
+          "name": "贵州茅台",
+          "type": 11,
+          "tick_size": 0.01,
+          "has_follow": false
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

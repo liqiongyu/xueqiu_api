@@ -1,0 +1,35 @@
+{
+  "params": {
+    "time": "60"
+  },
+  "body": {
+    "data": [
+      {
+        "date": "2021-11-05",
+        "quantile": 0.423423,
+        "performance_benchmark": 5702.4807
+      },
+      {
+        "date": "2021-11-08",
+        "quantile": 0.415454,
+        "performance_benchmark": 5724.7185
+      },
+      {
+        "date": "2021-11-09",
+        "quantile": 0.417533,
+        "performance_benchmark": 5755.4128
+      },
+      {
+        "date": "2026-10-30",
+        "quantile": 0.5125,
+        "performance_benchmark": 6201.25
+      },
+      {
+        "date": "2026-11-03",
+        "quantile": 0.5,
+        "performance_benchmark": null
+      }
+    ],
+    "result_code": 0
+  }
+}

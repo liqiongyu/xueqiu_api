@@ -1,0 +1,34 @@
+{
+  "params": {
+    "index_code": "SH000300"
+  },
+  "body": {
+    "data": {
+      "id": 520430,
+      "index_code": "SH000300",
+      "name": "沪深300",
+      "ttype": "1",
+      "pe": 13.6029,
+      "pb": 1.3501,
+      "pe_percentile": 0.6936,
+      "pb_percentile": 0.2344,
+      "roe": 0.0993,
+      "yeild": 0.0299,
+      "ts": 1793721600000,
+      "eva_type": "mid",
+      "eva_type_int": 1,
+      "url": "https://danjuanfunds.com/funding/100038",
+      "bond_yeild": 0.05,
+      "begin_at": 1468944000000,
+      "created_at": 1793806320353,
+      "updated_at": 1793806320353,
+      "peg": 0.9703,
+      "pb_flag": false,
+      "source": "5",
+      "date": "11-04",
+      "pb_over_history": 0.7656,
+      "pe_over_history": 0.3064
+    },
+    "result_code": 0
+  }
+}

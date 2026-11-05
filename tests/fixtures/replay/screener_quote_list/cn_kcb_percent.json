@@ -1,0 +1,83 @@
+{
+  "params": {
+    "market": "CN",
+    "type": "kcb",
+    "order_by": "percent",
+    "order": "desc"
+  },
+  "body": {
+    "data": {
+      "count": 618,
+      "list": [
+        {
+          "symbol": "SH688517",
+          "net_profit_cagr": -20.94022467400768,
+          "north_net_inflow": 0.0,
+          "ps": 4.1676,
+          "type": 82,
+          "percent": 20.02,
+          "has_follow": false,
+          "tick_size": 0.01,
+          "pb_ttm": 3.863,
+          "float_shares": 136613184,
+          "current": 21.46,
+          "amplitude": 19.24,
+          "pcf": 24.5566,
+          "current_year_percent": 40.99,
+          "float_market_capital": 2931718929.0,
+          "north_net_inflow_time": 1793635200000,
+          "market_capital": 2931718929.0,
+          "dividend_yield": 2.246,
+          "lot_size": 1,
+          "roe_ttm": 6.532028968892183,
+          "total_percent": 65.68,
+          "percent5m": 0.0,
+          "income_cagr": 6.636500711735516,
+          "amount": 348222307.0,
+          "chg": 3.58,
+          "issue_date_ts": 1623945600000,
+          "eps": 0.37,
+          "main_net_inflows": 8006286.0,
+          "volume": 17184879,
+          "volume_ratio": 1.73,
+          "pb": 3.863,
+          "followers": 4964,
+          "turnover_rate": 12.58,
+          "mapping_quote_current": null,
+          "first_percent": 101.69,
+          "name": "金冠电气",
+          "pe_ttm": 57.583,
+          "dual_counter_mapping_symbol": null,
+          "total_shares": 136613184,
+          "limitup_days": 1
+        },
+        {
+          "symbol": "SH688001",
+          "name": "示例科创甲",
+          "type": 82,
+          "current": 21.46,
+          "percent": 12.5,
+          "chg": 3.58,
+          "amount": 348222307.0,
+          "volume": 17184879,
+          "issue_date_ts": 1563465600000,
+          "has_follow": false
+        },
+        {
+          "symbol": "SH688002",
+          "name": "示例科创乙",
+          "type": 82,
+          "current": 21.46,
+          "percent": 9.8,
+          "chg": 3.58,
+          "amount": 348222307.0,
+          "volume": 17184879,
+          "issue_date_ts": null,
+          "has_follow": false
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

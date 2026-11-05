@@ -1,0 +1,14 @@
+{
+  "params": {
+    "market": "CN",
+    "ind_code": "S9999"
+  },
+  "body": {
+    "data": {
+      "count": 0,
+      "list": []
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "params": {
+    "category": "US",
+    "page": "92"
+  },
+  "body": {
+    "data": {
+      "count": 9124,
+      "list": [
+        {
+          "pct": -0.45,
+          "symbol": "MSD",
+          "current": 8.81,
+          "follow7d": null,
+          "name": "大摩新兴市场债券基金",
+          "type": 0,
+          "tick_size": 0.01,
+          "has_follow": false
+        },
+        {
+          "pct": 0.1,
+          "symbol": "RFMZ",
+          "current": 20.02,
+          "follow7d": null,
+          "name": "RiverNorth",
+          "type": 0,
+          "tick_size": 0.01,
+          "has_follow": false
+        },
+        {
+          "pct": 0.3102,
+          "symbol": "ASGI",
+          "current": 19.4,
+          "follow7d": null,
+          "name": "Aberdeen",
+          "type": 0,
+          "tick_size": 0.01,
+          "has_follow": false
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

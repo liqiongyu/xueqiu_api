@@ -1,0 +1,28 @@
+{
+  "params": {
+    "category": "cn"
+  },
+  "body": {
+    "data": {
+      "industries": [
+        {
+          "encode": "S1101",
+          "name": "种植业",
+          "pinyin": "zzy"
+        },
+        {
+          "encode": "S1102",
+          "name": "渔业",
+          "pinyin": "yy"
+        },
+        {
+          "encode": "S1103",
+          "name": "林业",
+          "pinyin": "ly"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
