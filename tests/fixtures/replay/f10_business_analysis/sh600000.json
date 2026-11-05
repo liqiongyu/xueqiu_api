@@ -1,0 +1,25 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "operating_analysis_explain": "合成经营分析第1期\r\n第二段",
+          "report_date": "2026三季报"
+        },
+        {
+          "operating_analysis_explain": "合成经营分析第2期\r\n第二段",
+          "report_date": "2026中报"
+        },
+        {
+          "operating_analysis_explain": "合成经营分析第3期\r\n第二段",
+          "report_date": "2026一季报"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

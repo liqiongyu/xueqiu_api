@@ -1,0 +1,53 @@
+{
+  "params": {
+    "symbol": "SZ002027"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "chg_date": "2026三季报",
+          "institution_num": "87",
+          "chg": -10.71,
+          "held_ratio": 43.895,
+          "price": 4.73,
+          "timestamp": 1790697600000
+        },
+        {
+          "chg_date": "2026中报",
+          "institution_num": "934",
+          "chg": 2.46,
+          "held_ratio": 49.1584,
+          "price": 4.6044,
+          "timestamp": 1782748800000
+        },
+        {
+          "chg_date": "2026一季报",
+          "institution_num": "147",
+          "chg": -13.13,
+          "held_ratio": 47.9799,
+          "price": 6.2312,
+          "timestamp": 1774886400000
+        },
+        {
+          "chg_date": "2025年报",
+          "institution_num": "1183",
+          "chg": 5.29,
+          "held_ratio": 55.2297,
+          "price": 7.0113,
+          "timestamp": 1767110400000
+        },
+        {
+          "chg_date": "2025三季报",
+          "institution_num": "165",
+          "chg": -14.04,
+          "held_ratio": 52.4572,
+          "price": 7.5157,
+          "timestamp": 1759161600000
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "params": {
+    "symbol": "00700"
+  },
+  "body": {
+    "data": {
+      "company": {
+        "comcnname": "合成公司",
+        "chairman": "示例董事长",
+        "mbu": "合成主营业务"
+      },
+      "industry": [
+        {
+          "ind_name": "互动媒体与服务Ⅲ",
+          "ind_code": "BK2059"
+        },
+        {
+          "ind_name": "通讯",
+          "ind_code": "BK2083"
+        },
+        {
+          "ind_name": "传媒",
+          "ind_code": "BK2101"
+        }
+      ],
+      "industry_class": "HS"
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

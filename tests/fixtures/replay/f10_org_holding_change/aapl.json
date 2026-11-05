@@ -1,0 +1,34 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "chg_date": "2026-11-03",
+          "price": 331.9,
+          "org_postion_calc": 76.5831,
+          "net_trade_vol": -2673177.0,
+          "holder_num": 6466.0
+        },
+        {
+          "chg_date": "2026-11-02",
+          "price": 338.32,
+          "org_postion_calc": 76.6014,
+          "net_trade_vol": 1968175.0,
+          "holder_num": 6461.0
+        },
+        {
+          "chg_date": "2026-10-30",
+          "price": 344.63,
+          "org_postion_calc": 76.5879,
+          "net_trade_vol": 1938305.0,
+          "holder_num": 6458.0
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

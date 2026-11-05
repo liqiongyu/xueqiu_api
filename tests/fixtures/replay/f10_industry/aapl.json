@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "concept": [
+        {
+          "ind_name": "无线充电",
+          "ind_code": "BK1417"
+        },
+        {
+          "ind_name": "指纹技术",
+          "ind_code": "BK1420"
+        },
+        {
+          "ind_name": "BIT概念",
+          "ind_code": "BK1421"
+        }
+      ],
+      "concept_class": "0004",
+      "industry": [
+        {
+          "ind_name": "可选消费",
+          "ind_code": "BK1073"
+        },
+        {
+          "ind_name": "耐用消费品",
+          "ind_code": "BK1087"
+        },
+        {
+          "ind_name": "消费电子",
+          "ind_code": "BK1320"
+        }
+      ],
+      "company": {
+        "org_name_cn": "合成公司",
+        "org_cn_introduction": "合成公司简介"
+      },
+      "industry_class": "GICS"
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

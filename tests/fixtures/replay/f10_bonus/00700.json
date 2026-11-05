@@ -1,0 +1,28 @@
+{
+  "params": {
+    "symbol": "00700"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "datedivpy": 1780243200000,
+          "divdstep": "末期派息每股股息5.3元（HKD ）",
+          "dertsdiv": 1778774400000
+        },
+        {
+          "datedivpy": 1748534400000,
+          "divdstep": "末期派息每股股息4.5元（HKD ）",
+          "dertsdiv": 1747324800000
+        },
+        {
+          "datedivpy": 1717084800000,
+          "divdstep": "末期派息每股股息3.4元（HKD ）",
+          "dertsdiv": 1715875200000
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
