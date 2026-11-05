@@ -15,6 +15,7 @@ from pydantic import (
     field_validator,
 )
 
+from .._model import UpstreamModel
 from .._time import from_ms
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolCode, exchange_timezone, split_symbols
@@ -42,10 +43,8 @@ def exchange_time(value: Any, info: ValidationInfo) -> Any:
     return value
 
 
-class Quote(BaseModel):
+class Quote(UpstreamModel):
     """Realtime quote of one symbol. Unknown upstream fields are kept in ``model_extra``."""
-
-    model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     symbol: str
     """Xueqiu symbol, such as SH600519, 00700 or AAPL."""

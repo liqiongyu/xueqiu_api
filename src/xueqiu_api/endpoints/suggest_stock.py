@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 
+from .._model import UpstreamModel
 from ..registry import AgentInfo, Endpoint
 
 RESULT_CAP = 10
@@ -23,11 +24,9 @@ class SuggestStockParams(BaseModel):
     """Code, pinyin initials or name, such as 600000, pfyh, 浦发银行 or AAPL."""
 
 
-class StockSuggestion(BaseModel):
+class StockSuggestion(UpstreamModel):
     """One search result. Unknown upstream fields (``label``, ``state``, ``type``) are kept in
     ``model_extra``."""
-
-    model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     symbol: str = Field(validation_alias="code")
     """Xueqiu symbol, such as SH600000 or AAPL (upstream ``code``)."""

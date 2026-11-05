@@ -353,6 +353,11 @@ def test_every_endpoint_has_matching_client_methods(name: str) -> None:
 
 
 def test_endpoint_methods_are_exactly_the_registry() -> None:
-    public = {name for name in vars(Client) if not name.startswith("_")}
+    public = {name for name in dir(Client) if not name.startswith("_")}
+    walks = {
+        f"{name}_pages"
+        for name, spec in REGISTRY.items()
+        if spec.pagination is not None and spec.pagination.style == "page"
+    }
 
-    assert public - {"call", "request", "close", "kline_history"} == set(REGISTRY)
+    assert public - {"call", "request", "close", "kline_history"} == set(REGISTRY) | walks

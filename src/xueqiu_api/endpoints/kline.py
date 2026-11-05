@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, Self, cast
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from .._time import from_ms, to_ms
-from ..errors import UpstreamChanged
+from ..errors import SymbolNotFound, UpstreamChanged
 from ..registry import AgentInfo, Endpoint, Pagination
 from ..symbols import SymbolCode, normalize_symbol
 
@@ -136,8 +136,11 @@ def _parse(payload: Any, params: KlineParams) -> Kline:
     if not isinstance(payload, dict):
         raise ValueError("kline data is not an object")
     data = cast(dict[str, Any], payload)
+    if not data:
+        # What unknown and delisted codes both get, measured 2026-11-05.
+        raise SymbolNotFound(f"the upstream has no bars for {params.symbol}")
     if "column" not in data and data.get("items") == []:
-        # Shape the upstream sends when there are no bars.
+        # What the upstream sends when the request lacks the u cookie, measured 2026-11-05.
         names: list[str] = []
         rows: list[list[Any]] = []
     else:
@@ -279,7 +282,7 @@ class BarWalk:
 
 ENDPOINT = Endpoint(
     name="kline",
-    doc="Bars of one symbol in one request; see ``KlineParams`` for how the range is chosen.",
+    doc="Bars of one symbol in one request.",
     host="stock.xueqiu.com",
     path="/v5/stock/chart/kline.json",
     params=KlineParams,

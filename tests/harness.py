@@ -245,6 +245,17 @@ class Harness:
     def request(self, **params: Any) -> Any:
         return self.run("request", **params)
 
+    def pages(self, method: str, *args: Any, **kwargs: Any) -> list[Any]:
+        """Every page a generated ``<name>_pages`` method yields."""
+        walk = getattr(self.client, method)(*args, **kwargs)
+        if self._runner is None:
+            return list(walk)
+
+        async def drain() -> list[Any]:
+            return [page async for page in walk]
+
+        return self._runner.run(drain())
+
     def walk(
         self, spec: Endpoint[Any, Any], *, stop_after: int | None = None, **params: Any
     ) -> tuple[list[Any], Exception | None]:

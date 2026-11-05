@@ -9,6 +9,7 @@ from pydantic import ValidationInfo, field_validator, model_validator
 
 from .._finance import REPORT_DATE_ZONE
 from .._time import date_from_ms
+from ..errors import SymbolNotFound
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolParams
 from .quotec import Quote, exchange_time
@@ -67,6 +68,10 @@ def _build_query(params: SymbolParams, now: datetime) -> dict[str, str]:
 
 
 def _parse(payload: Any, params: SymbolParams) -> QuoteDetail:
+    fields = cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
+    if "quote" in fields and fields["quote"] is None:
+        # What unknown and delisted codes both get, measured 2026-11-05.
+        raise SymbolNotFound(f"the upstream has no quote for {params.symbol}")
     return QuoteDetail.model_validate(payload)
 
 

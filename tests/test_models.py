@@ -8,9 +8,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from xueqiu_api import InvalidParams, Kline, KlineParams, Quote, QuotecParams
+from xueqiu_api import InvalidParams
 from xueqiu_api.endpoints.kline import ENDPOINT as KLINE
+from xueqiu_api.endpoints.kline import KlineParams
 from xueqiu_api.endpoints.quotec import ENDPOINT as QUOTEC
+from xueqiu_api.endpoints.quotec import QuotecParams
+from xueqiu_api.models import Kline, Quote
 
 from .harness import replay_body
 

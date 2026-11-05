@@ -302,7 +302,7 @@ async def test_excluded_endpoints_leave_no_trace_in_the_instructions_or_descript
     for word in ("利润表", "资产负债表", "现金流量表", "财务指标", "公司资料", "财报", ".yoy"):
         assert word not in text, word
     assert "利润表" in full and "公司资料" in full
-    assert "其他数据（行情详情、实时行情等）先用 xq_endpoints" in instructions
+    assert "其他数据（大宗交易、组合净值走势、基金历史净值等）先用 xq_endpoints" in instructions
 
 
 ARGS: dict[str, tuple[type[BaseModel], dict[str, type[BaseModel]]]] = {

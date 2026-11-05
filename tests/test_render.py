@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from xueqiu_api import InvalidParams, Kline, RateLimited
+from xueqiu_api import InvalidParams, RateLimited
 from xueqiu_api._finance import Financials
 from xueqiu_api._pages import Page, finish
 from xueqiu_api._render import (
@@ -32,6 +32,7 @@ from xueqiu_api._render import (
     number,
     render,
 )
+from xueqiu_api.models import Kline
 from xueqiu_api.registry import Endpoint, Pagination, RowOrder
 from xueqiu_api.symbols import SymbolParams
 

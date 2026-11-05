@@ -7,7 +7,7 @@ from ..registry import AgentInfo
 
 ENDPOINT = finance_endpoint(
     "indicator",
-    doc="Key financial indicators, latest report period first; see ``FinanceParams``.",
+    doc="Key financial indicators, latest report period first.",
     agent=AgentInfo(
         category="finance",
         group="xq_financials",

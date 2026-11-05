@@ -1,0 +1,41 @@
+{
+  "params": {
+    "symbol": "SH600000",
+    "page": "1"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "vol": 4452900.0,
+          "sell_branch_org_name": "机构专用",
+          "premium_rat": 0.0,
+          "trans_amt": 44929799.99999999,
+          "td_date": 1793721600000,
+          "buy_branch_org_name": "机构专用",
+          "trans_price": 10.09
+        },
+        {
+          "vol": 347899900.0,
+          "sell_branch_org_name": "示例证券乙资产管理部",
+          "premium_rat": -0.21,
+          "trans_amt": 3378107700.0,
+          "td_date": 1792080000000,
+          "buy_branch_org_name": "示例证券甲营业部",
+          "trans_price": 9.71
+        },
+        {
+          "vol": 225202900.0,
+          "sell_branch_org_name": "示例证券乙资产管理部",
+          "premium_rat": -0.09,
+          "trans_amt": 2483988200.0,
+          "td_date": 1768492800000,
+          "buy_branch_org_name": "示例证券甲营业部",
+          "trans_price": 11.03
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

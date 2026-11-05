@@ -4,7 +4,7 @@ import contextlib
 import os
 import threading
 import time
-from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Self, TypeVar
@@ -24,23 +24,10 @@ from ._core import (
     next_step,
     request_headers,
 )
-from ._finance import Financials, ReportType
+from ._endpoints_sync import SyncEndpoints
 from ._pages import PageT, PageWalk, start_walk
-from .endpoints.batch_quote import ENDPOINT as BATCH_QUOTE
-from .endpoints.f10_company import ENDPOINT as F10_COMPANY
-from .endpoints.f10_company import Company
-from .endpoints.finance_balance import ENDPOINT as FINANCE_BALANCE
-from .endpoints.finance_cash_flow import ENDPOINT as FINANCE_CASH_FLOW
-from .endpoints.finance_income import ENDPOINT as FINANCE_INCOME
-from .endpoints.finance_indicator import ENDPOINT as FINANCE_INDICATOR
 from .endpoints.kline import ENDPOINT as KLINE
 from .endpoints.kline import Adjust, BarWalk, Kline, Period
-from .endpoints.quote_detail import ENDPOINT as QUOTE_DETAIL
-from .endpoints.quote_detail import QuoteDetail
-from .endpoints.quotec import ENDPOINT as QUOTEC
-from .endpoints.quotec import Quote
-from .endpoints.suggest_stock import ENDPOINT as SUGGEST_STOCK
-from .endpoints.suggest_stock import StockSuggestion
 from .errors import XueqiuError
 from .registry import Endpoint
 from .sites import Host
@@ -58,8 +45,13 @@ class SyncRuntime:
     sleep: Callable[[float], None] = time.sleep
 
 
-class Client(ClientBase):
+class Client(ClientBase, SyncEndpoints):
     """Synchronous client for Xueqiu and Danjuan; safe to share between threads.
+
+    One method per endpoint, grouped by prefix: quote, capital, f10, finance, screener, market,
+    search, index, fund, cube and watchlist; besides these kline, quotec, batch_quote and
+    suggest_stock. ``<name>_pages`` walks a list with numbered pages. Result types are in
+    ``xueqiu_api.models``.
 
     Args:
         token: a bare ``xq_a_token`` value or a cookie string such as ``"xq_a_token=...; u=..."``.
@@ -97,43 +89,6 @@ class Client(ClientBase):
         )
         self._session_lock = threading.Lock()
 
-    def quotec(self, symbols: str | Sequence[str]) -> list[Quote]:
-        """Realtime quotes of up to 50 symbols in one request; a string may be comma-separated."""
-        return self._call(QUOTEC, {"symbols": symbols})
-
-    def batch_quote(self, symbols: str | Sequence[str]) -> list[QuoteDetail]:
-        """Quotes of up to 20 symbols in one request, with names and market status."""
-        return self._call(BATCH_QUOTE, {"symbols": symbols})
-
-    def quote_detail(self, symbol: str) -> QuoteDetail:
-        """Full quote of one symbol, with its name, valuation fields and market status."""
-        return self._call(QUOTE_DETAIL, {"symbol": symbol})
-
-    def kline(
-        self,
-        symbol: str,
-        *,
-        period: Period = "day",
-        adjust: Adjust = "before",
-        begin: date | None = None,
-        end: date | None = None,
-        before: datetime | None = None,
-        count: int | None = None,
-    ) -> Kline:
-        """Bars of one symbol in one request; see ``KlineParams`` for how the range is chosen."""
-        return self._call(
-            KLINE,
-            {
-                "symbol": symbol,
-                "period": period,
-                "adjust": adjust,
-                "begin": begin,
-                "end": end,
-                "before": before,
-                "count": count,
-            },
-        )
-
     def kline_history(
         self,
         symbol: str,
@@ -150,70 +105,6 @@ class Client(ClientBase):
         while walk.params is not None:
             walk.accept(self._call(KLINE, walk.params))
         return walk.result()
-
-    def suggest_stock(self, *, query: str) -> list[StockSuggestion]:
-        """Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``."""
-        return self._call(SUGGEST_STOCK, {"query": query})
-
-    def finance_income(
-        self,
-        symbol: str,
-        *,
-        report_type: ReportType = "all",
-        is_detail: bool = True,
-        count: int = 5,
-    ) -> Financials:
-        """Income statement, latest report period first; see ``FinanceParams``."""
-        return self._call(
-            FINANCE_INCOME,
-            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
-        )
-
-    def finance_balance(
-        self,
-        symbol: str,
-        *,
-        report_type: ReportType = "all",
-        is_detail: bool = True,
-        count: int = 5,
-    ) -> Financials:
-        """Balance sheet, latest report period first; see ``FinanceParams``."""
-        return self._call(
-            FINANCE_BALANCE,
-            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
-        )
-
-    def finance_cash_flow(
-        self,
-        symbol: str,
-        *,
-        report_type: ReportType = "all",
-        is_detail: bool = True,
-        count: int = 5,
-    ) -> Financials:
-        """Cash flow statement, latest report period first; see ``FinanceParams``."""
-        return self._call(
-            FINANCE_CASH_FLOW,
-            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
-        )
-
-    def finance_indicator(
-        self,
-        symbol: str,
-        *,
-        report_type: ReportType = "all",
-        is_detail: bool = True,
-        count: int = 5,
-    ) -> Financials:
-        """Key financial indicators, latest report period first; see ``FinanceParams``."""
-        return self._call(
-            FINANCE_INDICATOR,
-            {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
-        )
-
-    def f10_company(self, symbol: str) -> Company:
-        """Company profile of one listed company."""
-        return self._call(F10_COMPANY, {"symbol": symbol})
 
     def call(self, endpoint: str, /, **params: Any) -> Any:
         """Call any registered endpoint by name and return its parsed result."""

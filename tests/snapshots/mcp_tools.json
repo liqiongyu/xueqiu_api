@@ -186,7 +186,7 @@
   {
     "name": "xq_endpoints",
     "title": "端点目录",
-    "description": "端点目录 接口列表 参数说明 字段 批量行情 公司资料 资产负债表 现金流量表 利润表 财务指标 K线 行情详情 实时行情 证券搜索 endpoints catalog describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时列出全部端点：端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、翻页方式和一个示例调用。\n示例：xq_endpoints {\"query\":\"公司资料\"}；xq_endpoints {\"name\":[\"f10_company\"]}\n查到端点后用 xq_call 调用。",
+    "description": "端点目录 接口列表 参数说明 字段 批量行情 大宗交易 组合净值走势 公司资料 资产负债表 现金流量表 利润表 财务指标 基金历史净值 K线 行情详情 实时行情 证券搜索 endpoints catalog describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时列出全部端点：端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、翻页方式和一个示例调用。\n示例：xq_endpoints {\"query\":\"大宗交易\"}；xq_endpoints {\"name\":[\"capital_block_trades\"]}\n查到端点后用 xq_call 调用。",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -200,11 +200,14 @@
             "type": "string",
             "enum": [
               "batch_quote",
+              "capital_block_trades",
+              "cube_nav_daily",
               "f10_company",
               "finance_balance",
               "finance_cash_flow",
               "finance_income",
               "finance_indicator",
+              "fund_nav_history",
               "kline",
               "quote_detail",
               "quotec",
@@ -231,7 +234,7 @@
   {
     "name": "xq_call",
     "title": "调用端点",
-    "description": "调用端点 通用调用 公司资料 资产负债表 现金流量表 利润表 财务指标 行情详情 实时行情 call endpoint gateway\n按端点名调用任意已启用端点；没有专用工具的数据（公司资料、资产负债表、现金流量表等）都走这里。endpoint 必填，取值见枚举；params 按该端点的参数校验，未知参数返回 invalid_params 并列出合法参数和签名；fields 选择列，财报科目输出本期值和 .yoy（同比，百分点）两列；limit 限制行数。对同一端点和同一组参数，输出与专用工具相同。\n示例：xq_call {\"endpoint\":\"f10_company\",\"params\":{\"symbol\":\"SH600000\"}}；xq_call {\"endpoint\":\"finance_balance\",\"params\":{\"symbol\":\"SH600000\",\"count\":2}}\n不确定端点名或参数时先用 xq_endpoints。",
+    "description": "调用端点 通用调用 大宗交易 组合净值走势 公司资料 资产负债表 现金流量表 利润表 财务指标 基金历史净值 行情详情 实时行情 call endpoint gateway\n按端点名调用任意已启用端点；没有专用工具的数据（大宗交易、组合净值走势、公司资料等）都走这里。endpoint 必填，取值见枚举；params 按该端点的参数校验，未知参数返回 invalid_params 并列出合法参数和签名；fields 选择列，财报科目输出本期值和 .yoy（同比，百分点）两列；limit 限制行数。对同一端点和同一组参数，输出与专用工具相同。\n示例：xq_call {\"endpoint\":\"capital_block_trades\",\"params\":{\"symbol\":\"SH600000\",\"page_size\":20}}；xq_call {\"endpoint\":\"cube_nav_daily\",\"params\":{\"cube_symbol\":\"ZH2567925\"}}\n不确定端点名或参数时先用 xq_endpoints。",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -239,11 +242,14 @@
           "type": "string",
           "enum": [
             "batch_quote",
+            "capital_block_trades",
+            "cube_nav_daily",
             "f10_company",
             "finance_balance",
             "finance_cash_flow",
             "finance_income",
             "finance_indicator",
+            "fund_nav_history",
             "kline",
             "quote_detail",
             "quotec",

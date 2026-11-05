@@ -10,6 +10,7 @@ import httpx2
 import pytest
 
 from xueqiu_api import REGISTRY
+from xueqiu_api._base import ClientBase
 from xueqiu_api.registry import Endpoint
 
 from .harness import FakeClock, FakeUpstream, Harness, Kind, Register
@@ -45,6 +46,31 @@ def _no_ambient_mcp_options(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in list(os.environ):
         if name.startswith("XUEQIU_MCP_"):
             monkeypatch.delenv(name)
+
+
+@pytest.fixture(autouse=True)
+def _samples_parse_their_endpoint(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """A test marked ``sample("name")`` must have parsed a response of that endpoint by its end."""
+    marked = {mark.args[0] for mark in request.node.iter_markers("sample")}
+    if not marked:
+        yield
+        return
+    parsed: set[str] = set()
+    finish = ClientBase._finish  # pyright: ignore[reportPrivateUsage]
+
+    def recording(
+        client: ClientBase, spec: Endpoint[Any, Any], params: Any, call: Any, body: Any
+    ) -> Any:
+        result = finish(client, spec, params, call, body)
+        parsed.add(spec.name)
+        return result
+
+    monkeypatch.setattr(ClientBase, "_finish", recording)
+    yield
+    missing = marked - parsed
+    assert not missing, f"marked as a sample of {sorted(missing)}, but it parsed {sorted(parsed)}"
 
 
 @pytest.fixture

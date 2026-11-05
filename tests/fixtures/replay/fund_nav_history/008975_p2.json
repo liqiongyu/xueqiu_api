@@ -1,0 +1,19 @@
+{
+  "params": {
+    "fund_code": "008975",
+    "page": "2"
+  },
+  "body": {
+    "data": {
+      "items": [
+        { "date": "2026-10-30", "nav": "1.1752", "percentage": "2.03", "value": "1.1752" },
+        { "date": "2020-03-18", "nav": "1.0000", "value": "1.0000" }
+      ],
+      "current_page": 2,
+      "size": 3,
+      "total_items": 5,
+      "total_pages": 2
+    },
+    "result_code": 0
+  }
+}

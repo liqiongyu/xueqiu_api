@@ -19,12 +19,12 @@ from xueqiu_api import (
     Blocked,
     Client,
     InvalidParams,
-    Kline,
     RateLimited,
     UpstreamChanged,
 )
 from xueqiu_api._pages import Page, PageWalk, finish
 from xueqiu_api.endpoints.kline import BarWalk
+from xueqiu_api.models import Kline
 from xueqiu_api.registry import Endpoint, Pagination
 from xueqiu_api.sites import Host
 

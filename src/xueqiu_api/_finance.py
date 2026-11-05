@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ._time import from_ms
+from .errors import SymbolNotFound
 from .registry import AgentInfo, Endpoint, Pagination
 from .symbols import SymbolCode, normalize_symbol
 
@@ -106,6 +107,9 @@ def _build_query(params: FinanceParams, now: datetime) -> dict[str, str]:
 
 
 def _parse(payload: Any, params: FinanceParams, items: ItemFixes) -> Financials:
+    if payload == {}:
+        # What an unknown code gets, measured 2026-11-05 on the income statement.
+        raise SymbolNotFound(f"the upstream has no statements for {params.symbol}")
     data = cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
     rows: Any = data.get("list")
     if not isinstance(rows, list):

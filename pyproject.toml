@@ -58,12 +58,19 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 allowed-confusables = ["，", "：", "；", "（", "）"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/xueqiu_api/_endpoints_*.py" = ["E501"]
+
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "scripts/generate_client.py"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
+reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers"]
-markers = ["live: sends real requests to Xueqiu or Danjuan; opt-in only"]
+markers = [
+    "live: sends real requests to Xueqiu or Danjuan; opt-in only",
+    "sample(name): the test parses a sample response of the named endpoint; checked at teardown",
+]

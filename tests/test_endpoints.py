@@ -8,31 +8,59 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import httpx2
 import pytest
 
 from xueqiu_api import (
-    Company,
-    Financials,
+    REGISTRY,
     InvalidParams,
-    QuoteDetail,
     RateLimited,
-    StockSuggestion,
+    SymbolNotFound,
     UpstreamChanged,
 )
+from xueqiu_api._render import compact_json, render
+from xueqiu_api._replay import ReplayTransport
+from xueqiu_api.models import (
+    BlockTrade,
+    Company,
+    CubeNav,
+    Financials,
+    FundNav,
+    QuoteDetail,
+    StockSuggestion,
+)
 
-from .harness import Harness, Reply, error_reply, fixture_reply, json_reply, replay_body
+from .harness import (
+    REPLAY_DIR,
+    Harness,
+    Reply,
+    error_reply,
+    fixture_reply,
+    json_reply,
+    replay_body,
+)
 
 STOCK = "stock.xueqiu.com"
 WWW = "www.xueqiu.com"
 BATCH = "/v5/stock/batch/quote.json"
 DETAIL = "/v5/stock/quote.json"
 SUGGEST = "/query/v1/suggest_stock.json"
+KLINE = "/v5/stock/chart/kline.json"
+BLOCK_TRADES = "/v5/stock/capital/blocktrans.json"
+FUND_NAV = "/djapi/fund/nav/history/008975"
+CUBE_NAV = "/cubes/nav_daily/all.json"
+DANJUAN = "danjuanfunds.com"
 TOKEN = "xq_a_token=fake-login-token-0001; u=fake-login-u-0001"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 HONG_KONG = ZoneInfo("Asia/Hong_Kong")
 NEW_YORK = ZoneInfo("America/New_York")
 REGIONS = [("SH600000", "cn"), ("00700", "hk"), ("AAPL", "us")]
-STATEMENTS = ["income", "balance", "cash_flow", "indicator"]
+STATEMENTS = [
+    pytest.param("income", marks=pytest.mark.sample("finance_income")),
+    pytest.param("balance", marks=pytest.mark.sample("finance_balance")),
+    pytest.param("cash_flow", marks=pytest.mark.sample("finance_cash_flow")),
+    pytest.param("indicator", marks=pytest.mark.sample("finance_indicator")),
+]
 RENAMED = {
     "balance": {"asset_liab_ratio": ("asset_liab_ratio", 100), "ta_tlia": ("tlia_ta", 100)},
     "indicator": {"capital_reserve": ("capital_reserve_ps", 1)},
@@ -56,6 +84,7 @@ def gaps(times: Sequence[float]) -> list[float]:
     return [later - earlier for earlier, later in itertools.pairwise(sorted(times))]
 
 
+@pytest.mark.sample("batch_quote")
 def test_batch_quote_sends_one_request_and_parses_every_item(h: Harness) -> None:
     h.upstream.route(STOCK, BATCH, fixture_reply("batch_quote/cn_hk_us"))
 
@@ -102,6 +131,7 @@ def test_batch_quote_size_is_capped(h: Harness) -> None:
     assert h.upstream.sent == []
 
 
+@pytest.mark.sample("quote_detail")
 def test_quote_detail_parses_one_symbol(h: Harness) -> None:
     h.upstream.route(STOCK, DETAIL, fixture_reply("quote_detail/sh600000"))
 
@@ -164,6 +194,7 @@ def test_suggest_stock_searches_www_with_browser_headers_and_cookies(h: Harness)
     assert first.model_extra == {"label": "11", "state": 1, "type": 1}
 
 
+@pytest.mark.sample("suggest_stock")
 def test_suggest_stock_returns_every_match(h: Harness) -> None:
     h.upstream.route(WWW, SUGGEST, fixture_reply("suggest_stock/aapl"))
 
@@ -393,6 +424,7 @@ def test_company_goes_to_the_region_of_the_symbol(h: Harness, symbol: str, regio
     assert company.org_cn_introduction == "合成公司简介"
 
 
+@pytest.mark.sample("f10_company")
 def test_company_dates_are_exchange_dates(h: Harness) -> None:
     h.upstream.route(STOCK, company_path("cn"), fixture_reply("f10_company/sh600000"))
     h.upstream.route(STOCK, company_path("us"), fixture_reply("f10_company/aapl"))
@@ -450,7 +482,7 @@ EMPTY: list[Case] = [
 MISMATCHES: list[Case] = [
     ("batch_quote", STOCK, BATCH, {"data": []}),
     ("batch_quote", STOCK, BATCH, {"data": {"items": [{"market": {"status_id": 7}}]}}),
-    ("quote_detail", STOCK, DETAIL, {"data": {"quote": None}}),
+    ("quote_detail", STOCK, DETAIL, {"data": {}}),
     ("quote_detail", STOCK, DETAIL, {"data": {"quote": {"current": 1}}}),
     ("suggest_stock", WWW, SUGGEST, {"data": [], "success": False}),
     ("suggest_stock", WWW, SUGGEST, {"success": True}),
@@ -499,3 +531,314 @@ def test_shape_mismatch_is_upstream_changed(
 
     assert caught.value.endpoint == method
     assert len(h.upstream.requests(host, path)) == 1
+
+
+UNKNOWN_CODE: list[Case] = [
+    (
+        "quote_detail",
+        STOCK,
+        DETAIL,
+        {
+            "data": {"market": None, "quote": None, "others": None, "tags": None},
+            "error_code": 0,
+            "error_description": "",
+        },
+    ),
+    ("kline", STOCK, KLINE, {"data": {}, "error_code": 0, "error_description": ""}),
+    *(
+        (
+            f"finance_{statement}",
+            STOCK,
+            finance_path("cn", statement),
+            {"data": {}, "error_code": 0},
+        )
+        for statement in ("income", "balance", "cash_flow", "indicator")
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("method", "host", "path", "body"), UNKNOWN_CODE, ids=[case[0] for case in UNKNOWN_CODE]
+)
+def test_an_unknown_code_is_symbol_not_found(
+    h: Harness, method: str, host: str, path: str, body: dict[str, Any]
+) -> None:
+    h.upstream.route(host, path, json_reply(body))
+
+    with pytest.raises(SymbolNotFound) as caught:
+        call_once(h, method)
+
+    assert caught.value.endpoint == method
+    assert caught.value.params is not None and caught.value.params["symbol"] == "SH600000"
+    assert len(h.upstream.requests(host, path)) == 1
+
+
+def block_trade_rows(start: int, count: int) -> list[dict[str, Any]]:
+    """Rows that differ, one a day, the latest first, as the upstream sends them."""
+    day = 86_400_000
+    return [
+        {"td_date": 1793721600000 - row * day, "vol": 100.0, "trans_price": 10.0, "trans_amt": 1e3}
+        for row in range(start, start + count)
+    ]
+
+
+def block_trades_reply(request: httpx2.Request) -> httpx2.Response:
+    """Two full pages of 2 rows and a short last page."""
+    page, size = int(request.url.params["page"]), int(request.url.params["size"])
+    rows = block_trade_rows((page - 1) * size, size)[: max(0, 5 - (page - 1) * size)]
+    return httpx2.Response(200, json={"data": {"items": rows}, "error_code": 0})
+
+
+def fund_nav_reply(request: httpx2.Request) -> httpx2.Response:
+    """Two pages of 2 rows; the newest row of page 1 pushed its last row onto page 2."""
+    page = int(request.url.params["page"])
+    dates = [["2026-11-04", "2026-11-03"], ["2026-11-03", "2026-11-02"]][page - 1]
+    rows = [{"date": day, "nav": "1.5", "percentage": "0.1", "value": "1.5"} for day in dates]
+    data = {"items": rows, "current_page": page, "size": 2, "total_items": 4, "total_pages": 2}
+    return httpx2.Response(200, json={"data": data, "result_code": 0})
+
+
+def rendered(h: Harness, name: str, **params: Any) -> str:
+    spec = REGISTRY[name]
+    return render(
+        spec,
+        spec.validate(params),
+        h.call(name, **params),
+        fields=None,
+        limit=spec.agent.row_default,
+        max_chars=4000,
+        fetched_at=datetime(2026, 11, 5, 2, 0, tzinfo=SHANGHAI),
+        next_call=lambda following, offset: compact_json(following),
+    )
+
+
+@pytest.mark.sample("capital_block_trades")
+def test_capital_block_trades_parses_dates_and_percent_points(h: Harness) -> None:
+    h.upstream.route(STOCK, BLOCK_TRADES, fixture_reply("capital_block_trades/sh600000_p1"))
+
+    page = h.run("capital_block_trades", "600000", page_size=20)
+
+    [sent] = h.upstream.requests(STOCK, BLOCK_TRADES)
+    assert sent.params == {"symbol": "SH600000", "page": "1", "size": "20"}
+    assert (page.page, page.page_size, page.total, page.next_params) == (1, 20, None, None)
+    assert all(isinstance(row, BlockTrade) for row in page)
+    latest, older, _ = page
+    assert latest.trade_date == date(2026, 11, 4)
+    assert (older.trade_date, older.premium_pct, older.trans_price) == (
+        date(2026, 10, 16),
+        -0.21,
+        9.71,
+    )
+    assert older.vol * older.trans_price == pytest.approx(older.trans_amt, rel=1e-4)
+    assert older.buy_branch_org_name == "示例证券甲营业部"
+    assert REGISTRY["capital_block_trades"].order == "newest_first"
+    dates = [row.trade_date for row in page]
+    assert dates == sorted(dates, reverse=True)
+
+
+def test_capital_block_trades_pages_end_on_the_short_page(h: Harness) -> None:
+    h.upstream.route(STOCK, BLOCK_TRADES, block_trades_reply)
+
+    pages = h.pages("capital_block_trades_pages", "SH600000", page_size=2)
+
+    assert [len(page) for page in pages] == [2, 2, 1]
+    assert pages[0].next_params == {"symbol": "SH600000", "page": 2, "page_size": 2}
+    assert pages[-1].next_params is None
+    assert [sent.params["page"] for sent in h.upstream.requests(STOCK, BLOCK_TRADES)] == [
+        "1",
+        "2",
+        "3",
+    ]
+
+
+def test_capital_block_trades_pages_ask_for_the_largest_page_by_default(h: Harness) -> None:
+    h.upstream.route(STOCK, BLOCK_TRADES, json_reply({"data": {"items": []}, "error_code": 0}))
+
+    assert [len(page) for page in h.pages("capital_block_trades_pages", "SH600000")] == [0]
+
+    assert h.upstream.requests(STOCK, BLOCK_TRADES)[0].params["size"] == "100"
+
+
+@pytest.mark.parametrize(
+    ("method", "code"),
+    [("capital_block_trades_pages", "SH600000"), ("fund_nav_history_pages", "008975")],
+)
+def test_page_methods_reject_bad_params_before_any_request(
+    h: Harness, method: str, code: str
+) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        getattr(h.client, method)(code, page_size=0)
+
+    assert caught.value.field == "page_size"
+    assert h.upstream.sent == []
+
+
+def test_capital_block_trades_is_for_a_shares_only(h: Harness) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        h.run("capital_block_trades", "00700")
+
+    assert (caught.value.field, list(caught.value.valid_values)) == ("symbol", ["CN"])
+    assert h.upstream.sent == []
+
+
+def test_capital_block_trades_call_and_render(h: Harness) -> None:
+    h.upstream.route(STOCK, BLOCK_TRADES, fixture_reply("capital_block_trades/sh600000_p1"))
+
+    text = rendered(h, "capital_block_trades", symbol="SH600000", page_size=3)
+
+    assert "# page: page=1 page_size=3\n" in text
+    assert "trade_date,trans_price,vol,trans_amt,premium_pct," in text
+    assert (
+        "2026-10-16,9.71,347899900,3378107700,-0.21,示例证券甲营业部,示例证券乙资产管理部" in text
+    )
+    assert text.endswith('# next: {"symbol":"SH600000","page":2,"page_size":3}')
+
+
+@pytest.mark.sample("fund_nav_history")
+def test_fund_nav_history_parses_numbers_and_dates(h: Harness) -> None:
+    h.upstream.route(DANJUAN, FUND_NAV, fixture_reply("fund_nav_history/008975_p1"))
+
+    page = h.run("fund_nav_history", "008975", page_size=3)
+
+    [sent] = h.upstream.requests(DANJUAN)
+    assert sent.path == FUND_NAV
+    assert sent.params == {"page": "1", "size": "3"}
+    assert "cookie" not in sent.headers
+    assert (page.page, page.page_size, page.total, page.last_page) == (1, 3, 5, 2)
+    assert page.next_params == {"fund_code": "008975", "page": 2, "page_size": 3}
+    latest = page.items[0]
+    assert isinstance(latest, FundNav)
+    assert (latest.date, latest.nav, latest.nav_value, latest.daily_pct) == (
+        date(2026, 11, 4),
+        1.2048,
+        1.2048,
+        -1.27,
+    )
+    assert REGISTRY["fund_nav_history"].order == "newest_first"
+    dates = [row.date for row in page]
+    assert dates == sorted(dates, reverse=True)
+
+
+def test_fund_nav_history_pages_drop_rows_repeated_across_pages(h: Harness) -> None:
+    h.upstream.route(DANJUAN, FUND_NAV, fund_nav_reply)
+
+    pages = h.pages("fund_nav_history_pages", "008975", page_size=2)
+
+    assert [row.date.isoformat() for page in pages for row in page] == [
+        "2026-11-04",
+        "2026-11-03",
+        "2026-11-02",
+    ]
+    assert pages[-1].next_params is None
+    assert [sent.params["page"] for sent in h.upstream.requests(DANJUAN)] == ["1", "2"]
+
+
+def test_fund_nav_history_pages_walk_the_replay_fixtures(make: Callable[..., Harness]) -> None:
+    h = make(transport=ReplayTransport(REPLAY_DIR))
+
+    pages = h.pages("fund_nav_history_pages", "008975")
+
+    assert [len(page) for page in pages] == [3, 2]
+    oldest = pages[-1].items[-1]
+    assert (oldest.date, oldest.nav, oldest.daily_pct) == (date(2020, 3, 18), 1.0, None)
+
+
+def test_fund_nav_history_page_size_cap_is_the_measured_one(h: Harness) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        h.run("fund_nav_history", "008975", page_size=2001)
+
+    assert caught.value.field == "page_size"
+    assert h.upstream.sent == []
+
+
+def test_fund_nav_history_call_and_render(make: Callable[..., Harness]) -> None:
+    h = make(transport=ReplayTransport(REPLAY_DIR))
+
+    text = rendered(h, "fund_nav_history", fund_code="008975")
+
+    assert "# page: page=1 page_size=3 total=5 last_page=2\n" in text
+    assert "date,nav,daily_pct\n2026-11-04,1.2048,-1.27\n" in text
+    assert text.endswith('# next: {"fund_code":"008975","page":2,"page_size":50}')
+
+
+@pytest.mark.sample("cube_nav_daily")
+def test_cube_nav_daily_joins_the_portfolio_and_its_benchmark(h: Harness) -> None:
+    h.upstream.route(WWW, CUBE_NAV, fixture_reply("cube_nav_daily/zh2567925"))
+
+    nav = h.run("cube_nav_daily", "zh2567925")
+
+    [sent] = h.upstream.requests(WWW, CUBE_NAV)
+    assert sent.params == {"cube_symbol": "ZH2567925"}
+    assert sent.headers["user-agent"].startswith("Mozilla")
+    assert isinstance(nav, CubeNav)
+    assert (nav.symbol, nav.benchmark, nav.benchmark_name) == ("ZH2567925", "SH000300", "沪深300")
+    assert len(nav) == 3
+    assert nav.dates == (date(2021, 6, 11), date(2021, 6, 15), date(2021, 6, 16))
+    assert nav.columns["nav"] == (0.9857, 1.0122, 0.9842)
+    assert nav.columns["total_gain"] == (-1.43, 1.22, -1.58)
+    assert nav.columns["benchmark_value"] == (5224.7, 5166.56, 5080.49)
+    assert nav.columns["benchmark_total_gain"] == (-0.89, -1.99, -3.63)
+    for value, gain in zip(nav.columns["nav"], nav.columns["total_gain"], strict=True):
+        assert value is not None and gain == pytest.approx((value - 1) * 100, abs=0.01)
+    assert REGISTRY["cube_nav_daily"].order == "oldest_first"
+
+
+def test_cube_nav_daily_cuts_the_range_locally(h: Harness) -> None:
+    h.upstream.route(WWW, CUBE_NAV, fixture_reply("cube_nav_daily/zh2567925"))
+
+    nav = h.call(
+        "cube_nav_daily", cube_symbol="ZH2567925", begin="2021-06-15", end=date(2021, 6, 15)
+    )
+
+    assert nav.dates == (date(2021, 6, 15),)
+    assert nav.columns["nav"] == (1.0122,)
+    assert h.upstream.requests(WWW, CUBE_NAV)[0].params == {"cube_symbol": "ZH2567925"}
+
+
+def test_cube_nav_daily_without_a_benchmark_or_with_a_gap(h: Harness) -> None:
+    cube = {
+        "symbol": "ZH2567925",
+        "list": [
+            {"date": "2021-06-11", "value": 1.0, "percent": 0.0},
+            {"date": "2021-06-15", "value": 1.1, "percent": 10.0},
+        ],
+    }
+    benchmark = {
+        "symbol": "SH000300",
+        "list": [{"date": "2021-06-15", "value": 5000.0, "percent": 1.0}],
+    }
+    h.upstream.route(WWW, CUBE_NAV, json_reply([cube]), json_reply([cube, benchmark]))
+
+    alone = h.run("cube_nav_daily", "ZH2567925")
+    joined = h.run("cube_nav_daily", "ZH2567925")
+
+    assert (alone.benchmark, alone.header()) == (None, {})
+    assert alone.columns["benchmark_value"] == (None, None)
+    assert joined.columns["benchmark_value"] == (None, 5000.0)
+
+
+@pytest.mark.parametrize("body", [{"symbol": "ZH2567925"}, [], [{"symbol": "ZH2567925"}]])
+def test_cube_nav_daily_of_another_shape_is_upstream_changed(h: Harness, body: Any) -> None:
+    h.upstream.route(WWW, CUBE_NAV, json_reply(body))
+
+    with pytest.raises(UpstreamChanged):
+        h.run("cube_nav_daily", "ZH2567925")
+
+
+def test_cube_nav_daily_rejects_other_codes_before_any_request(h: Harness) -> None:
+    with pytest.raises(InvalidParams):
+        h.run("cube_nav_daily", "SH600000")
+    assert h.upstream.sent == []
+
+
+def test_cube_nav_daily_call_and_render(h: Harness) -> None:
+    h.upstream.route(WWW, CUBE_NAV, fixture_reply("cube_nav_daily/zh2567925"))
+
+    text = rendered(h, "cube_nav_daily", cube_symbol="ZH2567925")
+
+    assert "# info: benchmark=SH000300 benchmark_name=沪深300\n" in text
+    assert "# stats: points=3 first_date=2021-06-11 last_date=2021-06-16 nav_last=0.9842" in text
+    assert "date,nav,total_gain,benchmark_value,benchmark_total_gain\n" in text
+    assert "2021-06-16,0.9842,-1.58,5080.49,-3.63\n" in text
+    assert "示例组合" not in text
+    assert text.endswith("# next: none")

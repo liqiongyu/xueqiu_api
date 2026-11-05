@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, cast
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 
 from .._f10 import region_query
+from .._model import UpstreamModel
 from .._time import date_from_ms
 from ..registry import AgentInfo, Endpoint
 from ..symbols import SymbolParams, exchange_timezone
@@ -17,15 +18,13 @@ def _named(name: str, hong_kong: str) -> Any:
     return Field(default=None, validation_alias=AliasChoices(name, hong_kong))
 
 
-class Company(BaseModel):
+class Company(UpstreamModel):
     """Company profile. Field names follow the A-share and US responses.
 
     Hong Kong responses use other names; the ones with a clear counterpart are read into the
     fields below (``comcnname``, ``comenname``, ``mbu``, ``comintr``, ``incdate``,
     ``lsdateipo``, ``web_site``). Every other upstream field is kept in ``model_extra``.
     """
-
-    model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     symbol: str
     """The requested symbol."""
