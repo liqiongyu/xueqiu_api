@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from ._model import without_keys
 from ._time import from_ms
 from .errors import SymbolNotFound
 from .registry import AgentInfo, Endpoint, Pagination
@@ -120,7 +121,7 @@ def _parse(payload: Any, params: FinanceParams, items: ItemFixes) -> Financials:
         name=_TEXT.validate_python(data.get("quote_name")),
         currency=_TEXT.validate_python(data.get("currency")),
         periods=tuple(_period(row, tz, items) for row in cast(list[Any], rows)),
-        extra={key: value for key, value in data.items() if key not in _HEADER_KEYS},
+        extra=without_keys({k: v for k, v in data.items() if k not in _HEADER_KEYS}),
     )
 
 
@@ -138,11 +139,13 @@ def _period(row: Any, tz: ZoneInfo, items: ItemFixes) -> ReportPeriod:
         line_items[item] = LineItem(
             None if value is None else value * factor, None if yoy is None else yoy * 100
         )
-    extra = {
-        key: value
-        for key, value in fields.items()
-        if key not in _PERIOD_KEYS and not isinstance(value, list)
-    }
+    extra = without_keys(
+        {
+            key: value
+            for key, value in fields.items()
+            if key not in _PERIOD_KEYS and not isinstance(value, list)
+        }
+    )
     if extra.get("ctime") is not None:
         extra["ctime"] = from_ms(extra["ctime"], tz)
     return ReportPeriod(

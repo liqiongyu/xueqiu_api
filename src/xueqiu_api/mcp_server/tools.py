@@ -32,6 +32,8 @@ from .._render import (
     csv_line,
     error_text,
     fit,
+    no_offset,
+    refuses_offset,
     render,
     render_bar_stats,
 )
@@ -206,7 +208,7 @@ class KlineArgs(_Args):
 
 
 class EndpointsArgs(_Args):
-    query: str | None = None
+    query: str | None = Field(default=None, max_length=QUERY_CHARS)
     name: Annotated[tuple[str, ...], Field(min_length=1, max_length=DESCRIBE_NAMES)] | None = None
     category: str | None = None
 
@@ -356,6 +358,8 @@ class Toolbox:
                 endpoint=name,
                 field="limit",
             )
+        if offset and refuses_offset(spec):
+            raise no_offset(spec)
         result = await self._client.call(name, **model.model_dump())
         return render(
             spec,
@@ -418,10 +422,11 @@ class Toolbox:
             return f"xq_call {compact_json({'endpoint': spec.name, 'params': params, **more})}"
 
         def dedicated(params: Mapping[str, Any], offset: int) -> str:
-            # No dedicated tool takes an offset; a larger limit shows the rows a limit cut.
-            if offset:
+            # No dedicated tool takes an offset; the largest limit shows the rows a limit cut.
+            if offset and limit >= spec.agent.row_cap:
                 return ""
-            return f"{tool} {compact_json({**_tool_arguments(params), **options})}"
+            more = {**options, "limit": spec.agent.row_cap} if offset else options
+            return f"{tool} {compact_json({**_tool_arguments(params), **more})}"
 
         if "xq_call" in self.tools:
             return call
@@ -515,7 +520,13 @@ class Toolbox:
             names = [spec.name for spec in specs[stop : stop + DESCRIBE_NAMES]]
             return f"xq_endpoints {compact_json({'name': names or [specs[first].name]})}"
 
-        return fit(head, lines, footer=footer, max_chars=self._max_chars)
+        return fit(
+            head,
+            lines,
+            footer=footer,
+            max_chars=self._max_chars,
+            cut_hint="; narrow by category or query to list the others",
+        )
 
     def _describe(self, specs: Sequence[Endpoint[Any, Any]]) -> str:
         unique = list({spec.name: spec for spec in specs}.values())
@@ -761,6 +772,7 @@ class Toolbox:
                 {
                     "query": {
                         "type": "string",
+                        "maxLength": QUERY_CHARS,
                         "description": "按子串匹配端点名、标题、说明和关键词",
                     },
                     "name": {
@@ -916,10 +928,12 @@ def _examples(names: Sequence[str]) -> str:
 
 
 def _tool_arguments(params: Mapping[str, Any]) -> dict[str, Any]:
-    """Dedicated-tool arguments of a next page's endpoint params, for xq_quote and xq_kline.
+    """Dedicated-tool arguments of a next call's endpoint params.
 
     xq_kline takes the count from its limit, so only the count of range max is kept, as that.
     """
+    if "query" in params:
+        return {"query": params["query"]}
     if "symbols" in params:
         return {"symbols": params["symbols"]}
     arguments: dict[str, Any] = {"symbols": [params["symbol"]]}

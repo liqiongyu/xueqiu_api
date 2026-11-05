@@ -846,3 +846,67 @@ def test_a_history_that_never_ends_fails() -> None:
         walk.accept(bars(2, stamp))
     with pytest.raises(UpstreamChanged):
         walk.accept(bars(2, stamp))
+
+
+@pytest.mark.parametrize("begin", [datetime(1990, 12, 20), "1990-12-20"], ids=["datetime", "text"])
+def test_kline_history_takes_the_begin_and_end_kline_takes(h: Harness, begin: Any) -> None:
+    h.upstream.route(STOCK, KLINE_PATH, bars_reply(days(5)))
+
+    assert len(h.kline("SH000001", begin=begin)) == 4
+    assert len(history(h, "SH000001", begin=begin)) == 4
+    assert len(history(h, "SH000001", begin=date(1990, 12, 19), end=begin)) == 2
+
+
+def test_kline_history_refuses_a_begin_kline_refuses(h: Harness) -> None:
+    with pytest.raises(InvalidParams):
+        history(h, "SH000001", begin=datetime(1990, 12, 20, 9, 30))
+
+    assert h.upstream.sent == []
+
+
+def test_dates_holding_more_than_a_request_give_the_latest_bars(h: Harness) -> None:
+    stamps = days(12_000)
+    h.upstream.route(STOCK, KLINE_PATH, bars_reply(stamps))
+
+    kline = h.kline("SH000001", begin=date(1985, 1, 1))
+
+    assert h.upstream.requests(path=KLINE_PATH)[0].params["count"] == "-10000"
+    assert len(kline) == 10_000
+    assert int(kline.timestamps[-1].timestamp() * 1000) == stamps[-1]
+    assert len(history(h, "SH000001", begin=date(1985, 1, 1))) == 12_000
+
+
+CAPPED = [
+    pytest.param("total", {"total": 9000, "last_page": 90}, id="last-page"),
+    pytest.param("total", {"total": 9000}, id="total"),
+    pytest.param("short", {}, id="short"),
+    pytest.param("empty", {}, id="empty"),
+]
+
+
+@pytest.mark.parametrize(("end", "fields"), CAPPED)
+def test_the_page_reaching_the_total_cap_has_no_next(end: Any, fields: dict[str, Any]) -> None:
+    rule = Pagination(style="page", end=end, total_cap=5000)
+    rows = tuple(Row(id=str(index)) for index in range(100))
+
+    before = finish(rule, Page(rows, page=49, page_size=100, **fields), {"page": 49})
+    last = finish(rule, Page(rows, page=50, page_size=100, **fields), {"page": 50})
+
+    assert before.next_params == {"page": 50}
+    assert last.next_params is None
+
+
+def test_max_items_goes_past_the_runaway_limit(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("xueqiu_api._pages.RUNAWAY_PAGES", 5)
+
+    def endless(request: httpx2.Request) -> httpx2.Response:
+        page = int(request.url.params["page"])
+        return httpx2.Response(
+            200, json={"data": {"items": rows(100, start=page * 100)}, "error_code": 0}
+        )
+
+    h.upstream.route(STOCK, "/margin.json", endless)
+
+    pages, exc = h.walk(MARGIN, max_items=650)
+
+    assert exc is None and sum(len(page) for page in pages) == 650

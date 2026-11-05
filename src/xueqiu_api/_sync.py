@@ -214,11 +214,14 @@ class Client(ClientBase, SyncEndpoints):
         with self._session_locked(call, deadline):
             if self._session.generation == seen:
                 self._bootstrap(deadline)
+        if not self._session.ready(call):
+            raise self._cookie_error(call)
 
     @contextlib.contextmanager
     def _session_locked(self, call: Call, deadline: float) -> Generator[None]:
         """Hold the session lock; give up waiting for it at the call's deadline."""
-        if not self._session_lock.acquire(timeout=max(0.0, deadline - self._clock())):
+        wait = min(max(0.0, deadline - self._clock()), threading.TIMEOUT_MAX)
+        if not self._session_lock.acquire(timeout=wait):
             raise self._session_wait_error(call)
         try:
             yield

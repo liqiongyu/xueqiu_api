@@ -19,6 +19,7 @@ from typing import (
     Any,
     Literal,
     NamedTuple,
+    TypeVar,
     Union,
     cast,
     get_args,
@@ -88,7 +89,11 @@ def _render(tp: Any, module: str, imports: Imports) -> str:
     """``tp`` as source text; Literal aliases are looked up in ``module``."""
     origin = get_origin(tp)
     if origin is Annotated:
+        if _splits_symbols(tp.__metadata__):
+            return _symbol_list(imports)
         return _render(get_args(tp)[0], module, imports)
+    if tp is Any or isinstance(tp, TypeVar):
+        return "Any" if tp is Any else tp.__name__
     if tp is None or tp is type(None):
         return "None"
     if origin is Literal:
@@ -112,11 +117,19 @@ def _render(tp: Any, module: str, imports: Imports) -> str:
     raise TypeError(f"cannot write {tp!r} in a signature")
 
 
+def _splits_symbols(metadata: Iterable[Any]) -> bool:
+    return any(isinstance(m, BeforeValidator) and m.func is split_symbols for m in metadata)
+
+
+def _symbol_list(imports: Imports) -> str:
+    imports.add("collections.abc", "Sequence")
+    return "str | Sequence[str]"
+
+
 def _public_type(field: FieldInfo, module: str, imports: Imports) -> str:
     """What a caller passes: the validated type, except where a validator accepts more."""
-    if any(isinstance(m, BeforeValidator) and m.func is split_symbols for m in field.metadata):
-        imports.add("collections.abc", "Sequence")
-        return "str | Sequence[str]"
+    if _splits_symbols(field.metadata):
+        return _symbol_list(imports)
     return _render(field.annotation, module, imports)
 
 
@@ -320,10 +333,15 @@ def _is_result_class(tp: Any) -> bool:
     return issubclass(cls, BaseModel) or is_dataclass(cls) or hasattr(cls, "_fields")
 
 
-def _field_types(cls: type[Any]) -> list[Any]:
+def _field_types(cls: type[Any]) -> dict[str, Any]:
     if issubclass(cls, BaseModel):
-        return [field.annotation for field in cls.model_fields.values()]
-    return list(get_type_hints(cls).values())
+        return {name: field.annotation for name, field in cls.model_fields.items()}
+    return get_type_hints(cls)
+
+
+def field_texts(cls: type[Any]) -> dict[str, str]:
+    """Field name to type as source text of a result class, the same on every Python version."""
+    return {name: _render(tp, cls.__module__, Imports()) for name, tp in _field_types(cls).items()}
 
 
 def _add_public(found: dict[str, tuple[Any, str]], name: str, value: Any, module: str) -> None:
@@ -348,7 +366,7 @@ def _walk(tp: Any, module: str, found: dict[str, tuple[Any, str]]) -> None:
             return
         _add_public(found, tp.__name__, tp, tp.__module__)
         # A subclass of Page[Row] names its row type only among its bases.
-        for hint in (*getattr(tp, "__orig_bases__", ()), *_field_types(tp)):
+        for hint in (*getattr(tp, "__orig_bases__", ()), *_field_types(tp).values()):
             _walk(hint, tp.__module__, found)
 
 

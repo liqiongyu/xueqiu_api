@@ -131,6 +131,12 @@ class ClientBase:
             )
         if not path.startswith("/"):
             raise InvalidParams("path must start with /", params={"path": path[:200]})
+        if "?" in path:
+            raise InvalidParams(
+                "path must not hold a query",
+                params={"path": path[:200]},
+                hint="Pass the query values in params.",
+            )
         query = {str(key): _query_value(value) for key, value in (params or {}).items()}
         url = f"https://{site.host}{path}"
         try:

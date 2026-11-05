@@ -719,6 +719,17 @@ def test_fund_nav_history_parses_numbers_and_dates(h: Harness) -> None:
     assert dates == sorted(dates, reverse=True)
 
 
+def test_fund_nav_history_reads_nav_value_and_the_page_the_upstream_echoes(h: Harness) -> None:
+    row = {"date": "2026-11-04", "nav": "1.5", "percentage": "0.1", "value": "1.7"}
+    data = {"items": [row], "current_page": 3, "size": 1, "total_items": 3, "total_pages": 3}
+    h.upstream.route(DANJUAN, FUND_NAV, json_reply({"data": data, "result_code": 0}))
+
+    page = h.run("fund_nav_history", "008975", page_size=1)
+
+    assert (page.items[0].nav, page.items[0].nav_value) == (1.5, 1.7)
+    assert page.page == 3
+
+
 def test_fund_nav_history_pages_drop_rows_repeated_across_pages(h: Harness) -> None:
     h.upstream.route(DANJUAN, FUND_NAV, fund_nav_reply)
 
@@ -772,6 +783,7 @@ def test_cube_nav_daily_joins_the_portfolio_and_its_benchmark(h: Harness) -> Non
     assert sent.headers["user-agent"].startswith("Mozilla")
     assert isinstance(nav, CubeNav)
     assert (nav.symbol, nav.benchmark, nav.benchmark_name) == ("ZH2567925", "SH000300", "沪深300")
+    assert nav.name == "示例组合"
     assert len(nav) == 3
     assert nav.dates == (date(2021, 6, 11), date(2021, 6, 15), date(2021, 6, 16))
     assert nav.columns["nav"] == (0.9857, 1.0122, 0.9842)
@@ -842,3 +854,71 @@ def test_cube_nav_daily_call_and_render(h: Harness) -> None:
     assert "2021-06-16,0.9842,-1.58,5080.49,-3.63\n" in text
     assert "示例组合" not in text
     assert text.endswith("# next: none")
+
+
+def test_statements_drop_the_keys_naming_a_user(h: Harness) -> None:
+    someone = {"id": 7, "screen_name": "someone"}
+    period = {
+        "report_date": 1790000000000,
+        "report_name": "2026三季报",
+        "total_revenue": [1.0, 0.1],
+        "user": someone,
+        "owner_id": 42,
+        "sd": 1,
+    }
+    data = {"quote_name": "X", "currency": "CNY", "owner": someone, "org_type": 1, "list": [period]}
+    h.upstream.route(
+        STOCK, finance_path("cn", "income"), json_reply({"data": data, "error_code": 0})
+    )
+
+    report = h.run("finance_income", "SH600000", count=1)
+
+    assert report.extra == {"org_type": 1}
+    assert report.periods[0].extra == {"sd": 1}
+    assert set(report.periods[0].items) == {"total_revenue"}
+
+
+EARLY_BARS = [
+    (544982400000, 2766.3999),  # 1987-04-10 00:00 in Hong Kong, a Friday
+    (545238000000, 2708.8999),  # 1987-04-12 23:00, the bar of Monday the 13th
+    (545324400000, 2668.3999),  # 1987-04-13 23:00, the bar of Tuesday the 14th
+]
+
+
+def early_bars_reply(request: httpx2.Request) -> httpx2.Response:
+    """Going forward from ``begin``, inclusive, or back from it, like the upstream."""
+    begin, count = int(request.url.params["begin"]), int(request.url.params["count"])
+    if count < 0:
+        chosen = [bar for bar in EARLY_BARS if bar[0] <= begin][count:]
+    else:
+        chosen = [bar for bar in EARLY_BARS if bar[0] >= begin][:count]
+    data = {"symbol": "HKHSI", "column": ["timestamp", "close"], "item": chosen}
+    return httpx2.Response(200, json={"data": data, "error_code": 0})
+
+
+def test_hong_kong_bars_written_at_shanghai_midnight_keep_their_date(h: Harness) -> None:
+    h.upstream.route(STOCK, KLINE, early_bars_reply)
+
+    kline = h.kline("HKHSI", adjust="normal", begin=date(1987, 4, 1), end=date(1987, 4, 30))
+
+    assert kline.timestamps == (
+        datetime(1987, 4, 10, tzinfo=HONG_KONG),
+        datetime(1987, 4, 13, tzinfo=HONG_KONG),
+        datetime(1987, 4, 14, tzinfo=HONG_KONG),
+    )
+    assert kline.columns["close"] == (2766.3999, 2708.8999, 2668.3999)
+
+
+@pytest.mark.parametrize(
+    ("day", "closes"),
+    [(date(1987, 4, 12), ()), (date(1987, 4, 13), (2708.8999,)), (date(1987, 4, 14), (2668.3999,))],
+    ids=["sunday", "monday", "tuesday"],
+)
+def test_a_range_of_one_day_selects_the_bar_of_that_day(
+    h: Harness, day: date, closes: tuple[float, ...]
+) -> None:
+    h.upstream.route(STOCK, KLINE, early_bars_reply)
+
+    kline = h.kline("HKHSI", adjust="normal", begin=day, end=day)
+
+    assert kline.columns.get("close", ()) == closes

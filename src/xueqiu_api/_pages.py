@@ -13,7 +13,7 @@ T = TypeVar("T")
 PageT = TypeVar("PageT", bound="Page[Any]")
 
 RUNAWAY_PAGES = 1000
-"""A walk without ``max_pages`` fails past this many pages rather than running for hours."""
+"""A walk with neither limit fails past this many pages rather than running for hours."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,23 +49,24 @@ def finish(rule: Pagination, page: PageT, params: Mapping[str, Any]) -> PageT:
     """Set ``capped``, ``short`` and ``next_params``; raise ``ValueError`` when the page
     contradicts the upstream's total or lacks one it must have."""
     capped = bool(rule.total_cap and page.total is not None and page.total >= rule.total_cap)
+    within_cap = rule.total_cap is None or page.page * page.page_size < rule.total_cap
     if rule.end == "total":
         if page.last_page is not None:
             more = page.page < page.last_page
         elif page.total is not None:
-            served = page.total if rule.total_cap is None else min(page.total, rule.total_cap)
-            more = page.page * page.page_size < served
+            more = page.page * page.page_size < page.total
         else:
             raise ValueError(f"page {page.page} has no total and no last page")
+        more = more and within_cap
         if more and len(page) < page.page_size:
             raise ValueError(
                 f"page {page.page} has {len(page)} rows of {page.page_size} but the upstream "
                 f"counts {page.total} rows and {page.last_page} pages"
             )
     elif rule.end == "short":
-        more = len(page) >= page.page_size
+        more = within_cap and len(page) >= page.page_size
     else:
-        more = len(page) > 0
+        more = within_cap and len(page) > 0
     return replace(
         page,
         capped=capped,
@@ -136,7 +137,12 @@ class PageWalk:
             self.params = None
         elif self.max_pages is not None and self.fetched >= self.max_pages:
             self.params = None
-        elif self.max_pages is None and next_params is not None and self.fetched >= RUNAWAY_PAGES:
+        elif (
+            self.max_pages is None
+            and self.max_items is None
+            and next_params is not None
+            and self.fetched >= RUNAWAY_PAGES
+        ):
             raise UpstreamChanged(
                 f"{self.name} did not end within {RUNAWAY_PAGES} pages",
                 endpoint=self.name,

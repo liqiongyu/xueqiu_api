@@ -160,7 +160,8 @@ def request_headers(call: Call, cookie_header: str | None) -> dict[str, str]:
 
 
 def scrub(text: str, secrets: Iterable[str]) -> str:
-    for secret in secrets:
+    # Longest first: a value that starts with another must not leave its tail behind.
+    for secret in sorted(secrets, key=len, reverse=True):
         if secret:
             text = text.replace(secret, REDACTED)
     return text
@@ -262,7 +263,7 @@ def classify(call: Call, result: HttpResult, secrets: Iterable[str]) -> Ok | Fai
         cookies = {
             name: value for name, value in result.cookies.items() if usable_cookie(name, value)
         }
-        if status == 200 and "xq_a_token" in cookies:
+        if status == 200 and cookies.get("xq_a_token"):
             return Ok(cookies)
         return Failure(
             code="upstream_changed",
@@ -366,6 +367,9 @@ def next_step(
         return failure.error(call, AuthExpired)
     if call.cookies and not refreshed:
         return Retry(0.0, refresh=True)
+    if call.auth is None and not call.cookies:
+        hint = f"{call.site.host} takes no credentials from this package, so a token does not help."
+        return failure.error(call, LoginRequired, hint=hint)
     if call.auth is None or call.auth == "required":
         return failure.error(call, LoginRequired)
     if not call.cookies:
@@ -382,6 +386,8 @@ def next_step(
 
 
 def _means_not_found(failure: Failure, rule: NotFound) -> bool:
+    if failure.code not in ("upstream_error", "upstream_changed"):
+        return False
     if failure.upstream_code is not None:
         return failure.upstream_code in rule.codes
     return failure.status in rule.statuses

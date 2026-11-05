@@ -1027,12 +1027,18 @@ async def test_xq_search_stops_at_the_limit(connect: Connect) -> None:
 
 
 @pytest.mark.anyio
-async def test_xq_search_without_xq_call_has_no_next_for_rows_a_limit_cut(connect: Connect) -> None:
+async def test_xq_search_without_xq_call_shows_rows_a_limit_cut_with_a_larger_limit(
+    connect: Connect,
+) -> None:
     async with connect(exclude=("xq_call",)) as client:
         text = await call(client, "xq_search", {"query": "AAPL", "limit": 2})
+        assert len(body_lines(text)) == 3
+        assert next_call(text) == ("xq_search", {"query": "AAPL", "limit": 10})
 
-    assert len(body_lines(text)) == 3
-    assert next_call(text) is None
+        wider = await call(client, "xq_search", {"query": "AAPL", "limit": 10})
+
+    assert len(body_lines(wider)) == 4
+    assert next_call(wider) is None
 
 
 @pytest.mark.anyio
@@ -2173,12 +2179,16 @@ async def test_an_empty_list_without_a_symbol_does_not_blame_the_market_prefix(
 @pytest.mark.parametrize(
     "name", ["kline", "finance_income", "f10_company", "quote_detail", "quotec"]
 )
-async def test_results_with_their_own_next_take_no_offset(connect: Connect, name: str) -> None:
+async def test_results_with_their_own_next_take_no_offset(
+    connect: Connect, upstream: FakeUpstream, name: str
+) -> None:
     arguments = {"endpoint": name, "params": REGISTRY[name].agent.examples[0], "offset": 1}
-    async with connect() as client:
+    async with connect(replay=False) as client:
         payload = await fail(client, "xq_call", arguments)
 
     assert (payload["error_code"], payload["field"]) == ("invalid_params", "offset")
+    assert "raise limit or narrow fields" in payload["hint"]
+    assert upstream.sent == []
 
 
 # The catalog at its final size, and what one more endpoint changes
@@ -2262,7 +2272,9 @@ async def test_the_summary_and_a_category_list_what_is_enabled(connect: Connect)
         ("capital_block_trades", "CN", "a short page ends the list"),
         ("fund_nav_history", None, "the upstream's total ends the list"),
         ("quotec", "CN, HK, US", "names the codes not shown"),
+        ("batch_quote", "CN, HK, US", "names the codes not shown"),
         ("f10_company", "CN, HK, US", "one call returns one record"),
+        ("quote_detail", "CN, HK, US", "one call returns one record"),
         ("cube_nav_daily", None, "one call fetches the whole result"),
         ("suggest_stock", None, "repeats the call with offset"),
     ],
@@ -2428,3 +2440,134 @@ async def test_xueqiu_mcp_serves_the_replay_fixtures_over_stdio() -> None:
     assert content.text.startswith('# batch_quote {"symbols":["SH600000","00700","AAPL"]}')
     assert "SH600000,浦发银行," in content.text
     assert content.text.splitlines()[-1] == "# next: none"
+
+
+# A range that holds more bars than one request returns
+
+
+async def bar_walk(client: Client, arguments: Mapping[str, Any]) -> list[str]:
+    """Follow # next from an xq_kline call to none; the first column of the rows shown."""
+    shown: list[str] = []
+    step: tuple[str, Mapping[str, Any]] | None = ("xq_kline", arguments)
+    for _ in range(100):
+        assert step is not None
+        text = await call(client, *step)
+        shown += [line.split(",")[0] for line in body_lines(text)[1:]]
+        step = next_call(text)
+        if step is None:
+            return shown
+    raise AssertionError("no progress")
+
+
+@pytest.mark.anyio
+async def test_a_range_over_the_request_cap_starts_at_the_latest_and_pages_back(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    body = bars(10_300)
+    newest = datetime.fromtimestamp(body["item"][-1][0] / 1000, SHANGHAI).date().isoformat()
+    upstream.route(STOCK, KLINE, window_reply(body))
+    arguments = {"symbols": ["SH600000"], "begin": "1990-01-01", "limit": 500}
+    async with connect(replay=False) as client:
+        first = await call(client, "xq_kline", arguments)
+        shown = await bar_walk(client, arguments)
+
+    assert upstream.requests(STOCK, KLINE)[0].params["count"] == "-10000"
+    assert body_lines(first)[-1].startswith(newest)
+    assert "one request returns at most 10000 bars" in first
+    assert stats_of(first)["bars"] == "10000"
+    assert len(shown) == len(set(shown)) == 10_300
+
+
+@pytest.mark.anyio
+async def test_a_range_over_the_request_cap_says_so_when_only_stats_are_asked_for(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    upstream.route(STOCK, KLINE, window_reply(bars(10_300)))
+    arguments = {"symbols": ["SH600000"], "begin": "1990-01-01", "limit": 0}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_kline", arguments)
+
+    assert "# stats cover only those" in text
+    assert text.splitlines()[-1] == "# next: none"
+
+
+@pytest.mark.anyio
+async def test_comparing_a_range_over_the_request_cap_names_the_symbol_it_cut(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    long, short = window_reply(bars(10_300)), window_reply(bars(50))
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        return (long if request.url.params["symbol"] == "SH600000" else short)(request)
+
+    upstream.route(STOCK, KLINE, reply)
+    arguments = {"symbols": ["SH600000", "SZ000001"], "begin": "1990-01-01", "limit": 0}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_kline", arguments)
+
+    [note] = [line for line in text.splitlines() if "at most 10000 bars" in line]
+    assert note.startswith("# note: the bars of SH600000 start after begin")
+
+
+def rounding_reply(body: Mapping[str, Any]) -> Reply:
+    """Like ``window_reply``, on an upstream that rounds ``begin`` up to a whole minute, so that
+    a request going back returns a bar the parse then drops."""
+
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        begin, count = int(request.url.params["begin"]), int(request.url.params["count"])
+        rounded = -(-begin // 60_000) * 60_000
+        chosen = [item for item in body["item"] if item[0] <= rounded][count:]
+        return httpx2.Response(200, json={"data": {**body, "item": chosen}, "error_code": 0})
+
+    return reply
+
+
+@pytest.mark.anyio
+async def test_a_page_of_bars_one_short_does_not_end_the_walk(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    start = datetime(2026, 11, 4, 9, 30, tzinfo=SHANGHAI)
+    moments = [start + timedelta(minutes=5 * index) for index in range(35)]
+    upstream.route(STOCK, KLINE, rounding_reply(minute_bars(moments)))
+    async with connect(replay=False) as client:
+        shown = await bar_walk(client, {"symbols": ["SH600000"], "period": "5m", "limit": 10})
+
+    assert len(shown) == len(set(shown)) == 35
+
+
+# Catalog and empty results
+
+
+@pytest.mark.anyio
+async def test_an_endpoints_query_is_bounded(connect: Connect) -> None:
+    async with connect() as client:
+        payload = await fail(client, "xq_endpoints", {"query": "x" * 51})
+
+    assert (payload["error_code"], payload["field"]) == ("invalid_params", "query")
+
+
+@pytest.mark.anyio
+async def test_a_catalog_cut_by_the_budget_says_how_to_reach_the_rest(
+    connect: Connect, register_endpoint: Register
+) -> None:
+    for spec in many_endpoints(60):
+        register_endpoint(spec)
+    async with connect(max_chars=4000) as client:
+        text = await call(client, "xq_endpoints", {"query": "synthetic_name"})
+
+    last = text.splitlines()[-1]
+    assert " rows by the 4000 character limit; narrow by category or query" in last
+    assert next_call(text) is not None
+
+
+@pytest.mark.anyio
+async def test_block_trades_of_a_stock_without_any_do_not_blame_the_prefix(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    path = REGISTRY["capital_block_trades"].path
+    upstream.route(STOCK, path, json_reply({"data": {"items": []}, "error_code": 0}))
+    arguments = {"endpoint": "capital_block_trades", "params": {"symbol": "SH688517"}}
+    async with connect(replay=False) as client:
+        text = await call(client, "xq_call", arguments)
+
+    assert "no block trade" in text and "market prefix" not in text

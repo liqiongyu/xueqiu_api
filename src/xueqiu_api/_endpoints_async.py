@@ -307,9 +307,11 @@ class AsyncEndpoints:
         Bars ending at ``end`` (default: now) going back, or starting at ``begin`` going forward.
 
         With ``begin``, up to ``count`` bars from that date are requested; when ``count`` is not set,
-        enough to cover ``begin`` through ``end`` (default: today). Bars outside ``begin`` and
-        ``end`` are dropped. Dates are in the exchange timezone. ``before`` ends the range just
-        before a moment instead of with a day, to page back through minute bars.
+        enough to cover ``begin`` through ``end`` (default: today), or the latest ``MAX_COUNT`` of
+        them when the dates can hold more: one request returns no more than that, and
+        ``kline_history`` gets every bar of a range. Bars outside ``begin`` and ``end`` are dropped.
+        Dates are in the exchange timezone. ``before`` ends the range just before a moment instead
+        of with a day, to page back through minute bars.
 
         Args:
             period: 1m to 120m are minute bars, kept upstream for about 3 trading days (1m) to
@@ -319,8 +321,8 @@ class AsyncEndpoints:
             begin: First date, inclusive.
             end: Last date, inclusive.
             before: End of the range, exclusive, as an ISO time with offset; instead of ``end``.
-            count: Most bars to fetch: by default 100 back from ``end``, or enough to cover the
-                dates.
+            count: Most bars to fetch: by default 100 back from ``end``, or the dates' bars, 10000
+                at most.
 
         Auth anonymous; freshness intraday.
         """

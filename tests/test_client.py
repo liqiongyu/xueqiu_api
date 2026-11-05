@@ -208,6 +208,14 @@ def test_request_rejects_an_invalid_url_before_the_session_and_the_limiter(
     assert not session_path.exists()
 
 
+def test_request_rejects_a_query_in_the_path(h: Harness) -> None:
+    with pytest.raises(InvalidParams) as caught:
+        h.request(host=STOCK, path=f"{QUOTEC}?symbol=SH600000", params={"extend": "detail"})
+
+    assert "params" in caught.value.hint
+    assert h.upstream.sent == []
+
+
 def test_request_encodes_control_characters_in_param_values(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, json_reply({"data": [], "error_code": 0}))
 

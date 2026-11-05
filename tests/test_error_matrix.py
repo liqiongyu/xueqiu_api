@@ -577,3 +577,31 @@ def test_retry_after_a_refresh_that_misses_the_deadline_is_rate_limited(
     # The refresh ends at 3 s; the next stock slot is at 5 s, past the 4 s deadline.
     assert caught.value.retry_after_s == 2.0
     assert paths(h) == [*BOOTSTRAP, f"{STOCK}{KLINE}", *BOOTSTRAP]
+
+
+def test_a_waf_page_at_a_declared_not_found_status_stays_blocked(
+    h: Harness, register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(not_found=NotFound(statuses=(400,))))
+    h.upstream.route(STOCK, SYNTHETIC, waf_reply(400))
+
+    with pytest.raises(Blocked) as caught:
+        h.call(spec.name, symbol="SH600000")
+
+    assert caught.value.retry_after_s == 300.0
+    with pytest.raises(Blocked):
+        h.call(spec.name, symbol="SH600000")
+
+
+@pytest.mark.parametrize("token", [TOKEN, ""], ids=["token", "no-token"])
+def test_a_login_code_from_a_host_without_credentials_does_not_ask_for_a_token(
+    make: Callable[..., Harness], token: str
+) -> None:
+    h = make(token=token)
+    h.upstream.route(DANJUAN, FUND_PATH, danjuan_error_reply(300001, "synthetic login error"))
+
+    with pytest.raises(LoginRequired) as caught:
+        h.request(host=DANJUAN, path=FUND_PATH)
+
+    assert "XUEQIU_TOKEN" not in caught.value.hint
+    assert DANJUAN in caught.value.hint

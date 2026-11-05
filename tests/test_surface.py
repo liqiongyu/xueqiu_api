@@ -10,17 +10,16 @@ import os
 import shutil
 import subprocess
 import sys
-from dataclasses import fields, is_dataclass
 from pathlib import Path
-from typing import Any, Literal, get_args, get_origin
+from typing import Annotated, Any, Literal, get_args, get_origin
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator, Field
 
 import xueqiu_api
 from xueqiu_api import REGISTRY, AsyncClient, Client, Page, models
 from xueqiu_api._model import UpstreamModel
-from xueqiu_api.symbols import SymbolParams
+from xueqiu_api.symbols import SymbolParams, split_symbols
 
 from .harness import synthetic_endpoint
 
@@ -144,6 +143,21 @@ def test_the_generator_accepts_one_type_of_several_endpoints() -> None:
     assert list(load_generator().public_types([first, again])) == ["Row"]
 
 
+class OptionalCodes(BaseModel):
+    cube_symbols: (
+        Annotated[tuple[str, ...], BeforeValidator(split_symbols), Field(min_length=1)] | None
+    ) = None
+
+
+def test_the_generator_keeps_the_loose_type_of_an_optional_code_list() -> None:
+    generator = load_generator()
+    spec = synthetic_endpoint("quote_one", params=OptionalCodes)
+
+    [param] = generator._params(spec, generator.Imports())
+
+    assert param.annotation == "str | Sequence[str] | None"
+
+
 def annotation_names(text: str) -> set[str]:
     tree = ast.parse(text, mode="eval")
     return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
@@ -217,23 +231,29 @@ def methods(cls: type) -> dict[str, str]:
     return found
 
 
-def shape(value: Any) -> list[Any]:
-    """Field names of a result type, or the values of a Literal."""
+def shape(value: Any, generator: Any) -> Any:
+    """Field names and types of a result type, or the values of a Literal."""
     if get_origin(value) is Literal:
         return list(get_args(value))
-    if issubclass(value, BaseModel):
-        return list(value.model_fields)
-    if is_dataclass(value):
-        return [field.name for field in fields(value)]
-    return list(value._fields)
+    return generator.field_texts(value)
+
+
+def test_the_surface_records_the_type_of_each_field() -> None:
+    generator = load_generator()
+
+    assert shape(models.ReportPeriod, generator)["report_name"] == "str"
+    assert shape(models.Kline, generator)["timestamps"] == "tuple[datetime, ...]"
+    assert shape(models.Page, generator)["next_params"] == "Mapping[str, Any] | None"
+    assert shape(models.BlockTrade, generator)["vol"] == "float | None"
 
 
 def test_sdk_surface_snapshot() -> None:
+    generator = load_generator()
     surface = {
         "top_level": sorted(xueqiu_api.__all__),
         "Client": methods(Client),
         "AsyncClient": methods(AsyncClient),
-        "models": {name: shape(getattr(models, name)) for name in models.__all__},
+        "models": {name: shape(getattr(models, name), generator) for name in models.__all__},
     }
     text = json.dumps(surface, ensure_ascii=False, indent=2) + "\n"
     if os.environ.get(UPDATE_ENV) == "1":

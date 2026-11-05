@@ -20,6 +20,7 @@ from xueqiu_api import (
     InvalidParams,
     LoginRequired,
     UpstreamChanged,
+    UpstreamError,
 )
 from xueqiu_api._session import default_session_path, parse_credentials
 
@@ -436,3 +437,93 @@ def test_credentials_without_a_needed_cookie_are_login_required_with_no_request(
 def test_raw_request_host_must_be_known(h: Harness) -> None:
     with pytest.raises(InvalidParams):
         h.request(host="xueqiu.com", path="/")
+
+
+def test_an_empty_needed_cookie_counts_as_missing(h: Harness) -> None:
+    h.upstream.route(WWW, "/", home_page({"xq_a_token": ANON_COOKIES["xq_a_token"], "u": ""}))
+    h.upstream.route(STOCK, KLINE, json_reply({"data": {"items": []}, "error_code": 0}))
+
+    with pytest.raises(UpstreamChanged) as caught:
+        h.kline("SH600000")
+
+    assert "u cookie" in caught.value.message
+    assert h.upstream.requests(STOCK, KLINE) == []
+
+
+def test_bootstrap_with_an_empty_token_cookie_is_upstream_changed(
+    h: Harness, session_path: Path
+) -> None:
+    h.upstream.route(WWW, "/", home_page({"xq_a_token": "", "u": ANON_COOKIES["u"]}))
+
+    with pytest.raises(UpstreamChanged):
+        h.kline("SH600000")
+
+    assert not session_path.exists()
+    assert h.upstream.requests(STOCK, KLINE) == []
+
+
+def test_a_cached_empty_token_is_ignored(make: Callable[..., Harness], session_path: Path) -> None:
+    session_path.parent.mkdir(parents=True)
+    cached = {"version": 1, "cookies": {"xq_a_token": "", "u": "fake-anon-u-0001"}}
+    session_path.write_text(json.dumps(cached), encoding="utf-8")
+    h = make()
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    h.kline("SH600000")
+
+    assert len(h.upstream.requests("xueqiu.com", "/")) == 1
+    cookie = h.upstream.requests(STOCK, KLINE)[0].headers["cookie"]
+    assert f"xq_a_token={ANON_COOKIES['xq_a_token']}" in cookie
+
+
+def test_credentials_with_an_empty_needed_cookie_are_login_required_with_no_request(
+    make: Callable[..., Harness], register_endpoint: Register
+) -> None:
+    spec = register_endpoint(synthetic_endpoint(auth="required", needs_cookies=("u",)))
+    h = make(token=f"xq_a_token={LOGIN_TOKEN}; u=")
+
+    with pytest.raises(LoginRequired):
+        h.call(spec.name, symbol="SH600000")
+
+    assert h.upstream.sent == []
+
+
+def test_a_refresh_that_still_lacks_a_needed_cookie_fetches_the_home_page_once(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    session_path.parent.mkdir(parents=True)
+    cookies = {"xq_a_token": "fake-anon-token-0001", "u": "fake-anon-u-0001"}
+    session_path.write_text(json.dumps({"version": 1, "cookies": cookies}), encoding="utf-8")
+    h = make()
+    h.upstream.route(WWW, "/", home_page({"xq_a_token": "fake-anon-token-0002"}))
+    h.upstream.route(STOCK, KLINE, error_reply(60201, "synthetic login error"))
+
+    with pytest.raises(UpstreamChanged) as caught:
+        h.kline("SH600000")
+
+    assert "u cookie" in caught.value.message
+    assert len(h.upstream.requests(WWW, "/")) == 1
+    assert len(h.upstream.requests(STOCK, KLINE)) == 1
+
+
+@pytest.mark.parametrize("deadline", [float("inf"), 1e10], ids=["inf", "huge"])
+def test_a_first_call_works_with_any_deadline_the_constructor_takes(
+    make: Callable[..., Harness], deadline: float
+) -> None:
+    h = make(deadline=deadline)
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    assert len(h.kline("SH600000")) == 3
+
+
+def test_a_cookie_value_starting_with_another_leaves_no_tail_in_errors(
+    make: Callable[..., Harness],
+) -> None:
+    h = make(token="xq_a_token=abcdefgh; xq_r_token=abcdefghSECRETTAIL")
+    h.upstream.route(STOCK, KLINE, error_reply(99999, "bad abcdefghSECRETTAIL"))
+
+    with pytest.raises(UpstreamError) as caught:
+        h.request(host=STOCK, path=KLINE)
+
+    assert "SECRETTAIL" not in caught.value.message
+    assert "abcdefgh" not in caught.value.message

@@ -75,7 +75,7 @@ class SessionStore:
         if not isinstance(data, dict) or cast(dict[str, Any], data).get("version") != _VERSION:
             return None
         cookies: Any = cast(dict[str, Any], data).get("cookies")
-        if not isinstance(cookies, dict) or "xq_a_token" not in cookies:
+        if not isinstance(cookies, dict) or not cast(dict[Any, Any], cookies).get("xq_a_token"):
             return None
         items = cast(dict[Any, Any], cookies).items()
         if not all(
@@ -121,9 +121,9 @@ class Session:
         return self._credentials is not None
 
     def ready(self, call: Call) -> bool:
-        """Whether the set this call uses is there and holds the cookies the call needs."""
+        """Whether the set this call uses is there and holds a value for each cookie it needs."""
         cookies = self._cookies(call.credentials)
-        return cookies is not None and all(name in cookies for name in call.needs_cookies)
+        return cookies is not None and all(cookies.get(name) for name in call.needs_cookies)
 
     @property
     def kind(self) -> str:

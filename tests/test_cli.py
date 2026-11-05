@@ -29,7 +29,14 @@ from xueqiu_api._sync import SyncRuntime
 from xueqiu_api.mcp_server import McpOptions
 from xueqiu_api.sites import SITES, Host
 
-from .harness import REPLAY_DIR, FakeClock, Register, synthetic_endpoint
+from .harness import (
+    REPLAY_DIR,
+    FakeClock,
+    FakeUpstream,
+    Register,
+    home_page,
+    synthetic_endpoint,
+)
 
 LOGIN_ERROR = {"body": {"error_code": 60201, "error_description": "synthetic login error"}}
 TOKEN_REJECTED = {"status": 400, "body": {"error_code": "400016", "error_description": ""}}
@@ -245,6 +252,28 @@ def test_doctor_counts_empty_results_as_success(
         "endpoint  status        elapsed  detail",
         "kline     empty           0.00s",
     ]
+
+
+def test_doctor_does_not_read_a_home_page_with_an_empty_u_as_an_empty_kline(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = FakeClock()
+    upstream = FakeUpstream(clock)
+    upstream.route(
+        "www.xueqiu.com", "/", home_page({"xq_a_token": "fake-anon-token-0001", "u": ""})
+    )
+    monkeypatch.setattr(
+        cli,
+        "_runtime",
+        lambda: SyncRuntime(transport=upstream.transport, clock=clock.now, sleep=clock.sleep),
+    )
+
+    code, out, _ = run(capsys, "doctor", "--endpoint", "kline")
+
+    assert code != 0
+    assert table(out)[0][:2] == ["kline", "error"]
+    assert "u cookie" in out
+    assert upstream.requests("stock.xueqiu.com") == []
 
 
 def test_doctor_reports_a_blocked_host_and_sends_nothing_more_to_it(

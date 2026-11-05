@@ -192,6 +192,8 @@ class AsyncClient(ClientBase, AsyncEndpoints):
         async with self._session_locked(call, deadline):
             if self._session.generation == seen:
                 await self._bootstrap(deadline)
+        if not self._session.ready(call):
+            raise self._cookie_error(call)
 
     @contextlib.asynccontextmanager
     async def _session_locked(self, call: Call, deadline: float) -> AsyncGenerator[None]:

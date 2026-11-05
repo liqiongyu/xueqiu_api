@@ -27,9 +27,16 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 
-from ._finance import Financials, LineItem, ReportPeriod
+from ._finance import FinanceParams, Financials, LineItem, ReportPeriod
 from ._pages import Page
-from .endpoints.kline import DEFAULT_COUNT, Kline, KlineParams, older_range
+from .endpoints.kline import (
+    DEFAULT_COUNT,
+    MAX_COUNT,
+    Kline,
+    KlineParams,
+    came_back_full,
+    older_range,
+)
 from .errors import InvalidParams, XueqiuError
 from .registry import AgentInfo, Endpoint
 from .symbols import normalize_symbol
@@ -90,6 +97,10 @@ _EMPTY_BARS = (
 _LATE_BARS = (
     "no trading in between, or minute bars being kept only about 3 trading days (1m) to about "
     "6 months (60m); # stats cover only the bars returned."
+)
+_CUT_BARS = (
+    f"one request returns at most {MAX_COUNT} bars, the latest of the range, and # stats cover "
+    "only those. An end before the first bar reaches older ones."
 )
 _MISSING = "check the market prefix (indexes need SH or SZ, such as SH000001)."
 _TAG = re.compile(r"<[^>]*>")
@@ -169,22 +180,19 @@ def render(
     ``fields`` defaults to the registry's ``default_fields``. At most ``limit`` rows are shown,
     after skipping the ``offset`` rows already shown by earlier calls for the same params:
     counted back from the latest row where a cut keeps the latest, from the first row otherwise.
-    A ``Kline``, ``Financials``, a single record and a result for several codes have a ``# next:``
-    of their own and take no offset. A line item of a financial statement renders as two columns,
-    ``<item>`` and ``<item>.yoy``.
+    A ``Kline`` and a result for several codes have a ``# next:`` of their own, and ``Financials``
+    and a single record come whole from one call, so none of them takes an offset. A line item of
+    a financial statement renders as two columns, ``<item>`` and ``<item>.yoy``.
     """
     agent = spec.agent
     dump = params.model_dump(mode="json", exclude_none=True)
     batch = next((name for name in BATCH_PARAMS if name in dump), None)
     sectioned = isinstance(result, Sectioned)
-    record = isinstance(result, BaseModel) and not sectioned
-    if offset and (isinstance(result, Kline | Financials) or record or batch):
-        raise InvalidParams(
-            f"{spec.name} results take no offset",
-            endpoint=spec.name,
-            field="offset",
-            hint="Follow the # next line.",
-        )
+    record = isinstance(result, BaseModel) and not isinstance(result, Sectioned | Series)
+    if offset and (
+        isinstance(result, Kline | Financials) or record or (batch and isinstance(result, list))
+    ):
+        raise no_offset(spec)
     keep_last = spec.order == "oldest_first"
     head = [f"# {spec.name} {compact_json(dump)}"]
     notes: list[str] = []
@@ -200,9 +208,16 @@ def render(
                 f"the first bar is on {result.timestamps[0].date()}, after begin "
                 f"{bar_params.begin}: {_LATE_BARS}"
             )
+        if _cut_off(bar_params, result):
+            notes.append(f"the first bar is on {result.timestamps[0].date()}: {_CUT_BARS}")
     elif isinstance(result, Financials):
         rows = [_period_row(period) for period in result.periods]
         head.append(f"# statement: name={cell(result.name, 0)} currency={cell(result.currency, 0)}")
+        if 0 < limit < len(rows):
+            notes.append(
+                f"showing {limit} of {len(rows)} report periods; "
+                f"a limit of up to {agent.row_cap} shows more."
+            )
     elif isinstance(result, Series):
         rows = _series_rows(result)
         head += _info_lines(result.header(), agent.precision)
@@ -237,16 +252,14 @@ def render(
         stats = {"page": page.page, "page_size": page.page_size, "total": page.total}
         head.append(stats_line({**stats, "last_page": page.last_page}, 0, tag="page"))
         notes += _page_notes(spec, page)
-    zone = _zone(params)
-    head.append(
-        f"# meta: fetched_at={fetched_at.astimezone(zone).isoformat(timespec='seconds')} "
-        f"freshness={spec.freshness} rows={len(rows)}"
-    )
     available = list(dict.fromkeys(key for row in rows for key in row))
+    later_page = isinstance(result, Page) and cast(Page[Any], result).page > 1
+    missing_fields: list[str] = []
     if fields:
         wanted = list(dict.fromkeys(fields))
         unknown = [name for name in wanted if name not in available]
-        if rows and unknown:
+        # A column only some pages have stays, empty, on the others: # next carries the fields on.
+        if rows and unknown and not later_page:
             raise InvalidParams(
                 f"{spec.name} results have no field {', '.join(unknown)}",
                 endpoint=spec.name,
@@ -259,21 +272,32 @@ def render(
         wanted = [name for name in agent.default_fields if name in available]
         missing = [name for name in agent.default_fields if name not in available]
         if rows and missing:
-            head.append(
+            missing_fields = [
                 f"# note: default fields missing here: {', '.join(missing)}; "
                 f"available: {', '.join(available)}"
-            )
-    if not rows:
+            ]
+    left_out: list[str] = []
+    if sectioned:
+        rows, tables, left_out = _lay_out(named, wanted, explicit=bool(fields))
+        if left_out:
+            notes.append(f"tables with none of these columns are left out: {'; '.join(left_out)}")
+    else:
+        tables = [_Table("", 0, len(rows), tuple(wanted))]
+    zone = _zone(params)
+    head.append(
+        f"# meta: fetched_at={fetched_at.astimezone(zone).isoformat(timespec='seconds')} "
+        f"freshness={spec.freshness} rows={len(rows)}"
+    )
+    head += missing_fields
+    if not rows and not left_out:
         notes.append(_empty_note(agent, dump, cast(object, result)))
     head += [f"# note: {note}" for note in notes]
     free = [name for name in wanted if name in agent.free_text]
     labels = [name for name in wanted if name in agent.labels]
     if record:
+        if not limit:
+            return "\n".join([*head, "# next: none"])
         return _record(head, rows[0], wanted, free, labels, agent.precision, max_chars)
-    if sectioned:
-        rows, tables = _lay_out(named, wanted, explicit=bool(fields))
-    else:
-        tables = [_Table("", 0, len(rows), tuple(wanted))]
     if isinstance(result, Series | Sectioned | Page) or (isinstance(result, list) and not batch):
         following = result.next_params if isinstance(result, Page) else None
         pager = _row_pager(dump, len(rows), keep_last, following)
@@ -325,6 +349,28 @@ def render(
         keep_last=keep_last,
         post=post,
         frames=frames,
+        cut_hint="; narrow fields to see the rest" if isinstance(result, Financials) else "",
+    )
+
+
+def refuses_offset(spec: Endpoint[Any, Any]) -> bool:
+    """Whether the declaration of ``spec`` alone tells that its results take no offset, so no
+    request is needed to find out: bars, statements, one record, or one row per code."""
+    rule = spec.pagination
+    return (
+        spec.agent.row_cap == 1
+        or spec.params is FinanceParams
+        or (rule is not None and rule.style == "bars")
+        or (rule is None and any(name in spec.params.model_fields for name in BATCH_PARAMS))
+    )
+
+
+def no_offset(spec: Endpoint[Any, Any]) -> InvalidParams:
+    return InvalidParams(
+        f"{spec.name} results take no offset",
+        endpoint=spec.name,
+        field="offset",
+        hint="Follow the # next line; when it says none, raise limit or narrow fields.",
     )
 
 
@@ -361,6 +407,9 @@ def render_bar_stats(
     ]
     if late:
         head.append(f"# note: the bars of {', '.join(late)} start after begin: {_LATE_BARS}")
+    cut = [one.symbol for one, kline in zip(params, klines, strict=True) if _cut_off(one, kline)]
+    if cut:
+        head.append(f"# note: the bars of {', '.join(cut)} start after begin: {_CUT_BARS}")
     head.append(csv_line(["symbol", *STATS_COLUMNS]))
     lines: list[str] = []
     for one, kline in zip(params, klines, strict=True):
@@ -379,12 +428,15 @@ def fit(
     keep_last: bool = False,
     post: Sequence[str] = (),
     frames: Sequence[_Frame] = (),
+    cut_hint: str = "",
 ) -> str:
     """Join ``head``, as many ``rows`` as fit in ``max_chars``, ``post`` and the ``# next:`` line.
 
     ``footer(first, stop)`` gets the slice of ``rows`` shown and returns the next call or None.
     Rows are dropped from the end, or from the start with ``keep_last``. ``frames`` wrap slices
-    of ``rows`` in lines of their own, such as the title and columns of a table.
+    of ``rows`` in lines of their own, such as the title and columns of a table. When even one
+    row does not fit, the next call skips it, so that the rows after it stay in reach.
+    ``cut_hint`` follows the word on the cut, for rows no next call reaches.
     """
     fixed = sum(len(line) + 1 for line in (*head, *post))
     sizes = [len(row) + 1 for row in rows]
@@ -400,10 +452,16 @@ def fit(
             if frame.start < stop and first < frame.stop
             for line in (*frame.before, *frame.after)
         )
-        call = footer(first, stop) if shown else None
+        if shown:
+            call = footer(first, stop)
+        else:
+            call = footer(max(first - 1, 0), max(stop, 1)) if rows else None
         line = f"# next: {call or 'none'}"
         if shown < len(rows):
             line += f"; truncated to {shown} of {len(rows)} rows by the {max_chars} character limit"
+            line += cut_hint
+        if not shown and rows:
+            line += "; a row alone is over the limit: narrow fields to see it"
         if fixed + total + framing + len(line) <= max_chars or shown == 0:
             return "\n".join([*head, *_framed(rows, frames, first, stop), *post, line])
     raise AssertionError("unreachable")
@@ -543,7 +601,10 @@ def label_text(value: object) -> str:
 def csv_line(cells: Sequence[str]) -> str:
     buffer = io.StringIO()
     csv.writer(buffer, lineterminator="\n").writerow(cells)
-    return buffer.getvalue()[:-1]
+    line = buffer.getvalue()[:-1]
+    # Bare, it would read as a header line, or close the fence around upstream text. The writer
+    # left this cell unquoted, so it holds nothing that needs escaping.
+    return f'"{cells[0]}"{line[len(cells[0]) :]}' if line.startswith("#") else line
 
 
 def compact_json(value: object) -> str:
@@ -613,12 +674,13 @@ def _framed(rows: Sequence[str], frames: Sequence[_Frame], first: int, stop: int
 
 def _lay_out(
     named: Sequence[tuple[str, list[dict[str, Any]]]], wanted: Sequence[str], *, explicit: bool
-) -> tuple[list[dict[str, Any]], list[_Table]]:
-    """One run of rows and where each table sits in it; a table with no column to show is left
-    out. A column the caller asked for stays as long as the table has it, a default one as long
-    as the table has a value for it."""
+) -> tuple[list[dict[str, Any]], list[_Table], list[str]]:
+    """One run of rows, where each table sits in it, and what a caller needs to know about each
+    table with rows but no column to show, which is left out. A column the caller asked for stays
+    as long as the table has it, a default one as long as the table has a value for it."""
     rows: list[dict[str, Any]] = []
     tables: list[_Table] = []
+    left_out: list[str] = []
     for name, table in named:
         columns = tuple(
             column
@@ -628,7 +690,10 @@ def _lay_out(
         if columns:
             tables.append(_Table(name, len(rows), len(rows) + len(table), columns))
             rows += table
-    return rows, tables
+        elif table:
+            has = ", ".join(dict.fromkeys(key for row in table for key in row))
+            left_out.append(f"{name} (rows={len(table)}, available: {has})")
+    return rows, tables, left_out
 
 
 def _info_lines(header: Mapping[str, Any], precision: int) -> list[str]:
@@ -723,13 +788,14 @@ def _bar_pager(params: KlineParams, kline: Kline) -> Pager:
     """Older bars: the same call ending just before the first bar shown, with ``end`` the day
     before it, or for minute bars with ``before`` its time.
 
-    There are older bars when some fetched ones are not shown, or when a request without
-    ``begin`` came back full.
+    There are older bars when some fetched ones are not shown, or when a request going back came
+    back full: any without ``begin``, or one whose dates hold more than it returns.
     """
-    count = params.count or DEFAULT_COUNT
+    going_back = params.begin is None or params.count is None
+    count = MAX_COUNT if params.begin is not None else params.count or DEFAULT_COUNT
 
     def pager(first: int, stop: int) -> tuple[Mapping[str, Any], int] | None:
-        if first == 0 and (params.begin is not None or len(kline) < count):
+        if first == 0 and not (going_back and came_back_full(kline, count)):
             return None
         update = older_range(kline.timestamps[first], kline.period)
         end = update["end"]
@@ -748,6 +814,16 @@ def _starts_late(params: KlineParams, kline: Kline) -> bool:
         and params.begin is not None
         and len(kline) > 0
         and (kline.timestamps[0].date() - params.begin).days > 3
+    )
+
+
+def _cut_off(params: KlineParams, kline: Kline) -> bool:
+    """Whether the dates hold more bars than one request returned, so the oldest are missing."""
+    return (
+        params.begin is not None
+        and params.count is None
+        and came_back_full(kline, MAX_COUNT)
+        and kline.timestamps[0].date() > params.begin
     )
 
 

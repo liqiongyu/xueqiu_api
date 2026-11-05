@@ -24,6 +24,10 @@ MAX_COUNT = 10_000
 """Largest count sent upstream; one request returned all 8756 daily bars of SH000001."""
 HISTORY_RUNAWAY_PAGES = 20
 """``kline_history`` fails past this many requests for one symbol."""
+_EARLY_BAR = timedelta(hours=1)
+"""How early a bar of a day or longer can arrive; see ``_bar_moment``."""
+_EARLY_BARS_END = date(1992, 1, 1)
+"""No bar from this date on was seen to arrive early."""
 
 BarDate = Annotated[date, Field(ge=date(1900, 1, 1), le=date(2100, 12, 31))]
 """A range date, 1900-01-01 to 2100-12-31."""
@@ -46,9 +50,11 @@ class KlineParams(BaseModel):
     """Bars ending at ``end`` (default: now) going back, or starting at ``begin`` going forward.
 
     With ``begin``, up to ``count`` bars from that date are requested; when ``count`` is not set,
-    enough to cover ``begin`` through ``end`` (default: today). Bars outside ``begin`` and
-    ``end`` are dropped. Dates are in the exchange timezone. ``before`` ends the range just
-    before a moment instead of with a day, to page back through minute bars.
+    enough to cover ``begin`` through ``end`` (default: today), or the latest ``MAX_COUNT`` of
+    them when the dates can hold more: one request returns no more than that, and
+    ``kline_history`` gets every bar of a range. Bars outside ``begin`` and ``end`` are dropped.
+    Dates are in the exchange timezone. ``before`` ends the range just before a moment instead
+    of with a day, to page back through minute bars.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
@@ -66,7 +72,7 @@ class KlineParams(BaseModel):
     before: BarTime | None = None
     """End of the range, exclusive, as an ISO time with offset; instead of ``end``."""
     count: int | None = Field(default=None, ge=1, le=MAX_COUNT)
-    """Most bars to fetch: by default 100 back from ``end``, or enough to cover the dates."""
+    """Most bars to fetch: by default 100 back from ``end``, or the dates' bars, 10000 at most."""
 
     @model_validator(mode="after")
     def _check_range(self) -> Self:
@@ -115,13 +121,17 @@ def _bars_upper_bound(first: date, last: date, period: Period) -> int:
 def _build_query(params: KlineParams, now: datetime) -> dict[str, str]:
     tz = normalize_symbol(params.symbol).timezone
     first, last = _window(params, tz)
-    if first is not None:
+    if first is None:
+        count, begin = -(params.count or DEFAULT_COUNT), last or now
+    else:
         until = (last or now).astimezone(tz).date()
         count = params.count or _bars_upper_bound(first.date(), until, params.period)
-        begin = first
-    else:
-        count = -(params.count or DEFAULT_COUNT)
-        begin = last or now
+        early = first.date() < _EARLY_BARS_END and not params.period.endswith("m")
+        begin = first - _EARLY_BAR if early else first
+        if params.count is None and count >= MAX_COUNT:
+            # The dates may hold more bars than one request returns: the latest come first, going
+            # back as a request without begin does, and _parse drops any before begin.
+            count, begin = -MAX_COUNT, last or now
     return {
         "symbol": params.symbol,
         "begin": str(to_ms(begin)),
@@ -148,7 +158,7 @@ def _parse(payload: Any, params: KlineParams) -> Kline:
     tz = normalize_symbol(params.symbol).timezone
     values = list(zip(*rows, strict=True)) if rows else [() for _ in names]
     by_name = dict(zip(names, values, strict=True))
-    stamps = [from_ms(value, tz) for value in by_name.pop("timestamp", ())]
+    stamps = [_bar_moment(value, tz, params.period) for value in by_name.pop("timestamp", ())]
     first, last = _window(params, tz)
     keep = [
         index
@@ -165,6 +175,13 @@ def _parse(payload: Any, params: KlineParams) -> Kline:
         timestamps=tuple(stamps),
         columns={name: tuple(column) for name, column in by_name.items()},
     )
+
+
+def _bar_moment(value: Any, tz: tzinfo, period: Period) -> datetime:
+    """A bar's time. Hong Kong daily bars of 1987-04 to 1991-09 arrive at 23:00 the day before,
+    which is midnight in the daylight saving time Shanghai had then (measured 2026-11-05)."""
+    moment = from_ms(value, tz)
+    return moment + _EARLY_BAR if moment.hour == 23 and not period.endswith("m") else moment
 
 
 def _table(data: dict[str, Any]) -> tuple[list[str], list[list[Any]]]:
@@ -201,6 +218,12 @@ def older_range(moment: datetime, period: Period) -> dict[str, Any]:
     return {"end": moment.date() - timedelta(days=1), "before": None}
 
 
+def came_back_full(kline: Kline, count: int) -> bool:
+    """Whether a request for ``count`` bars going back may have left older ones out. A page one
+    short may still be a full one, if the parse dropped a bar at the boundary."""
+    return len(kline) > 0 and len(kline) >= count - 1
+
+
 class BarWalk:
     """All bars of one symbol in a range, walking back from ``end``.
 
@@ -223,19 +246,19 @@ class BarWalk:
             {"symbol": symbol, "period": period, "adjust": adjust, "begin": begin, "end": end}
         )
         self._zone = normalize_symbol(checked.symbol).timezone
-        self._period: Period = period
-        self._begin = begin
+        self._period: Period = checked.period
+        self._begin = checked.begin
         self._fetched = 0
         self._chunks: list[Kline] = []
         self._count = MAX_COUNT
-        if begin is not None:
-            until = end or now.astimezone(self._zone).date()
-            self._count = _bars_upper_bound(begin, until, period)
+        if checked.begin is not None:
+            until = checked.end or now.astimezone(self._zone).date()
+            self._count = _bars_upper_bound(checked.begin, until, checked.period)
         self.params: dict[str, Any] | None = {
             "symbol": checked.symbol,
-            "period": period,
-            "adjust": adjust,
-            "end": end,
+            "period": checked.period,
+            "adjust": checked.adjust,
+            "end": checked.end,
             "count": self._count,
         }
 
@@ -243,11 +266,8 @@ class BarWalk:
         """Take the bars of the request sent; ``params`` becomes the next one, or None."""
         self._fetched += 1
         self._chunks.append(kline)
-        # A page one short may still be a full one, if the parse dropped a bar at the boundary.
-        if (
-            not kline
-            or len(kline) < self._count - 1
-            or (self._begin is not None and kline.timestamps[0].date() <= self._begin)
+        if not came_back_full(kline, self._count) or (
+            self._begin is not None and kline.timestamps[0].date() <= self._begin
         ):
             self.params = None
         elif self._fetched >= HISTORY_RUNAWAY_PAGES:

@@ -97,5 +97,6 @@ ENDPOINT = Endpoint(
         upstream_cap=PAGE_SIZE_CAP,
         examples=({"symbol": "SH600000", "page_size": 20},),
         precision=2,
+        empty_hint="no rows: a day with no block trade has no row, and this stock may have none.",
     ),
 )

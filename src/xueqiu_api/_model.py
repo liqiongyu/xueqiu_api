@@ -30,15 +30,16 @@ class NoParams(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-def _without_keys(value: Any, drop: frozenset[str]) -> Any:
+def without_keys(value: Any, drop: frozenset[str] = frozenset()) -> Any:
+    """``value`` without the keys matching ``USER_KEY`` or listed in ``drop``, at every depth."""
     if isinstance(value, dict):
         return {
-            key: _without_keys(item, drop)
+            key: without_keys(item, drop)
             for key, item in cast(dict[Any, Any], value).items()
             if not (key in drop or (isinstance(key, str) and USER_KEY.match(key)))
         }
     if isinstance(value, list):
-        return [_without_keys(item, drop) for item in cast(list[Any], value)]
+        return [without_keys(item, drop) for item in cast(list[Any], value)]
     return value
 
 
@@ -56,7 +57,7 @@ class UpstreamModel(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _drop_keys(cls, value: Any) -> Any:
-        return _without_keys(value, cls.drop)
+        return without_keys(value, cls.drop)
 
 
 class UnverifiedModel(UpstreamModel):

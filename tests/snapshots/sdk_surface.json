@@ -80,70 +80,70 @@
       "after",
       "normal"
     ],
-    "BlockTrade": [
-      "trade_date",
-      "trans_price",
-      "vol",
-      "trans_amt",
-      "premium_pct",
-      "buy_branch_org_name",
-      "sell_branch_org_name"
-    ],
-    "Company": [
-      "symbol",
-      "org_name_cn",
-      "org_short_name_cn",
-      "org_name_en",
-      "main_operation_business",
-      "org_cn_introduction",
-      "established_date",
-      "listed_date",
-      "staff_num",
-      "chairman",
-      "org_website"
-    ],
-    "CubeNav": [
-      "symbol",
-      "name",
-      "benchmark",
-      "benchmark_name",
-      "dates",
-      "columns"
-    ],
-    "Financials": [
-      "symbol",
-      "name",
-      "currency",
-      "periods",
-      "extra"
-    ],
-    "FundNav": [
-      "date",
-      "nav",
-      "nav_value",
-      "daily_pct"
-    ],
-    "Kline": [
-      "symbol",
-      "period",
-      "adjust",
-      "timestamps",
-      "columns"
-    ],
-    "LineItem": [
-      "value",
-      "yoy"
-    ],
-    "Page": [
-      "items",
-      "page",
-      "page_size",
-      "total",
-      "last_page",
-      "capped",
-      "short",
-      "next_params"
-    ],
+    "BlockTrade": {
+      "trade_date": "date | None",
+      "trans_price": "float | None",
+      "vol": "float | None",
+      "trans_amt": "float | None",
+      "premium_pct": "float | None",
+      "buy_branch_org_name": "str | None",
+      "sell_branch_org_name": "str | None"
+    },
+    "Company": {
+      "symbol": "str",
+      "org_name_cn": "str | None",
+      "org_short_name_cn": "str | None",
+      "org_name_en": "str | None",
+      "main_operation_business": "str | None",
+      "org_cn_introduction": "str | None",
+      "established_date": "date | None",
+      "listed_date": "date | None",
+      "staff_num": "int | None",
+      "chairman": "str | None",
+      "org_website": "str | None"
+    },
+    "CubeNav": {
+      "symbol": "str",
+      "name": "str | None",
+      "benchmark": "str | None",
+      "benchmark_name": "str | None",
+      "dates": "tuple[date, ...]",
+      "columns": "Mapping[str, tuple[float | None, ...]]"
+    },
+    "Financials": {
+      "symbol": "str",
+      "name": "str | None",
+      "currency": "str | None",
+      "periods": "tuple[ReportPeriod, ...]",
+      "extra": "Mapping[str, Any]"
+    },
+    "FundNav": {
+      "date": "date",
+      "nav": "float | None",
+      "nav_value": "float | None",
+      "daily_pct": "float | None"
+    },
+    "Kline": {
+      "symbol": "str",
+      "period": "Period",
+      "adjust": "Adjust",
+      "timestamps": "tuple[datetime, ...]",
+      "columns": "Mapping[str, tuple[float | int | None, ...]]"
+    },
+    "LineItem": {
+      "value": "float | None",
+      "yoy": "float | None"
+    },
+    "Page": {
+      "items": "tuple[T, ...]",
+      "page": "int",
+      "page_size": "int",
+      "total": "int | None",
+      "last_page": "int | None",
+      "capped": "bool",
+      "short": "bool",
+      "next_params": "Mapping[str, Any] | None"
+    },
     "Period": [
       "1m",
       "5m",
@@ -157,66 +157,66 @@
       "quarter",
       "year"
     ],
-    "Quote": [
-      "symbol",
-      "current",
-      "percent",
-      "chg",
-      "timestamp",
-      "volume",
-      "amount",
-      "open",
-      "high",
-      "low",
-      "last_close",
-      "avg_price",
-      "turnover_rate",
-      "amplitude",
-      "current_year_percent",
-      "market_capital",
-      "float_market_capital",
-      "is_trade"
-    ],
-    "QuoteDetail": [
-      "symbol",
-      "current",
-      "percent",
-      "chg",
-      "timestamp",
-      "volume",
-      "amount",
-      "open",
-      "high",
-      "low",
-      "last_close",
-      "avg_price",
-      "turnover_rate",
-      "amplitude",
-      "current_year_percent",
-      "market_capital",
-      "float_market_capital",
-      "is_trade",
-      "name",
-      "market_status_id",
-      "time",
-      "timestamp_ext",
-      "timestamp_night_session",
-      "issue_date"
-    ],
-    "ReportPeriod": [
-      "report_date",
-      "report_name",
-      "items",
-      "extra"
-    ],
+    "Quote": {
+      "symbol": "str",
+      "current": "float | None",
+      "percent": "float | None",
+      "chg": "float | None",
+      "timestamp": "datetime | None",
+      "volume": "float | None",
+      "amount": "float | None",
+      "open": "float | None",
+      "high": "float | None",
+      "low": "float | None",
+      "last_close": "float | None",
+      "avg_price": "float | None",
+      "turnover_rate": "float | None",
+      "amplitude": "float | None",
+      "current_year_percent": "float | None",
+      "market_capital": "float | None",
+      "float_market_capital": "float | None",
+      "is_trade": "bool | None"
+    },
+    "QuoteDetail": {
+      "symbol": "str",
+      "current": "float | None",
+      "percent": "float | None",
+      "chg": "float | None",
+      "timestamp": "datetime | None",
+      "volume": "float | None",
+      "amount": "float | None",
+      "open": "float | None",
+      "high": "float | None",
+      "low": "float | None",
+      "last_close": "float | None",
+      "avg_price": "float | None",
+      "turnover_rate": "float | None",
+      "amplitude": "float | None",
+      "current_year_percent": "float | None",
+      "market_capital": "float | None",
+      "float_market_capital": "float | None",
+      "is_trade": "bool | None",
+      "name": "str | None",
+      "market_status_id": "int | None",
+      "time": "datetime | None",
+      "timestamp_ext": "datetime | None",
+      "timestamp_night_session": "datetime | None",
+      "issue_date": "date | None"
+    },
+    "ReportPeriod": {
+      "report_date": "date",
+      "report_name": "str",
+      "items": "Mapping[str, LineItem]",
+      "extra": "Mapping[str, Any]"
+    },
     "ReportType": [
       "all",
       "annual"
     ],
-    "StockSuggestion": [
-      "symbol",
-      "name",
-      "stock_type"
-    ]
+    "StockSuggestion": {
+      "symbol": "str",
+      "name": "str",
+      "stock_type": "int | None"
+    }
   }
 }

@@ -150,7 +150,22 @@ def test_kline_query_with_begin_goes_forward_and_covers_the_range() -> None:
     assert build(begin=date(2026, 6, 1), count=7)["count"] == "7"
     assert build(begin=date(2026, 11, 3), period="5m")["count"] == str(2 * 288)
     assert build(begin=date(2000, 1, 1))["count"] == "9805"
-    assert build(begin=date(1990, 1, 1))["count"] == "10000"
+
+
+def test_kline_query_for_dates_holding_more_than_a_request_goes_back_from_the_end() -> None:
+    query = build(begin=date(1990, 1, 1), end=date(2026, 6, 30))
+    assert query["count"] == "-10000"
+    assert query["begin"] == str(int(ms(datetime(2026, 7, 1, tzinfo=SHANGHAI))) - 1)
+
+    assert build(begin=date(1990, 1, 1), count=10_000)["count"] == "10000"
+
+
+def test_kline_query_of_old_days_starts_early_enough_for_bars_that_arrive_early() -> None:
+    query = build(begin=date(1990, 1, 1), count=7)
+    assert query["begin"] == str(int(ms(datetime(1990, 1, 1, tzinfo=SHANGHAI))) - 3_600_000)
+
+    minutes = build(begin=date(1990, 1, 1), count=7, period="1m")
+    assert minutes["begin"] == ms(datetime(1990, 1, 1, tzinfo=SHANGHAI))
 
 
 def test_us_kline_query_uses_new_york_dates() -> None:
