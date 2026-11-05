@@ -1,0 +1,34 @@
+{
+  "params": {
+    "fd_code": "008975"
+  },
+  "body": {
+    "data": {
+      "duration": "3Y",
+      "fd_code": "008975",
+      "buy_type1": "normal",
+      "buy_type2": "mv",
+      "cycle": "1",
+      "base_invest_amount": "100",
+      "recent_yields": [
+        {
+          "duration": "近1年",
+          "normal": "3.2000",
+          "max_itg": "4.1100"
+        },
+        {
+          "duration": "近2年",
+          "normal": "0.6800",
+          "max_itg": "1.7400"
+        },
+        {
+          "duration": "近3年",
+          "normal": "1.8400",
+          "max_itg": "3.3900"
+        }
+      ]
+    },
+    "result_code": 0,
+    "error_type": 0
+  }
+}

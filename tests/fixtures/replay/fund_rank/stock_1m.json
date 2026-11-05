@@ -1,0 +1,43 @@
+{
+  "params": {
+    "type": "1",
+    "order_by": "1m",
+    "size": "3",
+    "page": "1"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "fd_code": "001628",
+          "fd_name": "招商体育文化休闲",
+          "yield": "10.0188",
+          "sf_type": "1",
+          "unit_nav": "1.7570",
+          "f_type": "fund"
+        },
+        {
+          "fd_code": "019457",
+          "fd_name": "平安先进制造主题股票发起A",
+          "yield": "9.9379",
+          "sf_type": "1",
+          "unit_nav": "1.6461",
+          "f_type": "fund"
+        },
+        {
+          "fd_code": "019458",
+          "fd_name": "平安先进制造主题股票发起C",
+          "yield": "9.8749",
+          "sf_type": "1",
+          "unit_nav": "1.6167",
+          "f_type": "fund"
+        }
+      ],
+      "current_page": 1,
+      "size": 3,
+      "total_items": 1000,
+      "total_pages": 334
+    },
+    "result_code": 0
+  }
+}

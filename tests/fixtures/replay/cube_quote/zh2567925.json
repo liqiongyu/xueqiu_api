@@ -1,0 +1,19 @@
+{
+  "params": { "code": "ZH2567925" },
+  "body": {
+    "ZH2567925": {
+      "symbol": "ZH2567925",
+      "market": "cn",
+      "name": "示例组合",
+      "net_value": "0.8994",
+      "daily_gain": "-0.64",
+      "monthly_gain": "1.66",
+      "total_gain": "-10.06",
+      "annualized_gain": "-5.42",
+      "hasexist": "false",
+      "closed_at": "1683208040790",
+      "badges_exist": "false",
+      "game_id": 0
+    }
+  }
+}

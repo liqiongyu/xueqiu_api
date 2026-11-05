@@ -1,0 +1,89 @@
+{
+  "params": {
+    "type": "yield"
+  },
+  "body": {
+    "data": {
+      "type_model": [
+        {
+          "name": "股票型",
+          "k": "1",
+          "df": true
+        },
+        {
+          "name": "混合型",
+          "k": "3",
+          "df": false
+        },
+        {
+          "name": "债券型",
+          "k": "2",
+          "df": false
+        },
+        {
+          "name": "指数型",
+          "k": "5",
+          "df": false
+        },
+        {
+          "name": "QDII型",
+          "k": "11",
+          "df": false
+        }
+      ],
+      "order_model": [
+        {
+          "name": "日涨幅",
+          "k": "td",
+          "df": false
+        },
+        {
+          "name": "近一周",
+          "k": "1w",
+          "df": false
+        },
+        {
+          "name": "近一月",
+          "k": "1m",
+          "df": false
+        },
+        {
+          "name": "近三月",
+          "k": "3m",
+          "df": false
+        },
+        {
+          "name": "近六月",
+          "k": "6m",
+          "df": false
+        },
+        {
+          "name": "今年以来",
+          "k": "ty",
+          "df": false
+        },
+        {
+          "name": "近一年",
+          "k": "1y",
+          "df": false
+        },
+        {
+          "name": "近两年",
+          "k": "2y",
+          "df": true
+        },
+        {
+          "name": "近五年",
+          "k": "5y",
+          "df": false
+        },
+        {
+          "name": "成立以来",
+          "k": "base",
+          "df": false
+        }
+      ]
+    },
+    "result_code": 0
+  }
+}

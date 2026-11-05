@@ -1,0 +1,285 @@
+{
+  "params": {
+    "fund_code": "008975"
+  },
+  "body": {
+    "data": {
+      "fd_code": "008975",
+      "fd_type": "5",
+      "fd_name": "富国中证消费50ETF联接A",
+      "fd_full_name": "富国中证消费50交易型开放式指数证券投资基金联接基金",
+      "found_date": "2020-03-18",
+      "fd_status": "1",
+      "declare_status": "1",
+      "subscribe_status": "0",
+      "withdraw_status": "1",
+      "auto_invest_status": "1",
+      "totshare": "7.55亿",
+      "keeper_name": "富国基金管理有限公司",
+      "manager_name": "示例经理",
+      "trup_name": "中信证券股份有限公司",
+      "sale_status": "1",
+      "risk_level": "4",
+      "ipo_start_date": 1582473600000,
+      "ipo_end_date": 1584028800000,
+      "fund_status": "0",
+      "fund_derived": {
+        "end_date": "2026-11-04",
+        "unit_nav": "1.2048",
+        "nav_grtd": "-1.2702",
+        "nav_grl1m": "7.2458607798",
+        "nav_grl3m": "3.8620689655",
+        "nav_grl6m": "0.7610604667",
+        "nav_grlty": "-4.6005226067",
+        "nav_grl1y": "-4.5627376426",
+        "nav_grl3y": "0.3916340305",
+        "nav_grl5y": "-21.811928094",
+        "nav_grbase": "20.48",
+        "srank_l1m": "8/4521",
+        "srank_l3m": "210/4329",
+        "srank_l6m": "332/4059",
+        "srank_lty": "1420/4594",
+        "srank_l1y": "1228/3687",
+        "srank_l3y": "1531/1875",
+        "srank_l5y": "922/1262",
+        "nav_growth": "-0.0155",
+        "annual_performance_list": [
+          {
+            "period": "成立以来",
+            "nav": "20.48",
+            "rank": "1508/4594"
+          },
+          {
+            "period": "今年以来",
+            "nav": "-4.60",
+            "rank": "1420/4594"
+          },
+          {
+            "period": "2025",
+            "nav": "0.99",
+            "rank": "3402/3860"
+          },
+          {
+            "period": "2024",
+            "nav": "8.70",
+            "rank": "1545/2661"
+          },
+          {
+            "period": "2023",
+            "nav": "-14.21",
+            "rank": "1568/2118"
+          },
+          {
+            "period": "2022",
+            "nav": "-15.31",
+            "rank": "609/1722"
+          },
+          {
+            "period": "2021",
+            "nav": "-11.91",
+            "rank": "1289/1391"
+          },
+          {
+            "period": "2020",
+            "nav": "79.75",
+            "rank": "35/873"
+          }
+        ],
+        "yield_history": [
+          {
+            "yield": "3.86",
+            "name": "近3个月"
+          },
+          {
+            "yield": "0.76",
+            "name": "近6个月"
+          },
+          {
+            "yield": "-4.56",
+            "name": "近一年"
+          },
+          {
+            "yield": "-3.03",
+            "name": "近两年"
+          },
+          {
+            "yield": "0.39",
+            "name": "近三年"
+          },
+          {
+            "yield": "-21.81",
+            "name": "近五年"
+          },
+          {
+            "yield": "20.48",
+            "name": "成立以来"
+          }
+        ]
+      },
+      "fund_rates": {
+        "subscribe_rate": "1.0",
+        "declare_rate": "1.2",
+        "discount": "0.1",
+        "subscribe_discount": "1",
+        "declare_discount": "0.1"
+      },
+      "op_fund": {
+        "fund_tags": [
+          {
+            "category": "1",
+            "name": "股票型-标准指数"
+          },
+          {
+            "category": "9",
+            "name": "中高风险"
+          }
+        ]
+      },
+      "yield": "20.48",
+      "yield_name": "成立以来收益率",
+      "growth_day": "360",
+      "sales": "",
+      "type_desc": "股票型-标准指数",
+      "rating_desc": "暂无评级",
+      "follower_count": 13654,
+      "status_count": 876,
+      "agent_sell": true,
+      "trade_reason": {
+        "show_button": false,
+        "withdraw_display": true
+      },
+      "ipo_start_count_down": 1582268401000,
+      "ipo_end_count_down": 1584082800000,
+      "growth_default_period": "ty",
+      "fir_header_base_data": [
+        {
+          "data_name": "年化收益（近5年）",
+          "data_value_str": "-4.80%",
+          "data_value_number": -4.8019394382,
+          "data_have_colour": true
+        },
+        {
+          "data_name": "累计收益",
+          "data_value_str": "+20.48%",
+          "data_value_number": 20.48,
+          "data_have_colour": true
+        },
+        {
+          "data_name": "日涨跌",
+          "data_value_str": "-1.27%",
+          "data_value_number": -1.2702,
+          "data_have_colour": true
+        }
+      ],
+      "sec_header_base_data": [
+        {
+          "data_name": "今年以来",
+          "data_value_str": "-4.60%",
+          "data_value_number": -4.6005226067,
+          "data_have_colour": true
+        },
+        {
+          "data_name": "成立时长",
+          "data_value_str": "6年233天",
+          "data_have_colour": false
+        },
+        {
+          "data_name": "最新净值",
+          "data_value_str": "1.2048",
+          "data_value_number": 1.2048,
+          "data_have_colour": false,
+          "data_extend": "11-04"
+        },
+        {
+          "data_name": "最大回撤",
+          "data_value_str": "51.59%",
+          "data_value_number": 0.5159,
+          "data_have_colour": false
+        },
+        {
+          "data_name": "基金经理",
+          "data_value_str": "示例经理",
+          "data_have_colour": false
+        },
+        {
+          "data_name": "基金规模",
+          "data_value_str": "7.55亿",
+          "data_have_colour": false
+        }
+      ],
+      "base_data_tip": [
+        {
+          "title": "合成标题",
+          "content": "合成提示文字。"
+        }
+      ],
+      "nav_tab_list": [
+        {
+          "nav_tab_name": "今年以来",
+          "nav_tab_value": "ty",
+          "nav_growth": "-4.6005226067"
+        },
+        {
+          "nav_tab_name": "近1月",
+          "nav_tab_value": "1m",
+          "nav_growth": "7.2458607798"
+        },
+        {
+          "nav_tab_name": "近3月",
+          "nav_tab_value": "3m",
+          "nav_growth": "3.8620689655"
+        },
+        {
+          "nav_tab_name": "近1年",
+          "nav_tab_value": "1y",
+          "nav_growth": "-4.5627376426"
+        },
+        {
+          "nav_tab_name": "近6月",
+          "nav_tab_value": "6m",
+          "nav_growth": "0.7610604667"
+        },
+        {
+          "nav_tab_name": "近3年",
+          "nav_tab_value": "3y",
+          "nav_growth": "0.3916340305"
+        },
+        {
+          "nav_tab_name": "近5年",
+          "nav_tab_value": "5y",
+          "nav_growth": "-21.811928094"
+        },
+        {
+          "nav_tab_name": "成立以来",
+          "nav_tab_value": "all",
+          "nav_growth": "20.48",
+          "nav_tab_extent": "6年233天"
+        }
+      ],
+      "display_annual_performance": true,
+      "benchmark_index": [
+        {
+          "symbol": "CSI931139",
+          "symbol_name": "中证消费50"
+        },
+        {
+          "symbol": "SH000300",
+          "symbol_name": "沪深300指数"
+        },
+        {
+          "symbol": "SH000905",
+          "symbol_name": "中证500指数"
+        }
+      ],
+      "invest_orientation": "合成的投资策略文本。",
+      "invest_target": "合成的投资目标文本。",
+      "performance_bench_mark": "合成基准：指数收益率×95%+活期利率×5%",
+      "record_version": "1",
+      "pension_fund": false,
+      "lock_fund_type": "0",
+      "can_buy": true,
+      "can_pre_buy": false
+    },
+    "result_code": 0
+  }
+}

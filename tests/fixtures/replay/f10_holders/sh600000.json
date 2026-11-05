@@ -1,0 +1,46 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "per_float_chg": 7.93,
+          "per_float": 220087.47968016917,
+          "top_float_holder_ratio": 74.6823,
+          "chg": -7.35,
+          "price": 9.48,
+          "ashare_holder": 151330,
+          "per_amount": 2086429.3073680038,
+          "top_holder_ratio": 74.68,
+          "timestamp": 1790697600000
+        },
+        {
+          "per_float_chg": -7.49,
+          "per_float": 203921.20286296814,
+          "top_float_holder_ratio": 74.8702,
+          "chg": 8.1,
+          "price": 8.2216,
+          "ashare_holder": 163327,
+          "per_amount": 1676558.561458179,
+          "top_holder_ratio": 74.87,
+          "timestamp": 1782748800000
+        },
+        {
+          "per_float_chg": 6.43,
+          "per_float": 220435.6202553428,
+          "top_float_holder_ratio": 74.91929999999999,
+          "chg": -6.05,
+          "price": 9.7208,
+          "ashare_holder": 151091,
+          "per_amount": 2142810.5773781366,
+          "top_holder_ratio": 74.92,
+          "timestamp": 1774886400000
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

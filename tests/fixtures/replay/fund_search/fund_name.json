@@ -1,0 +1,47 @@
+{
+  "params": {
+    "key": "富国中证消费50",
+    "source": "index"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "id": 8695,
+          "scode": "008975",
+          "sname": "富国中证消费50ETF联接A",
+          "stype": "fund",
+          "yield": "-4.5627376426",
+          "rela_code": "",
+          "store_status": 1,
+          "ext_map": {
+            "fundStatus": "0",
+            "saleStatus": "1",
+            "agentStatus": "true",
+            "tyCategory": "0801"
+          }
+        },
+        {
+          "id": 8696,
+          "scode": "008976",
+          "sname": "富国中证消费50ETF联接C",
+          "stype": "fund",
+          "yield": "-4.9501741878",
+          "rela_code": "",
+          "store_status": 1,
+          "ext_map": {
+            "fundStatus": "0",
+            "saleStatus": "1",
+            "agentStatus": "true",
+            "tyCategory": "0801"
+          }
+        }
+      ],
+      "current_page": 1,
+      "size": 2,
+      "total_items": 2,
+      "total_pages": 1
+    },
+    "result_code": 0
+  }
+}

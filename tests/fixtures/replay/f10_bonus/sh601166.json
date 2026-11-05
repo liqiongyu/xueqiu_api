@@ -1,0 +1,56 @@
+{
+  "params": {
+    "symbol": "SH601166"
+  },
+  "body": {
+    "data": {
+      "addtions": [
+        {
+          "actual_issue_vol": 1721854000.0,
+          "actual_issue_price": 15.1,
+          "listing_ad": 1491840000000,
+          "actual_rc_net_amt": 25894247105.0
+        },
+        {
+          "actual_issue_vol": 1915146700.0000002,
+          "actual_issue_price": 12.36,
+          "listing_ad": 1357660800000,
+          "actual_rc_net_amt": 23532165306.0
+        }
+      ],
+      "allots": [
+        {
+          "allot_price_ps": 18.0,
+          "allot_specification_ad": 1274284800000,
+          "actua_rc_total_amt": 17864111340.0,
+          "actual_allot_num": 992450630.0
+        }
+      ],
+      "items": [
+        {
+          "dividend_year": "2026中报",
+          "ashare_ex_dividend_date": null,
+          "equity_date": null,
+          "plan_explain": "合成分红预案文本(股东大会预案)",
+          "cancle_dividend_date": null
+        },
+        {
+          "dividend_year": "2025年报",
+          "ashare_ex_dividend_date": 1781193600000,
+          "equity_date": 1781107200000,
+          "plan_explain": "10派5.01元(实施方案)",
+          "cancle_dividend_date": null
+        },
+        {
+          "dividend_year": "2025中报",
+          "ashare_ex_dividend_date": 1770307200000,
+          "equity_date": 1770220800000,
+          "plan_explain": "10派5.65元(实施方案)",
+          "cancle_dividend_date": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

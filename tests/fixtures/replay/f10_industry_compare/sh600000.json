@@ -1,0 +1,81 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "ind_name": "银行",
+      "quote_time": 1793775600000,
+      "avg": {
+        "pe_ttm": 6.3598333333333334,
+        "basic_eps": 1.1272738095238095,
+        "avg_roe": 6.987142857142857,
+        "gross_selling_rate": 0.0,
+        "total_revenue": 110897942138.03,
+        "net_profit_atsopc": 41590231735.72191,
+        "np_per_share": 14.5819,
+        "operate_cash_flow_ps": 4.191221428571429,
+        "total_assets": 8360841155540.682,
+        "total_shares": 47118935267.35714,
+        "market_capital": 402412867622.881,
+        "operating_income_yoy": 6.239228571428571,
+        "net_profit_atsopc_yoy": 2.1132166666666667,
+        "pb": 0.5951904761904763,
+        "asset_liab_ratio": 92.15074523809524,
+        "net_selling_rate": 38.74653333333333
+      },
+      "min": {
+        "pe_ttm": 4.358,
+        "basic_eps": 0.2158,
+        "avg_roe": 3.5017,
+        "gross_selling_rate": null,
+        "total_revenue": 3188527000.0,
+        "net_profit_atsopc": 1147230000.0,
+        "np_per_share": 5.25,
+        "operate_cash_flow_ps": -15.8533,
+        "total_assets": 230817935000.0,
+        "total_shares": 1962161395
+      },
+      "max": {
+        "pe_ttm": 8.704,
+        "basic_eps": 4.57,
+        "avg_roe": 10.9971,
+        "gross_selling_rate": null,
+        "total_revenue": 695947000000.0,
+        "net_profit_atsopc": 285640000000.0,
+        "np_per_share": 46.87,
+        "operate_cash_flow_ps": 21.8829,
+        "total_assets": 57823437000000.0,
+        "total_shares": 356406257089
+      },
+      "count": 1,
+      "ind_code": "BK0055",
+      "ind_class": "SW2014",
+      "report_name": "2026-09-30",
+      "items": [
+        {
+          "symbol": "SH600000",
+          "name": "浦发银行",
+          "basic_eps": 1.17,
+          "total_revenue": 138133000000.0,
+          "gross_selling_rate": null,
+          "net_profit_atsopc": 40572000000.0,
+          "np_per_share": 22.8,
+          "avg_roe": 4.8994,
+          "pe_ttm": 6.491,
+          "total_assets": 10451814000000.0,
+          "operate_cash_flow_ps": 8.06,
+          "total_shares": 33305838300,
+          "market_capital": 336055908447.0,
+          "operating_income_yoy": 4.4247,
+          "net_profit_atsopc_yoy": 4.5158,
+          "pb": 0.443,
+          "asset_liab_ratio": 91.9057,
+          "net_selling_rate": 29.7749
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

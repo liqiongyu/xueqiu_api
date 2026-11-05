@@ -1,0 +1,90 @@
+{
+  "params": {
+    "type": "13",
+    "_type": "13"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "type": 13,
+          "code": "00700",
+          "name": "腾讯控股",
+          "value": 11615.0,
+          "increment": -120,
+          "rank_change": 0,
+          "has_exist": null,
+          "symbol": "00700",
+          "percent": 6.27,
+          "current": 426.8,
+          "chg": 25.2,
+          "exchange": "HK",
+          "stock_type": 30,
+          "sub_type": "256",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": null,
+          "current_ext": null,
+          "percent_ext": null
+        },
+        {
+          "type": 13,
+          "code": "01810",
+          "name": "小米集团-W",
+          "value": 8825.0,
+          "increment": -31,
+          "rank_change": 0,
+          "has_exist": null,
+          "symbol": "01810",
+          "percent": 8.41,
+          "current": 31.18,
+          "chg": 2.42,
+          "exchange": "HK",
+          "stock_type": 30,
+          "sub_type": "256",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": null,
+          "current_ext": null,
+          "percent_ext": null
+        },
+        {
+          "type": 13,
+          "code": "09988",
+          "name": "阿里巴巴-W",
+          "value": 3996.0,
+          "increment": -48,
+          "rank_change": 0,
+          "has_exist": null,
+          "symbol": "09988",
+          "percent": 7.75,
+          "current": 108.4,
+          "chg": 7.8,
+          "exchange": "HK",
+          "stock_type": 30,
+          "sub_type": "256",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": null,
+          "current_ext": null,
+          "percent_ext": null
+        }
+      ],
+      "items_size": 3
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

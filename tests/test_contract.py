@@ -25,6 +25,11 @@ from .harness import FAKE_LOGIN, REPLAY_DIR, Harness, json_reply
 HERE = Path(__file__).parent
 NOW = datetime(2026, 11, 5, 2, 0, tzinfo=UTC)
 ENDPOINTS = sorted(REGISTRY)
+ROUTE_HOSTS = {
+    route["name"]: route["host"]
+    for route in json.loads((HERE / "snapshots" / "endpoint_routes.json").read_text("utf-8"))
+}
+"""Hosts of the table kept by hand: a request is held to that, and not to its own declaration."""
 UPSTREAM_ERRORS: Mapping[Envelope, Any] = {
     "xueqiu": {"error_code": 99999, "error_description": "synthetic"},
     "query": {"code": 99999, "success": False, "message": "synthetic"},
@@ -64,8 +69,10 @@ def fixture_params(name: str) -> list[dict[str, str]]:
 def test_the_example_query_covers_a_replay_fixture(name: str) -> None:
     query = example_query(REGISTRY[name])
 
-    # A file without params answers every request, so it says nothing about this one.
-    assert any(params and params.items() <= query.items() for params in fixture_params(name))
+    # A file without params answers every request, so it says nothing unless the query is empty.
+    assert any(
+        (params or not query) and params.items() <= query.items() for params in fixture_params(name)
+    )
 
 
 @pytest.mark.parametrize("name", ENDPOINTS)
@@ -78,7 +85,7 @@ def test_requests_use_the_profile_of_the_site(make: Callable[..., Harness], name
     h.call(name, **spec.agent.examples[0])
 
     [request] = [sent for sent in transport.seen if sent.url.path != "/"]
-    assert request.url.host == spec.host
+    assert request.url.host == ROUTE_HOSTS[name]
     for header, value in site.headers.items():
         assert request.headers[header] == value
     if not (site.cookies and spec.cookies):

@@ -8,14 +8,25 @@ from typing import assert_type
 from xueqiu_api import AsyncClient, Client, Page
 from xueqiu_api.models import (
     BlockTrade,
+    BonusPage,
+    CapitalFlow,
     Company,
     CubeNav,
+    CubeQuote,
     Financials,
+    FundInfo,
     FundNav,
+    HotStock,
+    IndexValuation,
     Kline,
+    MinuteChart,
     Quote,
     QuoteDetail,
+    RevenueBreakdown,
+    ScreenerQuote,
+    StockHit,
     StockSuggestion,
+    WatchlistItem,
 )
 
 
@@ -34,6 +45,18 @@ def sync_surface(c: Client) -> None:
     assert_type(c.fund_nav_history("008975", page=2), Page[FundNav])
     assert_type(c.fund_nav_history_pages("008975", page_size=None), Iterator[Page[FundNav]])
     assert_type(c.cube_nav_daily("ZH2567925"), CubeNav)
+    assert_type(c.quote_minute("SH600000", days=5), MinuteChart)
+    assert_type(c.capital_flow("SH600000"), CapitalFlow)
+    assert_type(c.f10_bonus("SH600000"), BonusPage)
+    assert_type(c.f10_bonus_pages("SH600000"), Iterator[BonusPage])
+    assert_type(c.finance_business("SH600000"), RevenueBreakdown)
+    assert_type(c.screener_quote_list(board="kcb"), Page[ScreenerQuote])
+    assert_type(c.market_hot_stocks(region="hk"), list[HotStock])
+    assert_type(c.search_stock(query="浦发银行"), list[StockHit])
+    assert_type(c.index_valuation("SH000300"), IndexValuation)
+    assert_type(c.fund_info("008975"), FundInfo)
+    assert_type(c.cube_quote(["ZH2567925"]), list[CubeQuote])
+    assert_type(c.watchlist_stocks(category="stock"), list[WatchlistItem])
     for row in c.fund_nav_history("008975"):
         assert_type(row, FundNav)
     c.kline("SH600000", period="daily")  # pyright: ignore[reportArgumentType]
@@ -58,6 +81,18 @@ async def async_surface(c: AsyncClient) -> None:
     assert_type(c.capital_block_trades_pages("SH600000"), AsyncIterator[Page[BlockTrade]])
     assert_type(c.fund_nav_history_pages("008975"), AsyncIterator[Page[FundNav]])
     assert_type(await c.cube_nav_daily("ZH2567925"), CubeNav)
+    assert_type(await c.quote_minute("SH600000"), MinuteChart)
+    assert_type(await c.capital_flow("SH600000"), CapitalFlow)
+    assert_type(await c.f10_bonus("SH600000"), BonusPage)
+    assert_type(c.f10_bonus_pages("SH600000"), AsyncIterator[BonusPage])
+    assert_type(await c.finance_business("SH600000"), RevenueBreakdown)
+    assert_type(await c.screener_quote_list(board="kcb"), Page[ScreenerQuote])
+    assert_type(await c.market_hot_stocks(), list[HotStock])
+    assert_type(await c.search_stock(query="浦发银行"), list[StockHit])
+    assert_type(await c.index_valuation("SH000300"), IndexValuation)
+    assert_type(await c.fund_info("008975"), FundInfo)
+    assert_type(await c.cube_quote(["ZH2567925"]), list[CubeQuote])
+    assert_type(await c.watchlist_stocks(), list[WatchlistItem])
     async for page in c.fund_nav_history_pages("008975", max_pages=2):
         assert_type(page, Page[FundNav])
     await c.kline("SH600000", period="daily")  # pyright: ignore[reportArgumentType]

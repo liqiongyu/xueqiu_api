@@ -1,0 +1,84 @@
+{
+  "params": {
+    "market": "US",
+    "type": "us",
+    "order_by": "percent",
+    "order": "desc"
+  },
+  "body": {
+    "data": {
+      "count": 5000,
+      "list": [
+        {
+          "symbol": "OMH",
+          "net_profit_cagr": 44.44356902883521,
+          "north_net_inflow": null,
+          "ps": null,
+          "type": 0,
+          "percent": 178.7671,
+          "has_follow": false,
+          "tick_size": 0.01,
+          "pb_ttm": null,
+          "float_shares": null,
+          "current": 8.14,
+          "amplitude": 197.77,
+          "pcf": null,
+          "current_year_percent": -79.84,
+          "float_market_capital": null,
+          "north_net_inflow_time": null,
+          "market_capital": 17327813.0,
+          "dividend_yield": 0.0,
+          "lot_size": 1,
+          "roe_ttm": -158.95830932586333,
+          "total_percent": null,
+          "percent5m": 18.21,
+          "income_cagr": 20.33271148089981,
+          "amount": 130189937.0,
+          "chg": 5.22,
+          "issue_date_ts": 1679328000000,
+          "eps": -3.3819814897097094,
+          "main_net_inflows": 974783.0,
+          "volume": 19948598,
+          "volume_ratio": 7000.92,
+          "pb": 4.6659,
+          "followers": 142,
+          "turnover_rate": 937.12,
+          "mapping_quote_current": null,
+          "first_percent": null,
+          "name": "Ohmyhome",
+          "pe_ttm": -2.435,
+          "dual_counter_mapping_symbol": null,
+          "total_shares": 2128724,
+          "limitup_days": null
+        },
+        {
+          "symbol": "DX-A.CL",
+          "name": "示例优先股",
+          "type": 0,
+          "current": 1.78,
+          "percent": null,
+          "chg": null,
+          "amount": null,
+          "volume": null,
+          "issue_date_ts": null,
+          "has_follow": false
+        },
+        {
+          "symbol": "CRIS",
+          "name": "居里",
+          "type": 0,
+          "current": 1.1398,
+          "percent": 59.67,
+          "chg": 0.426,
+          "amount": 176045061.0,
+          "volume": 119005438,
+          "issue_date_ts": 965059200000,
+          "has_follow": false,
+          "turnover_rate": 1781.72
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

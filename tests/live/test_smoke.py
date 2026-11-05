@@ -5,10 +5,10 @@ deselects them, and CI does not select them. Opt in explicitly, on your own mach
 
     uv run pytest -m live tests/live
 
-Every endpoint is called once with its first registry example, serially through one client,
-so the per-host limiter spaces the requests; finance and F10 are also called once each for a
-Hong Kong and a US symbol. The session cache goes to a temporary directory. Set XUEQIU_TOKEN
-to run them with a login session.
+Every endpoint that needs no login is called once with its first registry example, serially
+through one client, so the per-host limiter spaces the requests; finance and F10 are also called
+once each for a Hong Kong and a US symbol. The session cache goes to a temporary directory. They
+always use anonymous cookies: login-only endpoints join once a login session has measured them.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Client]:
         yield live_client
 
 
-@pytest.mark.parametrize("name", sorted(REGISTRY))
+@pytest.mark.parametrize("name", [n for n in sorted(REGISTRY) if REGISTRY[n].auth != "required"])
 def test_endpoint_answers(client: Client, name: str) -> None:
     result: Any = client.call(name, **REGISTRY[name].agent.examples[0])
     # Lists, Kline and Financials are empty when nothing came back; records are models.

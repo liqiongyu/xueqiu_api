@@ -1,0 +1,44 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "chg_date": "2026三季报",
+      "fund_items": [
+        {
+          "to_float_shares_ratio": 0.51,
+          "org_name_or_fund_name": "全部合计",
+          "held_num": 169885009
+        },
+        {
+          "to_float_shares_ratio": 0.1207,
+          "org_name_or_fund_name": "华宝中证银行交易型开放式指数证券投资基金",
+          "held_num": 40200187
+        },
+        {
+          "to_float_shares_ratio": 0.0729,
+          "org_name_or_fund_name": "中证上海国企交易型开放式指数证券投资基金",
+          "held_num": 24296272
+        }
+      ],
+      "times": [
+        {
+          "name": "2026三季报",
+          "value": 1790697600000
+        },
+        {
+          "name": "2026中报",
+          "value": 1782748800000
+        },
+        {
+          "name": "2026一季报",
+          "value": 1774886400000
+        }
+      ],
+      "timestamp": 1790697600000
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

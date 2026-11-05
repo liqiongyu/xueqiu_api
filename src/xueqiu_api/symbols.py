@@ -147,9 +147,10 @@ def split_symbols(value: Any) -> Any:
     return split_list(value) if isinstance(value, str) else value
 
 
+# Params of the endpoints that take one symbol and nothing else.
 class SymbolParams(BaseModel):
-    """Params of the endpoints that take one symbol and nothing else."""
-
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
     symbol: SymbolCode
+    """Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as a stock, so
+    an index needs its prefix, as SH000001 does."""

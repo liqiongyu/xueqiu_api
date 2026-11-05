@@ -1,0 +1,20 @@
+{
+  "params": {
+    "fd_code": "008975"
+  },
+  "body": {
+    "data": {
+      "buy_query_date": "11-09",
+      "buy_confirm_date": "11-06",
+      "sale_confirm_date": "11-06",
+      "sale_query_date": "11-11 12:00前",
+      "sale_to_cash_query_date": "11-09 18:00前",
+      "withdraw_date": 0,
+      "if_can_pay_xjb": true,
+      "if_can_sale_xjb": true,
+      "if_can_transition": true,
+      "if_can_sale_to_cash": true
+    },
+    "result_code": 0
+  }
+}

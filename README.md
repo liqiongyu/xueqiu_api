@@ -29,9 +29,9 @@ with Client() as client:
     print(latest.report_name, latest.items["total_revenue"].value)
 ```
 
-`AsyncClient` 有同样的方法。目前支持批量行情（`quotec`、`batch_quote`）、行情详情、K 线、证券搜索、利润表、资产负债表、现金流量表、财务指标、F10 公司资料、大宗交易、基金净值历史和组合净值，都不需要登录。
+`AsyncClient` 有同样的方法。目前有 72 个端点，覆盖行情、K 线、资金流向、财报、F10、选股器和榜单、指数估值、基金和雪球组合。分页的列表另有 `<name>_pages` 方法逐页取数，`kline_history` 取一段完整的 K 线。其中 68 个端点不需要登录。组合持仓、组合调仓、自选股分组和自选股这 4 个要把登录 cookie 放进环境变量 `XUEQIU_TOKEN`，它们的返回结构还没有用真实账号验证。
 
-`AsyncClient` has the same methods. Supported so far: batch quotes (`quotec`, `batch_quote`), quote detail, kline, security search, income statement, balance sheet, cash flow statement, financial indicators, the F10 company profile, block trades, fund NAV history and cube NAV, all without login.
+`AsyncClient` has the same methods. There are 72 endpoints so far, covering quotes, kline, capital flow, financial statements, F10, the screener and rankings, index valuation, funds and Xueqiu cubes. Paged lists also have a `<name>_pages` method, and `kline_history` returns a whole date range. 68 endpoints work without login. Cube holdings, cube rebalancing, watchlist groups and watchlist stocks need a login cookie string in the `XUEQIU_TOKEN` environment variable, and their response shapes have not been checked against a real account.
 
 ```bash
 xueqiu doctor   # 逐个调用端点并报告状态 / call every endpoint once and report

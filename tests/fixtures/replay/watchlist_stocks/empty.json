@@ -1,0 +1,8 @@
+{
+  "params": { "pid": -7, "category": 1, "size": 1000 },
+  "body": {
+    "data": { "pid": -7, "category": 1, "stocks": [] },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

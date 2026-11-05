@@ -1,0 +1,90 @@
+{
+  "params": {
+    "type": "21",
+    "_type": "11"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "type": 21,
+          "code": "NVDA",
+          "name": "英伟达",
+          "value": 83386.0,
+          "increment": 18,
+          "rank_change": 0,
+          "has_exist": null,
+          "symbol": "NVDA",
+          "percent": -3.1738,
+          "current": 200.13,
+          "chg": -6.56,
+          "exchange": "NASDAQ",
+          "stock_type": 0,
+          "sub_type": "257",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": 3,
+          "current_ext": 199.8,
+          "percent_ext": -0.164893
+        },
+        {
+          "type": 21,
+          "code": "AAPL",
+          "name": "苹果",
+          "value": 71046.0,
+          "increment": 179,
+          "rank_change": 0,
+          "has_exist": null,
+          "symbol": "AAPL",
+          "percent": 5.3058,
+          "current": 349.51,
+          "chg": 17.61,
+          "exchange": "NASDAQ",
+          "stock_type": 0,
+          "sub_type": "257",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": 3,
+          "current_ext": 350.99,
+          "percent_ext": 0.42345
+        },
+        {
+          "type": 21,
+          "code": "MU",
+          "name": "美光科技",
+          "value": 62608.0,
+          "increment": 48,
+          "rank_change": 0,
+          "has_exist": null,
+          "symbol": "MU",
+          "percent": -7.0015,
+          "current": 795.23,
+          "chg": -59.87,
+          "exchange": "NASDAQ",
+          "stock_type": 0,
+          "sub_type": "257",
+          "ad": 0,
+          "ad_id": null,
+          "content_id": null,
+          "page": null,
+          "model": null,
+          "location": null,
+          "trade_session": 3,
+          "current_ext": 776.0,
+          "percent_ext": -2.418168
+        }
+      ],
+      "items_size": 3
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

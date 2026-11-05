@@ -1,0 +1,62 @@
+{
+  "params": {
+    "fund_code": "008975"
+  },
+  "body": {
+    "data": {
+      "fund_code": "008975",
+      "annual_performance_list": [
+        {
+          "period_time": "成立以来",
+          "self_nav": "20.48",
+          "self_max_draw_down": "51.59%",
+          "standard_index_nav": "12.7901",
+          "standard_index_max_draw_down": "45.60%",
+          "self_nav_rank": "1253/4587"
+        },
+        {
+          "period_time": "今年以来",
+          "self_nav": "-4.6005226067",
+          "self_max_draw_down": "20.26%",
+          "standard_index_nav": "-11.417",
+          "standard_index_max_draw_down": "21.23%",
+          "self_nav_rank": "911/4587"
+        },
+        {
+          "period_time": "2025",
+          "self_nav": "0.99",
+          "self_max_draw_down": "7.74%",
+          "standard_index_nav": "17.66",
+          "standard_index_max_draw_down": "10.49%",
+          "self_nav_rank": "3402/3860"
+        }
+      ],
+      "stage_performance_list": [
+        {
+          "period_time": "近1月",
+          "self_nav": "7.2458607798",
+          "standard_index_nav": "-5.8812",
+          "standard_index_max_draw_down": "7.68%",
+          "self_nav_rank": "9/4521"
+        },
+        {
+          "period_time": "近3月",
+          "self_nav": "3.8620689655",
+          "self_max_draw_down": "5.57%",
+          "standard_index_nav": "-10.8585",
+          "standard_index_max_draw_down": "15.94%",
+          "self_nav_rank": "126/4317"
+        },
+        {
+          "period_time": "近6月",
+          "self_nav": "0.7610604667",
+          "self_max_draw_down": "14.01%",
+          "standard_index_nav": "-14.6853",
+          "standard_index_max_draw_down": "21.23%",
+          "self_nav_rank": "200/4059"
+        }
+      ]
+    },
+    "result_code": 0
+  }
+}

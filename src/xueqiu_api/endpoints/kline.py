@@ -60,6 +60,8 @@ class KlineParams(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_attribute_docstrings=True)
 
     symbol: SymbolCode
+    """Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as a stock, so
+    an index needs its prefix, as SH000001 does."""
     period: Period = "day"
     """1m to 120m are minute bars, kept upstream for about 3 trading days (1m) to about 6
     months (60m); day, week, month, quarter and year cover the full history."""

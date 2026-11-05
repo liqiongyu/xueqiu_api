@@ -1,0 +1,52 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "cubes": [
+        {
+          "name": "组合甲",
+          "percent": 5.97,
+          "desc": "近期调仓",
+          "symbol": "ZH0000001",
+          "cube_id": 1
+        }
+      ],
+      "items": [
+        {
+          "symbol": "SH601169",
+          "name": "北京银行",
+          "current": 5.85,
+          "percent": -0.17,
+          "tick_size": 0.01,
+          "type": 11,
+          "has_follow": false,
+          "list": []
+        },
+        {
+          "symbol": "SH601825",
+          "name": "沪农商行",
+          "current": 8.93,
+          "percent": -1.11,
+          "tick_size": 0.01,
+          "type": 11,
+          "has_follow": false,
+          "list": []
+        },
+        {
+          "symbol": "SH600016",
+          "name": "民生银行",
+          "current": 3.45,
+          "percent": 0.0,
+          "tick_size": 0.01,
+          "type": 11,
+          "has_follow": false,
+          "list": []
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -141,10 +141,30 @@ class UnknownEndpoint(XueqiuError):
     code = "unknown_endpoint"
 
 
+_OTHER_CODE_HINTS: Mapping[str, str] = MappingProxyType(
+    {
+        "fund_code": "A fund code is 6 digits, such as 008975. A fund that is not on sale may get "
+        "this answer too.",
+        "index_code": "An index code looks like SH000300, CSIH30269 or 935600.",
+        "cube_symbol": "A portfolio code is ZH plus digits, such as ZH2567925.",
+        "cube_symbols": "A portfolio code is ZH plus digits, such as ZH2567925.",
+    }
+)
+"""Default hint of a code that is no security code, by the name of its param."""
+
+
 class SymbolNotFound(XueqiuError):
-    """The code does not match a supported format, or the upstream has no such security."""
+    """The code does not match a supported format, or the upstream has no such security, fund,
+    index or portfolio."""
 
     code = "symbol_not_found"
+
+    def __init__(self, message: str, **details: Any) -> None:
+        super().__init__(message, **details)
+        if details.get("hint") is None:
+            for param, hint in _OTHER_CODE_HINTS.items():
+                if param in self.params:
+                    self.hint = hint
 
 
 class LoginRequired(XueqiuError):

@@ -1,0 +1,169 @@
+{
+  "params": {
+    "symbol": "SH600000",
+    "page": "1"
+  },
+  "body": {
+    "data": {
+      "items": [
+        [
+          {
+            "seq": 20300285,
+            "td_date": 1510243200000,
+            "rank_type": 1,
+            "info_type_name": "当日融资买入数量达到当日该证券总交易量的50％以上",
+            "trans_amt": 626756843.0,
+            "branches": [
+              {
+                "branch_id": "00000001",
+                "branch_name": "示例证券1",
+                "buy_amt": 315625623.72,
+                "sell_amt": 0.0,
+                "ratio": 50.36,
+                "net_amt": 315625623.72,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000002",
+                "branch_name": "示例证券2",
+                "buy_amt": 14044346.0,
+                "sell_amt": 0.0,
+                "ratio": 2.24,
+                "net_amt": 14044346.0,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000003",
+                "branch_name": "示例证券3",
+                "buy_amt": 12291277.0,
+                "sell_amt": 0.0,
+                "ratio": 1.96,
+                "net_amt": 12291277.0,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000004",
+                "branch_name": "示例证券4",
+                "buy_amt": 9749141.88,
+                "sell_amt": 0.0,
+                "ratio": 1.56,
+                "net_amt": 9749141.88,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000005",
+                "branch_name": "示例证券5",
+                "buy_amt": 6137512.0,
+                "sell_amt": 0.0,
+                "ratio": 0.98,
+                "net_amt": 6137512.0,
+                "branch_tag": null
+              }
+            ],
+            "buy_total": 357847900.6,
+            "sell_total": 0.0,
+            "chg": 0.64,
+            "net_buy": 357847900.6,
+            "ratio_total": 57.1,
+            "total_in": 357847900.6,
+            "total_out": 0.0,
+            "code_tag": null
+          }
+        ],
+        [
+          {
+            "seq": 20297375,
+            "td_date": 1506441600000,
+            "rank_type": 1,
+            "info_type_name": "当日融资买入数量达到当日该证券总交易量的50％以上",
+            "trans_amt": 339097277.0,
+            "branches": [
+              {
+                "branch_id": "00000001",
+                "branch_name": "示例证券1",
+                "buy_amt": 162644855.54,
+                "sell_amt": 0.0,
+                "ratio": 47.96,
+                "net_amt": 162644855.54,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000006",
+                "branch_name": "示例证券6",
+                "buy_amt": 22303968.19,
+                "sell_amt": 0.0,
+                "ratio": 6.58,
+                "net_amt": 22303968.19,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000007",
+                "branch_name": "示例证券7",
+                "buy_amt": 2607137.0,
+                "sell_amt": 0.0,
+                "ratio": 0.77,
+                "net_amt": 2607137.0,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000008",
+                "branch_name": "示例证券8",
+                "buy_amt": 2319339.0,
+                "sell_amt": 0.0,
+                "ratio": 0.68,
+                "net_amt": 2319339.0,
+                "branch_tag": null
+              },
+              {
+                "branch_id": "00000009",
+                "branch_name": "示例证券9",
+                "buy_amt": 2312913.0,
+                "sell_amt": 0.0,
+                "ratio": 0.68,
+                "net_amt": 2312913.0,
+                "branch_tag": null
+              }
+            ],
+            "buy_total": 192188212.73,
+            "sell_total": 0.0,
+            "chg": -0.08,
+            "net_buy": 192188212.73,
+            "ratio_total": 56.68,
+            "total_in": 192188212.73,
+            "total_out": 0.0,
+            "code_tag": null
+          },
+          {
+            "seq": 20297374,
+            "td_date": 1506441600000,
+            "rank_type": 1,
+            "info_type_name": "合成上榜原因",
+            "trans_amt": 339097277.0,
+            "branches": [
+              {
+                "branch_id": "00000010",
+                "branch_name": "示例证券10",
+                "buy_amt": 5000000.0,
+                "sell_amt": 0.0,
+                "ratio": 1.47,
+                "net_amt": 5000000.0,
+                "branch_tag": null
+              }
+            ],
+            "buy_total": 5000000.0,
+            "sell_total": 0.0,
+            "chg": -0.08,
+            "net_buy": 5000000.0,
+            "ratio_total": 1.47,
+            "total_in": 5000000.0,
+            "total_out": 0.0,
+            "code_tag": null
+          }
+        ]
+      ],
+      "items_size": 2
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

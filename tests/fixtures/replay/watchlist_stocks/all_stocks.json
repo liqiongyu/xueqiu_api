@@ -1,0 +1,16 @@
+{
+  "params": { "pid": -1, "category": 1, "size": 1000 },
+  "body": {
+    "data": {
+      "pid": -1,
+      "category": 1,
+      "stocks": [
+        { "symbol": "SH600000", "name": "浦发银行", "type": 11, "remark": "", "exchange": "SH", "created": 1700000000000 },
+        { "symbol": "SH510300", "name": "示例ETF", "type": 13, "remark": "", "exchange": "SH", "created": 1700000100000 },
+        { "symbol": "SZ000001", "name": "平安银行", "type": 11, "remark": "", "exchange": "SZ", "created": 1700000200000 }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

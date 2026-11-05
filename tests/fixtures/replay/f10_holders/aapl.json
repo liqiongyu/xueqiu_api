@@ -1,0 +1,65 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "splits": [
+        {
+          "explain": "每1.0股拆为4.0股",
+          "split_valid_date": 1598587200000,
+          "announcement_date": 1596081600000,
+          "exright_date": 1598846400000
+        },
+        {
+          "explain": "每1.0股拆为7.0股",
+          "split_valid_date": 1402027200000,
+          "announcement_date": 1398225600000,
+          "exright_date": 1402286400000
+        },
+        {
+          "explain": "每1.0股拆为2.0股",
+          "split_valid_date": 1109307600000,
+          "announcement_date": 1108098000000,
+          "exright_date": 1109566800000
+        }
+      ],
+      "holders": [
+        {
+          "chg": 7.43,
+          "share_held_num": 1415826462.0,
+          "reporter_name": "示例机构甲",
+          "total_held_ratio_dsclsr_value": 9.63
+        },
+        {
+          "chg": 0.0,
+          "share_held_num": 1043713019.0,
+          "reporter_name": "示例机构乙",
+          "total_held_ratio_dsclsr_value": 7.1
+        }
+      ],
+      "sharechg": [
+        {
+          "chg_date": 1792728000000,
+          "total_shares": 14532182000.0,
+          "common_shares_num": 14532182000.0,
+          "chg_reason_explain": null
+        },
+        {
+          "chg_date": 1790395200000,
+          "total_shares": 14532259000.0,
+          "common_shares_num": 14532259000.0,
+          "chg_reason_explain": "合成变动原因\r\n第二行"
+        },
+        {
+          "chg_date": 1784260800000,
+          "total_shares": 14594180000.0,
+          "common_shares_num": 14594180000.0,
+          "chg_reason_explain": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -16,7 +16,8 @@ ENDPOINT = finance_endpoint(
         title_en="Cash flow statement",
         summary=(
             "取 A 股、港股或美股公司的现金流量表，每个科目给本期值和同比，"
-            "可选全部报告期或只取年报。"
+            "可选全部报告期或只取年报，"
+            "港股键 nocf 经营、ninvcf 投资、nfcgcf 筹资、icdccceq 现金增加。"
         ),
         keywords=(
             "现金流量表",
@@ -37,6 +38,17 @@ ENDPOINT = finance_endpoint(
             "ncf_from_fa",
             "net_increase_in_cce",
         ),
+        market_fields={
+            "HK": ("report_date", "report_name", "nocf", "ninvcf", "nfcgcf", "icdccceq"),
+            "US": (
+                "report_date",
+                "report_name",
+                "net_cash_provided_by_oa",
+                "net_cash_used_in_ia",
+                "net_cash_used_in_fa",
+                "increase_in_cce",
+            ),
+        },
         row_default=MAX_COUNT,
         row_cap=MAX_COUNT,
         upstream_cap=MAX_COUNT,

@@ -1,0 +1,41 @@
+{
+  "params": {
+    "market": "CN",
+    "ind_code": "S6308",
+    "order_by": "symbol",
+    "order": "asc"
+  },
+  "body": {
+    "data": {
+      "count": 109,
+      "list": [
+        {
+          "symbol": "SH600001",
+          "name": "示例电网甲",
+          "type": 11,
+          "current": 25.78,
+          "percent": 20.02,
+          "chg": 4.3,
+          "amount": 483203573.86,
+          "volume": 21316327,
+          "issue_date_ts": null,
+          "has_follow": false
+        },
+        {
+          "symbol": "SZ000001",
+          "name": "示例电网乙",
+          "type": 11,
+          "current": 25.78,
+          "percent": 20.02,
+          "chg": 4.3,
+          "amount": 483203573.86,
+          "volume": 21316327,
+          "issue_date_ts": null,
+          "has_follow": false
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

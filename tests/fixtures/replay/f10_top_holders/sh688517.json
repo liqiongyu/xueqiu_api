@@ -1,0 +1,60 @@
+{
+  "params": {
+    "symbol": "SH688517"
+  },
+  "body": {
+    "data": {
+      "times": [
+        {
+          "name": "2026三季报",
+          "value": 1790697600000
+        },
+        {
+          "name": "2026中报",
+          "value": 1782748800000
+        }
+      ],
+      "total": {
+        "chg": -0.92,
+        "held_num": 74805011,
+        "held_ratio": 54.76
+      },
+      "quit": [
+        {
+          "held_num": 1838534,
+          "held_ratio": 1.35,
+          "holder_rank": 5,
+          "holder_name": "示例退出股东一"
+        },
+        {
+          "held_num": 1592503,
+          "held_ratio": 1.17,
+          "holder_rank": 8,
+          "holder_name": "示例退出股东二"
+        }
+      ],
+      "items": [
+        {
+          "chg": 0.0,
+          "held_num": 55020289,
+          "held_ratio": 40.27,
+          "holder_name": "示例股东一"
+        },
+        {
+          "chg": 55.04,
+          "held_num": 1450191,
+          "held_ratio": 1.06,
+          "holder_name": "示例股东二"
+        },
+        {
+          "chg": null,
+          "held_num": 1141826,
+          "held_ratio": 0.84,
+          "holder_name": "示例股东三"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

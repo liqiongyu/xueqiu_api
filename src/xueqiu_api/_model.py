@@ -14,19 +14,19 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from ._values import Number
 
 USER_KEY = re.compile(
-    r"^(users?|uid|user_?id|screen_name|nick_?name|avatar\w*|profile_image\w*|comments?"
-    r"|owner\w*|contractor\w*)$",
+    r"user(?!_rb)|(^|_)uid(_|$)|screen_?name|nick_?name|avatar|profile_image|photo_domain|comment"
+    r"|retweet|(^|_)owner|(^|_)contractor",
     re.IGNORECASE,
 )
-"""Upstream keys that name a user; never kept in a result, a fixture or a model field."""
+"""Upstream keys that name a user or carry a post, under any prefix or suffix; never kept in a
+result, a fixture or a model field. ``last_user_rb_gid`` is a rebalancing id, so it stays."""
 
 Order = Literal["asc", "desc"]
 """Sort direction of a list parameter."""
 
 
+# Params of an endpoint that takes none.
 class NoParams(BaseModel):
-    """Params of an endpoint that takes none."""
-
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
@@ -36,7 +36,7 @@ def without_keys(value: Any, drop: frozenset[str] = frozenset()) -> Any:
         return {
             key: without_keys(item, drop)
             for key, item in cast(dict[Any, Any], value).items()
-            if not (key in drop or (isinstance(key, str) and USER_KEY.match(key)))
+            if not (key in drop or (isinstance(key, str) and USER_KEY.search(key)))
         }
     if isinstance(value, list):
         return [without_keys(item, drop) for item in cast(list[Any], value)]

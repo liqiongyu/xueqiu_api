@@ -1,0 +1,31 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "explain": "每股分配0.27美元",
+          "announcement_date": 1793595600000,
+          "exright_date": 1794459600000,
+          "dividend_date": 1794805200000
+        },
+        {
+          "explain": "每股分配0.27美元",
+          "announcement_date": 1785384000000,
+          "exright_date": 1786334400000,
+          "dividend_date": 1786593600000
+        },
+        {
+          "explain": "每股分配0.27美元",
+          "announcement_date": 1777521600000,
+          "exright_date": 1778472000000,
+          "dividend_date": 1778731200000
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "personal_name": "示例董事长",
+          "position_name": "董事长、执行董事",
+          "employ_date": 1707235200000,
+          "employ_ed": null,
+          "resume_cn": "合成简历一",
+          "held_num": null,
+          "annual_salary": 900000.0
+        },
+        {
+          "personal_name": "示例副董事长",
+          "position_name": "副董事长、执行董事",
+          "employ_date": 1727625600000,
+          "employ_ed": null,
+          "resume_cn": "合成简历二",
+          "held_num": 200000,
+          "annual_salary": null
+        },
+        {
+          "personal_name": "示例独立董事",
+          "position_name": "独立董事",
+          "employ_date": 1788192000000,
+          "employ_ed": null,
+          "resume_cn": "合成简历三",
+          "held_num": null,
+          "annual_salary": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

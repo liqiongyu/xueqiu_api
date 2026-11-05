@@ -1,0 +1,25 @@
+{
+  "params": {
+    "category": "US",
+    "page": "1"
+  },
+  "body": {
+    "data": {
+      "count": 9124,
+      "list": [
+        {
+          "pct": -3.77,
+          "symbol": "INTC",
+          "current": 58.27,
+          "follow7d": 8921.0,
+          "name": "英特尔",
+          "type": 0,
+          "tick_size": 0.01,
+          "has_follow": false
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

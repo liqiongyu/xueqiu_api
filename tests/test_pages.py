@@ -369,6 +369,33 @@ def test_shift_between_pages_dedupes_and_loses_nothing(h: Harness) -> None:
     assert set(got) == set(row_ids(data))
 
 
+def test_a_last_page_of_known_rows_ends_the_walk(h: Harness) -> None:
+    moved = [{"data": {"count": 3, "list": rows(2)}, "error_code": 0}]
+    moved.append({"data": {"count": 3, "list": rows(1, start=1)}, "error_code": 0})
+    h.upstream.route(STOCK, "/screener.json", *(json_reply(body) for body in moved))
+
+    pages, exc = h.walk(SCREENER, page_size=2)
+
+    assert exc is None and ids(pages) == ["r00000", "r00001"]
+    assert pages[-1].next_params is None
+
+
+def test_a_middle_page_of_known_rows_does_not_stop_the_walk(h: Harness) -> None:
+    bodies = [
+        {"count": 5, "list": rows(2)},
+        {"count": 5, "list": [{"id": "r00001"}, {"id": "r00000"}]},
+        {"count": 5, "list": rows(1, start=4)},
+    ]
+    h.upstream.route(
+        STOCK, "/screener.json", *(json_reply({"data": b, "error_code": 0}) for b in bodies)
+    )
+
+    pages, exc = h.walk(SCREENER, page_size=2)
+
+    assert exc is None and ids(pages) == ["r00000", "r00001", "r00004"]
+    assert [len(page) for page in pages] == [2, 0, 1]
+
+
 def test_page_parameter_ignored_raises(h: Harness) -> None:
     h.upstream.route(
         STOCK, "/margin.json", json_reply({"data": {"items": rows(100)}, "error_code": 0})

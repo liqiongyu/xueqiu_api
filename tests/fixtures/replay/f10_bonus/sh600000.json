@@ -1,0 +1,55 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "addtions": [
+        {
+          "actual_issue_vol": 1248316498.0,
+          "actual_issue_price": 11.88,
+          "listing_ad": 1504627200000,
+          "actual_rc_net_amt": 14816552046.0
+        },
+        {
+          "actual_issue_vol": 999510332.0,
+          "actual_issue_price": 16.36,
+          "listing_ad": 1458576000000,
+          "actual_rc_net_amt": 16351989024.0
+        },
+        {
+          "actual_issue_vol": 2869764833.0,
+          "actual_issue_price": 13.75,
+          "listing_ad": 1287158400000,
+          "actual_rc_net_amt": 39199464245.0
+        }
+      ],
+      "allots": [],
+      "items": [
+        {
+          "dividend_year": "2025年报",
+          "ashare_ex_dividend_date": 1784131200000,
+          "equity_date": 1784044800000,
+          "plan_explain": "10派4.2元(实施方案)",
+          "cancle_dividend_date": null
+        },
+        {
+          "dividend_year": "2024年报",
+          "ashare_ex_dividend_date": 1752595200000,
+          "equity_date": 1752508800000,
+          "plan_explain": "10派4.1元(实施方案)",
+          "cancle_dividend_date": null
+        },
+        {
+          "dividend_year": "2023年报",
+          "ashare_ex_dividend_date": 1721232000000,
+          "equity_date": 1721145600000,
+          "plan_explain": "10派3.21元(实施方案)",
+          "cancle_dividend_date": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

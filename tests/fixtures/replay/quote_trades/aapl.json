@@ -1,0 +1,62 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "symbol": "AAPL",
+      "items": [
+        {
+          "symbol": "AAPL",
+          "timestamp": 1793806098975,
+          "current": 353.0874,
+          "chg": 21.187,
+          "percent": 6.38,
+          "trade_volume": 1,
+          "side": 1,
+          "level": 3,
+          "trade_session": 2,
+          "trade_type": "I_ODD_LOT_TRADE",
+          "trade_unique_id": "lt_3784750",
+          "bid_appl_seq_num": null,
+          "offer_appl_seq_num": null,
+          "trade_type_v2": null
+        },
+        {
+          "symbol": "AAPL",
+          "timestamp": 1793806098975,
+          "current": 353.0874,
+          "chg": 21.187,
+          "percent": 6.38,
+          "trade_volume": 1,
+          "side": 1,
+          "level": 3,
+          "trade_session": 2,
+          "trade_type": "I_ODD_LOT_TRADE",
+          "trade_unique_id": "lt_3784752",
+          "bid_appl_seq_num": null,
+          "offer_appl_seq_num": null,
+          "trade_type_v2": null
+        },
+        {
+          "symbol": "AAPL",
+          "timestamp": 1793806099009,
+          "current": 353.0,
+          "chg": 21.1,
+          "percent": 6.3573,
+          "trade_volume": 200,
+          "side": 0,
+          "level": 3,
+          "trade_session": 2,
+          "trade_type": null,
+          "trade_unique_id": "lt_3784762",
+          "bid_appl_seq_num": null,
+          "offer_appl_seq_num": null,
+          "trade_type_v2": null
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "params": { "cube_symbol": "ZH2567925", "type": "max_draw" },
+  "body": {
+    "symbol": "ZH2567925",
+    "max_draw": -0.3841431219374203,
+    "begin_time": 1624869867485,
+    "end_time": 1665479506604,
+    "begin_date": "2021-06-28",
+    "end_date": "2022-10-11",
+    "level": -1
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "params": {
+    "symbol": "SH600000",
+    "period": "5d"
+  },
+  "body": {
+    "data": {
+      "last_close": 9.85,
+      "after": [],
+      "items": [
+        {
+          "current": 9.89,
+          "volume": 1407000,
+          "avg_price": 9.88,
+          "chg": 0.04,
+          "percent": 0.41,
+          "timestamp": 1793237400000,
+          "amount": 13901009.0,
+          "high": 9.9,
+          "low": 9.86,
+          "amount_total": 13901009.0,
+          "volume_total": 1407000,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 1407000,
+            "volume_sum_last": 2118730
+          }
+        },
+        {
+          "current": 9.85,
+          "volume": 4927100,
+          "avg_price": 9.89,
+          "chg": 0.0,
+          "percent": 0.0,
+          "timestamp": 1793238000000,
+          "amount": 3738566.0,
+          "high": 9.87,
+          "low": 9.85,
+          "amount_total": 66390066.0,
+          "volume_total": 6713113,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 6334100,
+            "volume_sum_last": 10664430
+          }
+        },
+        {
+          "current": 9.84,
+          "volume": 3466500,
+          "avg_price": 9.88,
+          "chg": -0.01,
+          "percent": -0.1,
+          "timestamp": 1793238600000,
+          "amount": 5714648.0,
+          "high": 9.87,
+          "low": 9.84,
+          "amount_total": 106311063.0,
+          "volume_total": 10759813,
+          "macd": null,
+          "kdj": null,
+          "ratio": null,
+          "capital": null,
+          "volume_compare": {
+            "volume_sum": 9800600,
+            "volume_sum_last": 21289530
+          }
+        }
+      ],
+      "items_size": 130
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

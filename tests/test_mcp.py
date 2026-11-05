@@ -88,7 +88,7 @@ SUGGEST = "/query/v1/suggest_stock.json"
 QUOTEC = "/v5/stock/realtime/quotec.json"
 INCOME = "/v5/stock/finance/cn/income.json"
 F10 = "/v5/stock/f10/cn/company.json"
-TOKEN = "fake-token"
+TOKEN = "xq_a_token=fake-token; u=fake-u"
 CJK = re.compile(r"[一-鿿]")
 BAR_COLUMNS = [
     "timestamp",
@@ -410,13 +410,15 @@ async def test_tool_definitions_pass_the_lint(connect: Connect, exclude: tuple[s
         assert tool.output_schema is None
         assert references(description + json.dumps(schema, ensure_ascii=False)) <= names
     assert len(instructions) <= 3500
-    assert instructions.startswith(INSTRUCTIONS_PREFIX) and instructions.endswith(DISCLAIMER)
     assert references(instructions) <= names
     enabled = [
         spec
         for spec in REGISTRY.values()
         if not any(fnmatch.fnmatchcase(spec.name, p) for p in exclude)
+        and ("xq_call" in names or spec.agent.mcp_tool in names)
     ]
+    if any(spec.host == "danjuanfunds.com" for spec in enabled):
+        assert instructions.startswith(INSTRUCTIONS_PREFIX) and instructions.endswith(DISCLAIMER)
     title_line = instructions.splitlines()[0]
     assert len(title_line) <= TITLE_LINE_CHARS
     assert all(spec.agent.title_zh in title_line for spec in enabled)
@@ -871,9 +873,9 @@ async def test_endpoint_details_fit_the_smallest_budget(connect: Connect) -> Non
 @pytest.mark.anyio
 async def test_a_cut_catalog_continues_with_the_rows_left_out() -> None:
     async with AsyncClient(session_path=Path(os.devnull)) as client:
-        toolbox = Toolbox(McpOptions(max_chars=300), client=client, now=lambda: NOW)
+        toolbox = Toolbox(McpOptions(max_chars=400), client=client, now=lambda: NOW)
         summary, summary_error = await toolbox.call("xq_endpoints", {})
-        toolbox = Toolbox(McpOptions(max_chars=450), client=client, now=lambda: NOW)
+        toolbox = Toolbox(McpOptions(max_chars=500), client=client, now=lambda: NOW)
         rows, rows_error = await toolbox.call("xq_endpoints", {"category": "finance"})
 
     categories = [line.split(",")[0] for line in body_lines(summary)[1:]]
@@ -906,7 +908,7 @@ async def test_endpoint_catalog_and_details_never_show_upstream_paths(connect: C
     assert "rows=0" in nothing and "# note: no endpoint matches" in nothing
     for name in REGISTRY:
         assert any(f"# endpoint {name}: " in text for text in details)
-    assert "param period: one of 1m, 5m, 15m" in "".join(details)
+    assert 'param period: one of "1m", "5m", "15m"' in "".join(details)
     assert "before (前复权, forward-adjusted)" in "".join(details)
 
 
@@ -1062,9 +1064,71 @@ async def test_statements_show_yoy_columns_and_note_missing_default_fields(
     )
     assert body_lines(shanghai)[1].startswith("2026-09-30,2026三季报,138133000000,4.4247,")
     assert "# statement: name=浦发银行 currency=CNY" in shanghai
-    assert "# note: default fields missing here: op, net_profit" in apple
-    assert "available: report_date, report_name, gross_profit" in apple
-    assert body_lines(apple)[0] == "report_date,report_name,total_revenue,total_revenue.yoy"
+    assert "default fields missing" not in apple
+    assert body_lines(apple)[0].startswith(
+        "report_date,report_name,total_revenue,total_revenue.yoy,operating_income,"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("name", "symbol", "columns"),
+    [
+        ("finance_balance", "00700", ("ta", "tlia", "teqy", "tlia_ta")),
+        ("finance_balance", "AAPL", ("total_assets", "total_liab", "total_holders_equity")),
+        ("finance_income", "00700", ("tto", "gp", "plocyr", "ploashh", "beps_aju")),
+        ("finance_income", "AAPL", ("total_revenue", "operating_income", "net_income")),
+        ("finance_cash_flow", "00700", ("nocf", "ninvcf", "nfcgcf", "icdccceq")),
+        ("finance_cash_flow", "AAPL", ("net_cash_provided_by_oa", "net_cash_used_in_ia")),
+        ("finance_indicator", "00700", ("beps", "roe", "gpm", "tlia_ta")),
+        ("finance_indicator", "AAPL", ("basic_eps", "roe_avg", "net_sales_rate")),
+    ],
+)
+async def test_statements_of_every_market_show_figures_by_default(
+    connect: Connect, name: str, symbol: str, columns: tuple[str, ...]
+) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_call", {"endpoint": name, "params": {"symbol": symbol}})
+
+    header = body_lines(text)[0].split(",")
+    assert all(column in header and f"{column}.yoy" in header for column in columns)
+    assert "default fields missing" not in text
+
+
+@pytest.mark.anyio
+async def test_details_name_the_default_fields_of_each_market_and_how_to_list_the_rest(
+    connect: Connect,
+) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"name": ["finance_balance"]})
+
+    assert "fields of HK: default report_date, report_name, ta, tlia, teqy, tlia_ta" in text
+    assert "an unknown name in fields returns the others in valid_values" in text
+
+
+@pytest.mark.anyio
+async def test_a_wrong_field_of_a_wide_statement_keeps_the_defaults_and_counts_the_rest(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    items = {f"long_tail_item_{index:03d}": [1.0, 0.1] for index in range(90)}
+    row = {"report_date": 1790697600000, "report_name": "2026三季报", **items}
+    row |= {"total_assets": [1.0, 0.1], "total_liab": [1.0, 0.1], "st_loan": [1.0, 0.1]}
+    upstream.route(
+        STOCK,
+        "/v5/stock/finance/cn/balance.json",
+        json_reply({"data": {"list": [row]}, "error_code": 0}),
+    )
+    arguments = {
+        "endpoint": "finance_balance",
+        "params": {"symbol": "SH600000"},
+        "fields": ["总资产"],
+    }
+    async with connect(replay=False) as client:
+        payload = await fail(client, "xq_call", arguments)
+
+    shown = payload["valid_values"]
+    assert shown[:4] == ["report_date", "report_name", "total_assets", "total_liab"]
+    assert f"valid_values shows {len(shown)} of 95." in payload["hint"]
 
 
 # Errors
@@ -1450,6 +1514,81 @@ async def test_bad_arguments_are_error_results(
         assert payload["candidates"][: len(candidates)] == candidates
     if code == "symbol_not_found":
         assert "Use xq_search" in payload["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("name", "params", "path", "body", "start", "lookup"),
+    [
+        (
+            "fund_info",
+            {"fund_code": "000000"},
+            "/djapi/fund/000000",
+            {"result_code": 600001, "message": "示例说明"},
+            "A fund code is 6 digits",
+            "fund_search finds a fund",
+        ),
+        (
+            "index_valuation",
+            {"index_code": "SH999999"},
+            "/djapi/index_eva/detail/SH999999",
+            {"result_code": 0},
+            "An index code looks like SH000300",
+            "index_valuation_list lists them.",
+        ),
+    ],
+)
+async def test_an_unknown_code_of_another_kind_gets_a_hint_of_its_kind(
+    connect: Connect,
+    upstream: FakeUpstream,
+    name: str,
+    params: dict[str, str],
+    path: str,
+    body: dict[str, Any],
+    start: str,
+    lookup: str,
+) -> None:
+    upstream.route("danjuanfunds.com", path, json_reply(body))
+    async with connect(replay=False) as client:
+        payload = await fail(client, "xq_call", {"endpoint": name, "params": params})
+
+    assert payload["error_code"] == "symbol_not_found"
+    assert payload["hint"].startswith(start) and lookup in payload["hint"]
+    assert "xq_search" not in payload["hint"] and "A shares" not in payload["hint"]
+
+
+@pytest.mark.anyio
+async def test_an_unknown_portfolio_gets_no_lookup_it_cannot_follow(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    body = {
+        "error_description": "示例说明",
+        "error_uri": "/cubes/quote.json",
+        "error_code": "20809",
+    }
+    upstream.route(WWW, "/cubes/quote.json", json_reply(body, 400))
+    arguments = {"endpoint": "cube_quote", "params": {"cube_symbols": ["ZH0000000"]}}
+    async with connect(replay=False) as client:
+        payload = await fail(client, "xq_call", arguments)
+
+    assert payload["hint"] == "A portfolio code is ZH plus digits, such as ZH2567925."
+
+
+@pytest.mark.anyio
+async def test_an_unknown_fund_names_no_lookup_that_is_excluded(
+    connect: Connect, upstream: FakeUpstream
+) -> None:
+    upstream.route(
+        "danjuanfunds.com",
+        "/djapi/fund/000000",
+        json_reply({"result_code": 600001, "message": "示例说明"}),
+    )
+    arguments = {"endpoint": "fund_info", "params": {"fund_code": "000000"}}
+    async with connect(replay=False, exclude=("fund_search",)) as client:
+        payload = await fail(client, "xq_call", arguments)
+
+    assert payload["hint"].startswith("A fund code is 6 digits")
+    assert "fund_search" not in payload["hint"]
 
 
 @pytest.mark.anyio
@@ -2366,6 +2505,114 @@ async def test_one_more_endpoint_adds_one_enum_line_and_changes_the_first_instru
     assert instructions_after[1:] == instructions_before[1:]
     assert spec.agent.title_zh in instructions_after[0]
     assert spec.agent.title_zh not in instructions_before[0]
+
+
+@pytest.mark.anyio
+async def test_without_xq_call_the_catalog_lists_only_what_a_tool_can_reach(
+    connect: Connect,
+) -> None:
+    async with connect(exclude=("xq_call",)) as client:
+        summary = await call(client, "xq_endpoints")
+        kline = await call(client, "xq_endpoints", {"name": ["kline"]})
+        hidden = await fail(client, "xq_endpoints", {"name": ["finance_income"]})
+        instructions = client.instructions or ""
+        example = next(line for line in kline.splitlines() if line.startswith("example: "))
+        copied = await call_raw(
+            client, "xq_kline", json.loads(example.removeprefix("example: xq_kline "))
+        )
+
+    assert "endpoints=3" in summary
+    assert summary_names(summary) == ["batch_quote", "kline", "suggest_stock"]
+    assert hidden["error_code"] == "disabled_by_config"
+    assert not copied[1], copied[0]
+    assert "其他数据" not in instructions
+    assert "端点的参数和上限用 xq_endpoints 查。" in instructions
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("name", "wording"),
+    [("cube_rank_list", "chosen by page in params"), ("fund_rank", "chosen by page and page_size")],
+)
+async def test_details_name_the_paging_params_the_endpoint_has(
+    connect: Connect, name: str, wording: str
+) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"name": [name]})
+
+    assert wording in text
+
+
+@pytest.mark.anyio
+async def test_details_print_a_text_enum_so_that_it_reads_as_text(connect: Connect) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"name": ["fund_rank"]})
+
+    assert 'param fund_type: one of "1", "3", "2", "5", "11"' in text
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("exclude", "gone", "kept"),
+    [
+        (
+            ("fund_*", "index_*", "cube_*", "watchlist_*"),
+            ("蛋卷", "组合", "fund_code", "cube_symbol", "danjuan", "XUEQIU_TOKEN"),
+            ("雪球", "stock.xueqiu.com"),
+        ),
+        (("fund_*", "index_*"), ("蛋卷", "fund_code", "danjuan"), ("cube_symbol", "XUEQIU_TOKEN")),
+        (("cube_*", "watchlist_*"), ("cube_symbol", "XUEQIU_TOKEN"), ("fund_code", "蛋卷")),
+    ],
+)
+async def test_the_instructions_mention_only_the_data_that_is_enabled(
+    connect: Connect, exclude: tuple[str, ...], gone: tuple[str, ...], kept: tuple[str, ...]
+) -> None:
+    async with connect(exclude=exclude) as client:
+        instructions = client.instructions or ""
+
+    for word in gone:
+        assert word not in instructions, word
+    for word in kept:
+        assert word in instructions, word
+    assert "  " not in instructions
+
+
+@pytest.mark.anyio
+async def test_the_full_instructions_still_mention_every_kind_of_code(connect: Connect) -> None:
+    async with connect() as client:
+        instructions = client.instructions or ""
+
+    assert "基金和组合不是证券代码，有各自的参数：fund_code" in instructions
+    assert "cube_symbol 是 ZH 加数字" in instructions
+    assert "和蛋卷 danjuanfunds.com 每秒 1 次" in instructions
+    assert "设置 XUEQIU_TOKEN" in instructions
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("name", "params", "shown"),
+    [
+        ("quote_detail", {"symbol": "SH600000"}, ("pe_ttm: ", "pb: ", "dividend_yield: ")),
+        ("search_stock", {"query": "浦发银行"}, ("name_en",)),
+        ("fund_derived", {"fund_code": "008975"}, ("aip_return_1y_pct: ",)),
+        ("fund_info", {"fund_code": "008975"}, ("custodian: ",)),
+    ],
+)
+async def test_the_default_columns_hold_what_the_summary_promises(
+    connect: Connect, name: str, params: dict[str, str], shown: tuple[str, ...]
+) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_call", {"endpoint": name, "params": params})
+
+    assert all(column in text for column in shown)
+
+
+@pytest.mark.anyio
+async def test_the_ranking_word_finds_the_hot_stocks(connect: Connect) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"query": "榜单"})
+
+    assert "market_hot_stocks" in text
 
 
 def test_grouped_tools_report() -> None:

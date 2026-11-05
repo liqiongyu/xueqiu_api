@@ -1,6 +1,7 @@
 {
   "xq_capital": {
     "params": [
+      "count",
       "page",
       "page_size",
       "symbol"
@@ -10,6 +11,10 @@
   },
   "xq_company": {
     "params": [
+      "count",
+      "page",
+      "page_size",
+      "report_date",
       "symbol"
     ],
     "over_8_params": false,
@@ -19,10 +24,22 @@
     "params": [
       "begin",
       "cube_symbol",
-      "end"
+      "cube_symbols",
+      "end",
+      "page",
+      "page_size"
     ],
     "over_8_params": false,
-    "mixed_types": {}
+    "mixed_types": {
+      "page": {
+        "{\"maximum\":5,\"minimum\":1,\"type\":\"integer\"}": [
+          "cube_rank_list"
+        ],
+        "{\"minimum\":1,\"type\":\"integer\"}": [
+          "cube_rebalancing_history"
+        ]
+      }
+    }
   },
   "xq_financials": {
     "params": [
@@ -37,8 +54,69 @@
   "xq_fund": {
     "params": [
       "fund_code",
+      "fund_type",
+      "order_by",
       "page",
-      "page_size"
+      "page_size",
+      "period",
+      "query"
+    ],
+    "over_8_params": false,
+    "mixed_types": {
+      "page_size": {
+        "{\"maximum\":2000,\"minimum\":1,\"type\":\"integer\"}": [
+          "fund_nav_history"
+        ],
+        "{\"maximum\":100,\"minimum\":1,\"type\":\"integer\"}": [
+          "fund_rank"
+        ]
+      }
+    }
+  },
+  "xq_intraday": {
+    "params": [
+      "count",
+      "days",
+      "symbol"
+    ],
+    "over_8_params": false,
+    "mixed_types": {}
+  },
+  "xq_market": {
+    "params": [
+      "begin",
+      "board",
+      "count",
+      "end",
+      "ind_code",
+      "index_code",
+      "market",
+      "order",
+      "order_by",
+      "page",
+      "page_size",
+      "period",
+      "region",
+      "symbol",
+      "window"
+    ],
+    "over_8_params": true,
+    "mixed_types": {
+      "page_size": {
+        "{\"maximum\":50,\"minimum\":1,\"type\":\"integer\"}": [
+          "screener_events"
+        ],
+        "{\"maximum\":100,\"minimum\":1,\"type\":\"integer\"}": [
+          "screener_popularity_rank",
+          "screener_quote_list"
+        ]
+      }
+    }
+  },
+  "xq_watchlist": {
+    "params": [
+      "category",
+      "pid"
     ],
     "over_8_params": false,
     "mixed_types": {}

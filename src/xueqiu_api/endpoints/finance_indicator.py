@@ -16,7 +16,8 @@ ENDPOINT = finance_endpoint(
         title_en="Financial indicators",
         summary=(
             "取 A 股、港股或美股公司的主要财务指标，如每股收益、净资产收益率和资产负债率，"
-            "每项给本期值和同比。"
+            "每项给本期值和同比，"
+            "港股键 beps 每股收益、roe 净资产收益率、gpm 毛利率、tlia_ta 负债率。"
         ),
         keywords=(
             "财务指标",
@@ -39,6 +40,18 @@ ENDPOINT = finance_endpoint(
             "net_selling_rate",
             "asset_liab_ratio",
         ),
+        market_fields={
+            "HK": ("report_date", "report_name", "beps", "roe", "gpm", "tlia_ta"),
+            "US": (
+                "report_date",
+                "report_name",
+                "basic_eps",
+                "roe_avg",
+                "gross_selling_rate",
+                "net_sales_rate",
+                "asset_liab_ratio",
+            ),
+        },
         row_default=MAX_COUNT,
         row_cap=MAX_COUNT,
         upstream_cap=MAX_COUNT,

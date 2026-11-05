@@ -1,0 +1,50 @@
+{
+  "params": {
+    "code": "SH600000"
+  },
+  "body": {
+    "stockname": "",
+    "platename": "银行",
+    "industrystocks": [
+      {
+        "symbol": "02888",
+        "code": "02888",
+        "name": "渣打集团",
+        "exchange": "HK",
+        "current": "219.4",
+        "percentage": "2.81",
+        "change": "6.0",
+        "volume": "1043575",
+        "pe_ttm": "",
+        "marketCapital": "4.75476923138E11"
+      },
+      {
+        "symbol": "00023",
+        "code": "00023",
+        "name": "东亚银行",
+        "exchange": "HK",
+        "current": "17.15",
+        "percentage": "2.51",
+        "change": "0.42",
+        "volume": "1733459",
+        "pe_ttm": "14.34",
+        "marketCapital": "4.5522467126E10"
+      },
+      {
+        "symbol": "00302",
+        "code": "00302",
+        "name": "中手游",
+        "exchange": "HK",
+        "current": "0.169",
+        "percentage": "2.42",
+        "change": "0.004",
+        "volume": "328000",
+        "pe_ttm": "16.98",
+        "marketCapital": "5.27003617E8"
+      }
+    ],
+    "exchange": "CN",
+    "code": "SH600000",
+    "industryname": "银行"
+  }
+}

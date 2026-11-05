@@ -1,0 +1,52 @@
+{
+  "params": {
+    "symbol": "SH600000",
+    "circula": "1"
+  },
+  "body": {
+    "data": {
+      "times": [
+        {
+          "name": "2026三季报",
+          "value": 1790697600000
+        },
+        {
+          "name": "2026中报",
+          "value": 1782748800000
+        },
+        {
+          "name": "2026一季报",
+          "value": 1774886400000
+        }
+      ],
+      "total": {
+        "chg": -0.25,
+        "held_num": 24873575418,
+        "held_ratio": 74.6823
+      },
+      "quit": [],
+      "items": [
+        {
+          "chg": 0.0,
+          "held_num": 7086834641,
+          "held_ratio": 21.28,
+          "holder_name": "上海国际集团有限公司"
+        },
+        {
+          "chg": 0.0,
+          "held_num": 6053495450,
+          "held_ratio": 18.18,
+          "holder_name": "中国移动通信集团广东有限公司"
+        },
+        {
+          "chg": 0.0,
+          "held_num": 2779437274,
+          "held_ratio": 8.35,
+          "holder_name": "富德生命人寿保险股份有限公司-传统"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

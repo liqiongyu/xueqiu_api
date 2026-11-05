@@ -299,7 +299,8 @@ def test_doctor_reports_a_blocked_host_and_sends_nothing_more_to_it(
     for name in later:
         assert rows[name]["elapsed_s"] == 0.0
         assert rows[name]["error"]["message"] == "circuit breaker open for stock.xueqiu.com"
-        assert rows[name]["error"]["retry_after_s"] == 300.0
+        # The cooldown runs down while checks on other hosts wait for their rate limit slots.
+        assert 0 < rows[name]["error"]["retry_after_s"] <= 300.0
     payload = error_json(err)
     assert code == ERROR_TABLE["blocked"].exit_code
     assert (payload["error_code"], payload["endpoint"]) == ("blocked", "f10_company")

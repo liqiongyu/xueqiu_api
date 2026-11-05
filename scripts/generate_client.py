@@ -175,7 +175,7 @@ def _docstring(spec: Endpoint[Any, Any], *, pages: bool) -> list[str]:
     if pages:
         first = f"Every page of ``{spec.name}``, one request each. {first}"
     lines = textwrap.wrap(first, 90)
-    if spec.params.__module__.endswith(f".{spec.name}") and spec.params.__doc__:
+    if spec.params.__doc__:
         lines += ["", *(line.strip() for line in spec.params.__doc__.strip().splitlines())]
     args = {
         name: " ".join((field.description or "").split())

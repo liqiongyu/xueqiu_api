@@ -1,0 +1,97 @@
+{
+  "params": {
+    "fund_code": "008975"
+  },
+  "body": {
+    "data": {
+      "source": "2026-09-30",
+      "source_mark": "2026-09-30",
+      "stock_percent": 0.72,
+      "cash_percent": 11.61,
+      "bond_percent": 6.48,
+      "other_percent": 99.48,
+      "stock_list": [
+        {
+          "name": "贵州茅台",
+          "code": "600519",
+          "percent": 0.17,
+          "current_price": 1446.44,
+          "change_percentage": -2.27,
+          "xq_symbol": "SH600519",
+          "xq_url": "https://xueqiu.com/S/SH600519",
+          "change_of_pre_quarter": "0.05%",
+          "change_of_pre_quarter_type": 1,
+          "industry_label": "食品饮料",
+          "percent_double": 0.17,
+          "amarket": true
+        },
+        {
+          "name": "伊利股份",
+          "code": "600887",
+          "percent": 0.14,
+          "current_price": 30.71,
+          "change_percentage": -2.41,
+          "xq_symbol": "SH600887",
+          "change_of_pre_quarter": "0.05%",
+          "change_of_pre_quarter_type": 1,
+          "industry_label": "食品饮料",
+          "percent_double": 0.14,
+          "amarket": true
+        },
+        {
+          "name": "海尔智家",
+          "code": "600690",
+          "percent": 0.06,
+          "current_price": 20.98,
+          "change_percentage": -1.73,
+          "xq_symbol": "SH600690",
+          "change_of_pre_quarter": "0.02%",
+          "change_of_pre_quarter_type": 1,
+          "industry_label": "家用电器",
+          "percent_double": 0.06,
+          "amarket": true
+        }
+      ],
+      "bond_list": [
+        {
+          "name": "25国债19",
+          "code": "019792",
+          "percent": 5.79,
+          "xq_symbol": "019792",
+          "percent_double": 5.79,
+          "amarket": false
+        },
+        {
+          "name": "26国债14",
+          "code": "019846",
+          "percent": 0.69,
+          "xq_symbol": "019846",
+          "percent_double": 0.69,
+          "amarket": false
+        }
+      ],
+      "chart_list": [
+        {
+          "type_desc": "股票",
+          "type": "stock",
+          "percent": 0.72,
+          "color": "#F04848"
+        },
+        {
+          "type_desc": "债券",
+          "type": "bond",
+          "percent": 6.48,
+          "color": "#287DFF"
+        },
+        {
+          "type_desc": "现金",
+          "type": "cash",
+          "percent": 11.61,
+          "color": "#FFCA03"
+        }
+      ],
+      "important_list_show": 3
+    },
+    "result_code": 0
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "params": {
+    "fund_code": "008975",
+    "day": "ty"
+  },
+  "body": {
+    "data": {
+      "fund_nav_growth": [
+        {
+          "date": "2025-12-31",
+          "nav": "1.2629",
+          "percentage": "-0.5042",
+          "value": "0.0",
+          "than_value": "0.0",
+          "performance_value": "0.0"
+        },
+        {
+          "date": "2026-01-05",
+          "nav": "1.2764",
+          "percentage": "1.0690",
+          "value": "0.01069",
+          "than_value": "0.011188",
+          "performance_value": "0.010631"
+        },
+        {
+          "date": "2026-01-06",
+          "nav": "1.2831",
+          "percentage": "0.5249",
+          "value": "0.015995",
+          "than_value": "0.016733",
+          "performance_value": "0.015896"
+        }
+      ],
+      "growth_lines": [
+        {
+          "line_name": "本产品",
+          "line_key": "value",
+          "line_color": "#FFA100"
+        },
+        {
+          "line_name": "中证消费50",
+          "line_key": "than_value",
+          "line_color": "#797C86"
+        }
+      ],
+      "tip": [
+        {
+          "title": "合成指数",
+          "content": "合成指数说明。"
+        }
+      ],
+      "performance_remark": "合成业绩说明。"
+    },
+    "result_code": 0
+  }
+}

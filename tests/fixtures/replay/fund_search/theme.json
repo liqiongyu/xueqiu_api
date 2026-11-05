@@ -1,0 +1,38 @@
+{
+  "params": {
+    "key": "消费",
+    "source": "index"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "id": 15166,
+          "scode": "TIAA026061",
+          "sname": "好消费精选",
+          "stype": "ic",
+          "store_status": 1
+        },
+        {
+          "id": 18532,
+          "scode": "TIAA026099",
+          "sname": "永动机消费型",
+          "stype": "ic",
+          "store_status": 1
+        },
+        {
+          "id": 18917,
+          "scode": "TIAA054006",
+          "sname": "富国带你投消费医药",
+          "stype": "ic",
+          "store_status": 1
+        }
+      ],
+      "current_page": 1,
+      "size": 20,
+      "total_items": 20,
+      "total_pages": 1
+    },
+    "result_code": 0
+  }
+}
