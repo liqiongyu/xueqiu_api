@@ -5,6 +5,9 @@ split = "holdout"
 prompt = "有只保险股名字里带平安，代码是多少来着？"
 tags = ["colloquial"]
 source = "blind"
+target = "suggest_stock"
+also_ok = ["search_stock"]
+expected = [ { endpoint = "suggest_stock", params = { query = "平安" } } ]
 
 [[task]]
 id = "h02"
@@ -13,6 +16,9 @@ split = "holdout"
 prompt = "帮我拉一下贵州茅台最近三年的日K，要前复权的。"
 tags = ["adjust"]
 source = "blind"
+target = "kline"
+also_ok = []
+expected = [ { endpoint = "kline", params = { symbol = "SH600519", period = "day", adjust = "before" } } ]
 
 [[task]]
 id = "h03"
@@ -21,6 +27,9 @@ split = "holdout"
 prompt = "Put Tencent (00700) and Apple (AAPL) side by side for me: current price, day change and P/E."
 tags = ["multi_symbol"]
 source = "blind"
+target = "batch_quote"
+also_ok = ["quote_detail"]
+expected = [ { endpoint = "batch_quote", params = { symbols = ["00700", "AAPL"] } } ]
 
 [[task]]
 id = "h04"
@@ -29,6 +38,9 @@ split = "holdout"
 prompt = "600030 的前十大股东都有谁？"
 tags = ["recovery"]
 source = "blind"
+target = "f10_top_holders"
+also_ok = []
+expected = [ { endpoint = "f10_top_holders", params = { symbol = "SH600030" } } ]
 
 [[task]]
 id = "h05"
@@ -37,6 +49,10 @@ split = "holdout"
 prompt = "Screen A-shares for me: P/E under 10 and dividend yield above 4 percent."
 tags = []
 source = "blind"
+target = "screener_quote_list"
+also_ok = []
+# The endpoint has no P/E or yield filter: the rows carry pe_ttm and dividend_yield to filter on.
+expected = [ { endpoint = "screener_quote_list", params = { market = "CN" } } ]
 
 [[task]]
 id = "h06"
@@ -45,6 +61,9 @@ split = "holdout"
 prompt = "今天大家是在买茅台还是在卖茅台？钱是流进去了还是流出来了？"
 tags = ["colloquial"]
 source = "blind"
+target = "capital_distribution"
+also_ok = ["capital_flow", "capital_assort"]
+expected = [ { endpoint = "capital_distribution", params = { symbol = "SH600519" } } ]
 
 [[task]]
 id = "h07"
@@ -53,6 +72,10 @@ split = "holdout"
 prompt = "浦发银行这几年分红不少，我想知道把分红算进去的话，从2020年初到现在实际涨了多少。"
 tags = ["adjust"]
 source = "blind"
+target = "kline"
+also_ok = []
+# adjust = "before" also removes the dividend gaps; adjust = "normal" is the wrong answer.
+expected = [ { endpoint = "kline", params = { symbol = "SH600000", adjust = "after", begin = "2020-01-01" } } ]
 
 [[task]]
 id = "h08"
@@ -61,6 +84,13 @@ split = "holdout"
 prompt = "看看我雪球自选里今天涨得最好的是哪几只。"
 tags = ["login"]
 source = "blind"
+target = "watchlist_stocks"
+also_ok = []
+# Watchlist rows have no price change, so a quote call follows; its symbols depend on the account.
+expected = [
+  { endpoint = "watchlist_stocks", params = { pid = -1 } },
+  { endpoint = "batch_quote", params = {} },
+]
 
 [[task]]
 id = "h09"
@@ -69,6 +99,9 @@ split = "holdout"
 prompt = "What does SH601166 actually do? Give me the company background: business, headquarters and listing date."
 tags = []
 source = "blind"
+target = "f10_company"
+also_ok = []
+expected = [ { endpoint = "f10_company", params = { symbol = "SH601166" } } ]
 
 [[task]]
 id = "h10"
@@ -77,6 +110,9 @@ split = "holdout"
 prompt = "ZH2437873 这个组合最近都换了些啥股票？"
 tags = ["colloquial"]
 source = "blind"
+target = "cube_rebalancing_history"
+also_ok = []
+expected = [ { endpoint = "cube_rebalancing_history", params = { cube_symbol = "ZH2437873" } } ]
 
 [[task]]
 id = "h11"
@@ -85,6 +121,10 @@ split = "holdout"
 prompt = "000001 今天收了多少点？"
 tags = ["recovery"]
 source = "blind"
+target = "quote_detail"
+also_ok = ["batch_quote", "quotec", "kline"]
+# Bare 000001 normalizes to SZ000001; "点" means the index.
+expected = [ { endpoint = "quote_detail", params = { symbol = "SH000001" } } ]
 
 [[task]]
 id = "h12"
@@ -93,6 +133,9 @@ split = "holdout"
 prompt = "把中信证券、兴业银行、中国平安这三只现在的价格和涨跌幅一起列给我。"
 tags = ["multi_symbol"]
 source = "blind"
+target = "batch_quote"
+also_ok = ["quotec"]
+expected = [ { endpoint = "batch_quote", params = { symbols = ["SH600030", "SH601166", "SH601318"] } } ]
 
 [[task]]
 id = "h13"
@@ -101,6 +144,10 @@ split = "holdout"
 prompt = "Tencent split its shares in 2014. Show me monthly candles from 2013 onward, and I don't want the split to show up as a crash."
 tags = ["adjust"]
 source = "blind"
+target = "kline"
+also_ok = []
+# adjust = "after" also removes the split gap; adjust = "normal" is the wrong answer.
+expected = [ { endpoint = "kline", params = { symbol = "00700", period = "month", adjust = "before", begin = "2013-01-01" } } ]
 
 [[task]]
 id = "h14"
@@ -109,6 +156,9 @@ split = "holdout"
 prompt = "沪深300现在的估值处于历史什么位置？贵不贵？"
 tags = []
 source = "blind"
+target = "index_valuation"
+also_ok = ["index_valuation_list", "index_pe_history", "index_pb_history"]
+expected = [ { endpoint = "index_valuation", params = { index_code = "SH000300" } } ]
 
 [[task]]
 id = "h15"
@@ -117,6 +167,12 @@ split = "holdout"
 prompt = "富国那只中证消费50的ETF联接A类，代码我记不住了，帮我看下它最近一年的净值走势。"
 tags = ["multi_step"]
 source = "blind"
+target = "fund_growth"
+also_ok = ["fund_nav_history", "fund_search"]
+expected = [
+  { endpoint = "fund_search", params = { query = "富国中证消费50" } },
+  { endpoint = "fund_growth", params = { fund_code = "008975", period = "1y" } },
+]
 
 [[task]]
 id = "h16"
@@ -125,6 +181,9 @@ split = "holdout"
 prompt = "Pull the dividend history for 700, the Hong Kong one."
 tags = ["recovery"]
 source = "blind"
+target = "f10_bonus"
+also_ok = []
+expected = [ { endpoint = "f10_bonus", params = { symbol = "00700" } } ]
 
 [[task]]
 id = "h17"
@@ -133,6 +192,9 @@ split = "holdout"
 prompt = "兴业银行最近四个季度的营收和净利润，按单季度给我看看。"
 tags = []
 source = "blind"
+target = "finance_income"
+also_ok = []
+expected = [ { endpoint = "finance_income", params = { symbol = "SH601166", report_type = "all" } } ]
 
 [[task]]
 id = "h18"
@@ -141,6 +203,13 @@ split = "holdout"
 prompt = "今天大盘整体咋样？涨的多还是跌的多？"
 tags = ["colloquial"]
 source = "blind"
+target = "batch_quote"
+also_ok = ["quote_detail", "quotec", "screener_quote_list"]
+# No endpoint gives advancer and decliner counts: the index quote covers the mood, paging the list covers the count.
+expected = [
+  { endpoint = "batch_quote", params = { symbols = ["SH000001"] } },
+  { endpoint = "screener_quote_list", params = { market = "CN", order_by = "percent" } },
+]
 
 [[task]]
 id = "h19"
@@ -149,6 +218,9 @@ split = "holdout"
 prompt = "Show me Apple's latest balance sheet. I mainly care about total debt versus cash."
 tags = []
 source = "blind"
+target = "finance_balance"
+also_ok = []
+expected = [ { endpoint = "finance_balance", params = { symbol = "AAPL" } } ]
 
 [[task]]
 id = "h20"
@@ -157,6 +229,9 @@ split = "holdout"
 prompt = "中国平安的董事长和总经理现在分别是谁？"
 tags = []
 source = "blind"
+target = "f10_executives"
+also_ok = ["f10_company"]
+expected = [ { endpoint = "f10_executives", params = { symbol = "SH601318" } } ]
 
 [[task]]
 id = "h21"
@@ -165,6 +240,9 @@ split = "holdout"
 prompt = "What are the biggest holdings in fund 008975 right now?"
 tags = []
 source = "blind"
+target = "fund_asset"
+also_ok = []
+expected = [ { endpoint = "fund_asset", params = { fund_code = "008975" } } ]
 
 [[task]]
 id = "h22"
@@ -173,3 +251,4 @@ split = "holdout"
 prompt = "雪球上大家最近都在怎么聊中信证券？挑几条讨论度高的帖子给我看看。"
 tags = []
 source = "blind"
+target = "out_of_scope"
