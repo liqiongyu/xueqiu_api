@@ -41,6 +41,7 @@ from xueqiu_api._model import UpstreamModel
 from xueqiu_api._pages import Page
 from xueqiu_api._render import STATS_COLUMNS, compact_json
 from xueqiu_api._replay import ReplayTransport
+from xueqiu_api._search import EndpointIndex
 from xueqiu_api._time import to_ms
 from xueqiu_api.mcp_server import MIN_MAX_CHARS, McpOptions
 from xueqiu_api.mcp_server import server as mcp_server
@@ -877,6 +878,7 @@ async def test_a_cut_catalog_continues_with_the_rows_left_out() -> None:
         summary, summary_error = await toolbox.call("xq_endpoints", {})
         toolbox = Toolbox(McpOptions(max_chars=500), client=client, now=lambda: NOW)
         rows, rows_error = await toolbox.call("xq_endpoints", {"category": "finance"})
+        ranked, _ = await toolbox.call("xq_endpoints", {"query": "基金净值"})
 
     categories = [line.split(",")[0] for line in body_lines(summary)[1:]]
     used = list(dict.fromkeys(spec.agent.category for spec in REGISTRY.values()))
@@ -888,6 +890,11 @@ async def test_a_cut_catalog_continues_with_the_rows_left_out() -> None:
     shown = [line.split(",")[0] for line in body_lines(rows)[1:]]
     assert not rows_error and shown and shown != finance
     assert next_call(rows) == ("xq_endpoints", {"name": finance[len(shown) :][:DESCRIBE_NAMES]})
+
+    hits = [hit.name for hit in EndpointIndex(REGISTRY.values()).search("基金净值")]
+    shown = [line.split(",")[0] for line in body_lines(ranked)[1:]]
+    assert shown == hits[: len(shown)] and len(shown) < len(hits)
+    assert next_call(ranked) == ("xq_endpoints", {"name": hits[len(shown) :][:DESCRIBE_NAMES]})
 
 
 @pytest.mark.anyio
@@ -904,8 +911,10 @@ async def test_endpoint_catalog_and_details_never_show_upstream_paths(connect: C
     for text in (catalog, found, nothing, *details):
         assert "xueqiu.com" not in text and "/v5/" not in text and "/query/" not in text
         assert "danjuan" not in text.lower()
-    assert "finance_income" in [line.split(",")[0] for line in body_lines(found)[1:]]
+    assert body_lines(found)[1].split(",")[0] == "finance_income"
     assert "rows=0" in nothing and "# note: no endpoint matches" in nothing
+    assert "without arguments for the summary by category" in nothing
+    assert next_call(nothing) is None
     for name in REGISTRY:
         assert any(f"# endpoint {name}: " in text for text in details)
     assert 'param period: one of "1m", "5m", "15m"' in "".join(details)
@@ -2788,9 +2797,45 @@ async def test_a_page_of_bars_one_short_does_not_end_the_walk(
 @pytest.mark.anyio
 async def test_an_endpoints_query_is_bounded(connect: Connect) -> None:
     async with connect() as client:
-        payload = await fail(client, "xq_endpoints", {"query": "x" * 51})
+        longest = await call(client, "xq_endpoints", {"query": "x" * 200})
+        payload = await fail(client, "xq_endpoints", {"query": "x" * 201})
 
+    assert "rows=0" in longest
     assert (payload["error_code"], payload["field"]) == ("invalid_params", "query")
+
+
+@pytest.mark.anyio
+async def test_an_endpoints_query_may_be_a_sentence_and_ranks_at_most_ten_rows(
+    connect: Connect,
+) -> None:
+    async with connect() as client:
+        text = await call(client, "xq_endpoints", {"query": "这只基金的净值走势"})
+        wide = await call(client, "xq_endpoints", {"query": "基金净值"})
+
+    shown = [line.split(",")[0] for line in body_lines(text)[1:]]
+    assert shown[0] == "fund_nav_history" and len(shown) > 1
+    assert f"rows={len(shown)}" in text
+    assert "# note: ranked by text match, best first" in text
+    assert next_call(text) == ("xq_endpoints", {"name": ["fund_nav_history"]})
+    assert len(body_lines(wide)[1:]) <= 10
+
+
+@pytest.mark.anyio
+async def test_an_excluded_endpoint_cannot_be_found_by_query(connect: Connect) -> None:
+    async with connect(exclude=("capital_margin",)) as client:
+        text = await call(client, "xq_endpoints", {"query": "融资融券"})
+
+    assert "capital_margin" not in text
+
+
+@pytest.mark.anyio
+async def test_a_category_narrows_a_query_before_low_scores_are_dropped(connect: Connect) -> None:
+    async with connect() as client:
+        anywhere = await call(client, "xq_endpoints", {"query": "block trade"})
+        narrowed = await call(client, "xq_endpoints", {"query": "block trade", "category": "f10"})
+
+    assert "f10_executive_trades" not in anywhere
+    assert "f10_executive_trades" in [line.split(",")[0] for line in body_lines(narrowed)[1:]]
 
 
 @pytest.mark.anyio
@@ -2798,9 +2843,9 @@ async def test_a_catalog_cut_by_the_budget_says_how_to_reach_the_rest(
     connect: Connect, register_endpoint: Register
 ) -> None:
     for spec in many_endpoints(60):
-        register_endpoint(spec)
+        register_endpoint(replace(spec, agent=replace(spec.agent, category="quote")))
     async with connect(max_chars=4000) as client:
-        text = await call(client, "xq_endpoints", {"query": "synthetic_name"})
+        text = await call(client, "xq_endpoints", {"category": "quote"})
 
     last = text.splitlines()[-1]
     assert " rows by the 4000 character limit; narrow by category or query" in last

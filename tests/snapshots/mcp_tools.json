@@ -186,14 +186,14 @@
   {
     "name": "xq_endpoints",
     "title": "端点目录",
-    "description": "端点目录 接口列表 参数说明 字段 行情 K线 资金流向 F10 财报 选股器 市场概览 搜索 指数估值 基金 组合 自选股 endpoints catalog category describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时每个类别一行：类别、中文标题、端点数和全部端点名；category 列出该类端点的端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词，行格式相同；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、适用市场、翻页方式和一个示例调用。\n示例：xq_endpoints {\"category\":\"f10\"}；xq_endpoints {\"query\":\"公司资料\"}；xq_endpoints {\"name\":[\"f10_company\"]}\n查到端点后用 xq_call 调用。",
+    "description": "端点目录 接口列表 参数说明 字段 行情 K线 资金流向 F10 财报 选股器 市场概览 搜索 指数估值 基金 组合 自选股 endpoints catalog category describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时每个类别一行：类别、中文标题、端点数和全部端点名；category 列出该类端点的端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 是中文或英文检索词，可以写一句话，按相关度返回最多 10 条，行格式相同；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、适用市场、翻页方式和一个示例调用。\n示例：xq_endpoints {\"category\":\"f10\"}；xq_endpoints {\"query\":\"公司资料\"}；xq_endpoints {\"name\":[\"f10_company\"]}\n查到端点后用 xq_call 调用。",
     "inputSchema": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "maxLength": 50,
-          "description": "按子串匹配端点名、标题、说明和关键词"
+          "maxLength": 200,
+          "description": "中文或英文检索词，可以写一句话，按相关度返回最多 10 条"
         },
         "name": {
           "type": "array",
