@@ -698,6 +698,29 @@ def test_factors_take_the_earlier_fetch_time_of_their_two_requests(cached: Cache
     assert factors.fetched_at == SESSION
 
 
+def test_a_security_snapshot_keeps_its_pages_out_of_the_cache(
+    cached: Cached, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h = cached()
+    asked: list[bool] = []
+
+    def record(cache: bool) -> None:
+        asked.append(cache)
+        raise UpstreamChanged("synthetic stop after the first page")
+
+    def call(self: Any, endpoint: str, /, *, cache: bool = True, **params: Any) -> Any:
+        record(cache)
+
+    async def async_call(self: Any, endpoint: str, /, *, cache: bool = True, **params: Any) -> Any:
+        record(cache)
+
+    monkeypatch.setattr(type(h.client), "call", call if h.kind == "sync" else async_call)
+
+    with pytest.raises(UpstreamChanged):
+        h.run("security_snapshot", "CN")
+    assert asked == [False]
+
+
 # ---- failures leave nothing behind
 
 
