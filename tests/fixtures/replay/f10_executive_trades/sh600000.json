@@ -1,0 +1,31 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "items": [
+        {
+          "manage_name": "示例高管一",
+          "chg_date": 1793635200000,
+          "trans_avg_price": 9.92,
+          "chg_shares_num": 22500
+        },
+        {
+          "manage_name": "示例高管二",
+          "chg_date": 1793635200000,
+          "trans_avg_price": 10.01,
+          "chg_shares_num": 72900
+        },
+        {
+          "manage_name": "示例副董事长",
+          "chg_date": 1793548800000,
+          "trans_avg_price": 9.95,
+          "chg_shares_num": 83000
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

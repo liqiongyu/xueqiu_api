@@ -1,0 +1,32 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "restricts": [],
+      "items": [
+        {
+          "float_shares": 33305838300,
+          "chg_date": 1761494400000,
+          "chg_reason": "可转债转股",
+          "total_shares": 33305838300
+        },
+        {
+          "float_shares": 33305769783,
+          "chg_date": 1761235200000,
+          "chg_reason": "可转债转股",
+          "total_shares": 33305769783
+        },
+        {
+          "float_shares": 33187026772,
+          "chg_date": 1761148800000,
+          "chg_reason": "可转债转股",
+          "total_shares": 33187026772
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
