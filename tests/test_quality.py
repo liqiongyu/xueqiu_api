@@ -132,12 +132,12 @@ def test_a_changed_time_fails_its_check(stock: Kline, check: str, shift: timedel
 
 @pytest.mark.parametrize(
     ("position", "value", "status"),
-    [(1, 10.18, "pass"), (0, 10.23, "pass"), (1, 10.2, "fail")],
+    [(1, 10.19, "pass"), (2, 10.04, "pass"), (1, 10.2, "fail")],
 )
 def test_ohlc_order_tolerates_a_cent(
     stock: Kline, position: int, value: float, status: str
 ) -> None:
-    # The highs of these bars are 10.22 and 10.18, and 10.23 - 10.22 comes out above 0.01.
+    # Bar 1 has a high of 10.18 and bar 2 a low of 10.05; 10.05 - 10.04 comes out above 0.01.
     checked = result(check_kline(with_cell(stock, "close", position, value)), "kline.ohlc_order")
 
     assert checked.status == status
