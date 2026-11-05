@@ -1,0 +1,287 @@
+[
+  {
+    "name": "xq_search",
+    "title": "证券搜索",
+    "description": "证券搜索 股票代码 代码查询 拼音 名称 search symbol lookup ticker suggest A股 港股 美股 指数 code name\n按代码、拼音首字母或名称查证券的雪球代码，返回 symbol、name、stock_type 的 CSV，最多 10 条。用户只给名称、或不确定代码前缀时先用它，再把 symbol 交给其他工具。query 必填；limit 可选，默认 10。\n示例：xq_search {\"query\":\"贵州茅台\"}；xq_search {\"query\":\"pfyh\"}\n要最新价时用 xq_quote。要历史走势时用 xq_kline。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "代码、拼音首字母或名称，如 600000、pfyh、浦发银行、AAPL"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 10,
+          "description": "最多返回几条"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "证券搜索",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  {
+    "name": "xq_quote",
+    "title": "实时行情",
+    "description": "批量行情 实时行情 股票名称 最新价 涨跌幅 市值 quote batch realtime price market status 盘中 成交额 市盈率 snapshot\n取 1 到 20 只股票或指数的实时行情快照，合并成一次上游请求。默认列：symbol, name, current, percent, chg, volume, amount, market_capital, market_status_id, timestamp；fields 还可选 pe_ttm、pb、dividend_yield、turnover_rate、high52w、low52w 等上游字段。symbols 是数组，也接受单个代码、逗号分隔的字符串或 JSON 编码的数组字符串。timestamp 是交易所本地时间；market_status_id 为 5 表示交易中，7 表示已收盘。\n示例：xq_quote {\"symbols\":[\"SH600519\",\"00700\",\"AAPL\"]}；xq_quote {\"symbols\":\"SH600000,SZ000001\",\"fields\":[\"symbol\",\"name\",\"current\",\"pe_ttm\",\"pb\"]}\n历史 K 线和区间涨跌用 xq_kline。只知道名称时先用 xq_search 查代码。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "代码，如 SH600519、00700、AAPL；也接受单个代码、逗号分隔的字符串或 JSON 编码的数组字符串"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "要输出的列，默认列见端点说明；也接受逗号分隔的字符串"
+        }
+      },
+      "required": [
+        "symbols"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "实时行情",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  {
+    "name": "xq_kline",
+    "title": "K线",
+    "description": "K线 日线 周线 月线 分钟线 前复权 后复权 kline candlestick OHLCV bars history 区间涨跌 最高价 最低价 对比 compare\n取 1 到 5 只股票或指数的 K 线，每只代码一次上游请求。只给 1 只时，表头 # stats 是全部取回数据上的统计（根数、首末收盘、涨跌幅、最高最低及日期；涨跌幅从首根之前的收盘 base_close 算起），正文是最近 limit 根的 CSV；给多只时每只一行统计，不输出明细，适合比较涨跌。period 默认 day；adjust 默认 before（前复权），after 是后复权，normal 是不复权，也接受中文值。range 取 5d、1mo、3mo、6mo、ytd、1y、2y、3y、5y、10y、max（mo 是月，1m 是 1 分钟线），从今天或 end 按日历往前算；begin、end 是交易所本地日期 YYYY-MM-DD，给了 begin 就不看 range；都不给时取最近 limit 根；before 是分钟线翻页的时刻，照抄 # next 给出的值。limit 0 到 500，默认 100，0 只返回统计。分钟线上游只保留约 3 个交易日（1m）到约 6 个月（60m）。更早的数据见末行 # next。\n示例：xq_kline {\"symbols\":[\"SH600519\"],\"range\":\"1y\"}；xq_kline {\"symbols\":[\"SH600519\",\"SZ000858\",\"SH000300\"],\"range\":\"ytd\",\"limit\":0}\n只要当前价格时用 xq_quote。只知道名称时先用 xq_search 查代码。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "代码，如 SH600519、00700、AAPL；也接受单个代码、逗号分隔的字符串或 JSON 编码的数组字符串"
+        },
+        "period": {
+          "type": "string",
+          "enum": [
+            "1m",
+            "5m",
+            "15m",
+            "30m",
+            "60m",
+            "120m",
+            "day",
+            "week",
+            "month",
+            "quarter",
+            "year"
+          ],
+          "default": "day",
+          "description": "K 线周期，1m 到 120m 是分钟线"
+        },
+        "adjust": {
+          "type": "string",
+          "enum": [
+            "before",
+            "after",
+            "normal",
+            "前复权",
+            "后复权",
+            "不复权"
+          ],
+          "default": "before",
+          "description": "before 前复权，after 后复权，normal 不复权"
+        },
+        "range": {
+          "type": "string",
+          "enum": [
+            "5d",
+            "1mo",
+            "3mo",
+            "6mo",
+            "ytd",
+            "1y",
+            "2y",
+            "3y",
+            "5y",
+            "10y",
+            "max"
+          ],
+          "description": "从今天或 end 按日历往前的区间，mo 是月；给了 begin 时不用"
+        },
+        "begin": {
+          "type": "string",
+          "format": "date",
+          "description": "起始日期 YYYY-MM-DD（交易所本地日期），含当天"
+        },
+        "end": {
+          "type": "string",
+          "format": "date",
+          "description": "结束日期 YYYY-MM-DD（交易所本地日期），含当天"
+        },
+        "before": {
+          "type": "string",
+          "format": "date-time",
+          "description": "只取这个时刻之前的 K 线，分钟线翻页用，照抄 # next 的值"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500,
+          "default": 100,
+          "description": "正文最多几根（最近的），0 只返回统计"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "要输出的列，默认列见端点说明；也接受逗号分隔的字符串"
+        }
+      },
+      "required": [
+        "symbols"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "K线",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  {
+    "name": "xq_endpoints",
+    "title": "端点目录",
+    "description": "端点目录 接口列表 参数说明 字段 批量行情 公司资料 资产负债表 现金流量表 利润表 财务指标 K线 行情详情 实时行情 证券搜索 endpoints catalog describe parameters fields\n本服务器已启用端点的本地目录，不访问上游。不带参数时列出全部端点：端点名、中文标题、一句话说明、是否需要登录、时效类别和承接工具；query 按子串匹配端点名、标题、说明和关键词；name 给 1 到 5 个端点名，返回参数签名、取值含义、默认值和上限、翻页方式和一个示例调用。\n示例：xq_endpoints {\"query\":\"公司资料\"}；xq_endpoints {\"name\":[\"f10_company\"]}\n查到端点后用 xq_call 调用。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "按子串匹配端点名、标题、说明和关键词"
+        },
+        "name": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "batch_quote",
+              "f10_company",
+              "finance_balance",
+              "finance_cash_flow",
+              "finance_income",
+              "finance_indicator",
+              "kline",
+              "quote_detail",
+              "quotec",
+              "suggest_stock"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "要查看详情的端点名"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "端点目录",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  {
+    "name": "xq_call",
+    "title": "调用端点",
+    "description": "调用端点 通用调用 公司资料 资产负债表 现金流量表 利润表 财务指标 行情详情 实时行情 call endpoint gateway\n按端点名调用任意已启用端点；没有专用工具的数据（公司资料、资产负债表、现金流量表等）都走这里。endpoint 必填，取值见枚举；params 按该端点的参数校验，未知参数返回 invalid_params 并列出合法参数和签名；fields 选择列，财报科目输出本期值和 .yoy（同比，百分点）两列；limit 限制行数。对同一端点和同一组参数，输出与专用工具相同。\n示例：xq_call {\"endpoint\":\"f10_company\",\"params\":{\"symbol\":\"SH600000\"}}；xq_call {\"endpoint\":\"finance_balance\",\"params\":{\"symbol\":\"SH600000\",\"count\":2}}\n不确定端点名或参数时先用 xq_endpoints。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "enum": [
+            "batch_quote",
+            "f10_company",
+            "finance_balance",
+            "finance_cash_flow",
+            "finance_income",
+            "finance_indicator",
+            "kline",
+            "quote_detail",
+            "quotec",
+            "suggest_stock"
+          ],
+          "description": "端点名"
+        },
+        "params": {
+          "type": "object",
+          "description": "该端点的参数对象，参数名和取值见端点说明"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "要输出的列，默认列见端点说明；也接受逗号分隔的字符串"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500,
+          "description": "最多输出几行，默认和上限按端点"
+        }
+      },
+      "required": [
+        "endpoint"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "调用端点",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  }
+]

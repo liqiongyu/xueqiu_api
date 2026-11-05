@@ -1,0 +1,56 @@
+{
+  "params": {
+    "symbol": "00700"
+  },
+  "body": {
+    "data": {
+      "quote_name": "腾讯控股",
+      "currency_name": "人民币",
+      "sas": "国际会计准则",
+      "org_type": 1,
+      "annual_settle_date": "12-31",
+      "last_report_name": "2026中报",
+      "statuses": null,
+      "currency": "CNY",
+      "tip": "synthetic fiscal year note",
+      "list": [
+        {
+          "adtfxda": [null, null],
+          "cceqbegyr": [141041000000.0, 0.0643077596420136],
+          "cceqeyr": [206930000000.0, 0.13662204694134256],
+          "ctime": null,
+          "divp": [null, null],
+          "ed": "2026-06-30",
+          "icdccceq": [69868000000.0, 0.43327794530945496],
+          "month_num": 6,
+          "nfcgcf": [-9469000000.0, 0.6855302049085052],
+          "ninvcf": [-74724000000.0, -0.0319996685403345],
+          "nocf": [154061000000.0, 0.018484117277625358],
+          "report_date": 1782748800000,
+          "report_name": "2026中报",
+          "rptsourefc": 15,
+          "sd": "2026-01-01"
+        },
+        {
+          "adtfxda": [null, null],
+          "cceqbegyr": [141041000000.0, 0.0643077596420136],
+          "cceqeyr": [217770000000.0, 0.060983274300497436],
+          "ctime": null,
+          "divp": [null, null],
+          "ed": "2026-03-31",
+          "icdccceq": [78674000000.0, 0.08954686461333924],
+          "month_num": 3,
+          "nfcgcf": [-12117000000.0, -1.4882343460391652],
+          "ninvcf": [-10560000000.0, 0.6420217634496085],
+          "nocf": [101351000000.0, 0.31814693909401864],
+          "report_date": 1774886400000,
+          "report_name": "2026一季报",
+          "rptsourefc": 14,
+          "sd": "2026-01-01"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

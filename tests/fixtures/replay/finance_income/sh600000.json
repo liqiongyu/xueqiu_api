@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "quote_name": "浦发银行",
+      "currency_name": "人民币",
+      "org_type": 2,
+      "last_report_name": "2026三季报",
+      "statuses": null,
+      "currency": "CNY",
+      "list": [
+        {
+          "basic_eps": [1.17, -0.08593750000000007],
+          "ctime": 1793358014000,
+          "dlt_earnings_per_share": [1.17, -0.00847457627118645],
+          "invest_incomes_from_rr": [null, null],
+          "net_profit": [41129000000.0, 0.04998595900028082],
+          "net_profit_atsopc": [40572000000.0, 0.04515829877122028],
+          "op": [46298000000.0, 0.09692705001540029],
+          "profit_total_amt": [46139000000.0, 0.09812928408225438],
+          "report_date": 1790697600000,
+          "report_name": "2026三季报",
+          "total_revenue": [138133000000.0, 0.044247051708497125]
+        },
+        {
+          "basic_eps": [0.89, -0.101010101010101],
+          "ctime": 1787829403000,
+          "dlt_earnings_per_share": [0.89, -0.01111111111111112],
+          "invest_incomes_from_rr": [65000000.0, -0.04411764705882353],
+          "net_profit": [31354000000.0, 0.04883923195290025],
+          "net_profit_atsopc": [30951000000.0, 0.040824561993476144],
+          "op": [36487000000.0, 0.08922920771389337],
+          "profit_total_amt": [36446000000.0, 0.09982497434968918],
+          "report_date": 1782748800000,
+          "report_name": "2026中报",
+          "total_revenue": [93777000000.0, 0.03553484468688921]
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

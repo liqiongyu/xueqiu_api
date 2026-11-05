@@ -1,7 +1,38 @@
-from importlib.metadata import version
+from __future__ import annotations
+
+import inspect
+from importlib.metadata import entry_points, version
 
 import xueqiu_api
 
 
 def test_version_matches_metadata() -> None:
     assert xueqiu_api.__version__ == version("xueqiu-api")
+
+
+def test_console_script_points_at_the_cli() -> None:
+    scripts = entry_points(group="console_scripts")
+    assert [ep.value for ep in scripts if ep.name == "xueqiu"] == ["xueqiu_api.cli:main"]
+
+
+def test_public_api_has_no_httpx2_types() -> None:
+    for name in xueqiu_api.__all__:
+        value = getattr(xueqiu_api, name)
+        assert not getattr(value, "__module__", "").startswith("httpx"), name
+    for cls in (xueqiu_api.Client, xueqiu_api.AsyncClient):
+        members = [(name, member) for name, member in vars(cls).items() if callable(member)]
+        for name, member in [("__init__", cls.__init__), *members]:
+            if name.startswith("_") and name not in {"__init__", "__enter__", "__aenter__"}:
+                continue
+            signature = inspect.signature(member)
+            annotations = [str(p.annotation) for p in signature.parameters.values()]
+            annotations.append(str(signature.return_annotation))
+            assert not any("httpx" in text for text in annotations), (cls.__name__, name)
+
+
+def test_client_surfaces_match() -> None:
+    def public(cls: type) -> set[str]:
+        return {name for name in vars(cls) if not name.startswith("_")}
+
+    assert public(xueqiu_api.Client) == public(xueqiu_api.AsyncClient)
+    assert {"quotec", "kline", "call", "request", "close"} <= public(xueqiu_api.Client)

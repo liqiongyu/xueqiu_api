@@ -1,0 +1,58 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "quote_name": "苹果",
+      "currency_name": "美元",
+      "sas": "美国公认会计准则(US GAAP)",
+      "org_type": 1,
+      "annual_settle_date": "09-30",
+      "last_report_name": "2026年FY",
+      "statuses": null,
+      "currency": "USD",
+      "tip": "synthetic fiscal year note",
+      "list": [
+        {
+          "ctime": 1793756520000,
+          "ed": "2026-09-26",
+          "gross_profit": [233602000000.0, 0.196725426611544],
+          "interest_expense": [null, null],
+          "net_income": [132175000000.0, 0.18002856887777877],
+          "net_income_atcss": [132175000000.0, 0.18002856887777877],
+          "operating_income": [158063000000.0, 0.18799699361142427],
+          "preferred_dividend": [0.0, null],
+          "report_annual": 2026,
+          "report_date": 1790352000009,
+          "report_name": "2026年FY",
+          "report_type_code": 596001,
+          "revenue": [478834000000.0, 0.1505979656911628],
+          "sd": "2025-09-28",
+          "total_basic_earning_common_ps": [9.01, 0.20293724966622156],
+          "total_revenue": [478834000000.0, 0.1505979656911628]
+        },
+        {
+          "ctime": 1785570347000,
+          "ed": "2026-06-27",
+          "gross_profit": [178782000000.0, 0.21736347541876616],
+          "interest_expense": [null, null],
+          "net_income": [101464000000.0, 0.20013247539742618],
+          "net_income_atcss": [101464000000.0, 0.20013247539742618],
+          "operating_income": [122432000000.0, 0.21673971159675223],
+          "preferred_dividend": [0.0, null],
+          "report_annual": 2026,
+          "report_date": 1782489600000,
+          "report_name": "2026年Q9",
+          "report_type_code": 596007,
+          "revenue": [364357000000.0, 0.16150082086102743],
+          "sd": "2025-09-28",
+          "total_basic_earning_common_ps": [6.91, 0.2251773049645391],
+          "total_revenue": [364357000000.0, 0.16150082086102743]
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

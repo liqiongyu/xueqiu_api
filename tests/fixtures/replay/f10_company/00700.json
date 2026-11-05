@@ -1,0 +1,33 @@
+{
+  "params": {
+    "symbol": "00700"
+  },
+  "body": {
+    "data": {
+      "company": {
+        "comunic": 200079465.0,
+        "comcnname": "腾讯控股有限公司",
+        "comenname": "Tencent Holdings Limited",
+        "incdate": 943286400000.0,
+        "rgiofc": "synthetic registered office",
+        "hofclctmbu": "合成办公地址",
+        "chairman": "示例董事长",
+        "mbu": "合成主营业务",
+        "comintr": "合成公司简介",
+        "refccomty": 1.0,
+        "numtissh": 420160500.0,
+        "ispr": 3.7,
+        "nrfd": 1437800000.0,
+        "nation_name": "中国",
+        "tel": "00-0000-0000",
+        "fax": "00-0000-0001",
+        "email": "ir@example.com",
+        "web_site": "http://www.example.com",
+        "lsdateipo": 1087315200000.0,
+        "mainholder": "MIH Internet Holdings B.V."
+      }
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

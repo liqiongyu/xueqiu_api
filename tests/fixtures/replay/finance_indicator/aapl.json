@@ -1,0 +1,56 @@
+{
+  "params": {
+    "symbol": "AAPL"
+  },
+  "body": {
+    "data": {
+      "quote_name": "苹果",
+      "currency_name": "美元",
+      "sas": "美国公认会计准则(US GAAP)",
+      "org_type": 1,
+      "annual_settle_date": "09-30",
+      "last_report_name": "2026年FY",
+      "statuses": null,
+      "currency": "USD",
+      "tip": "synthetic fiscal year note",
+      "list": [
+        {
+          "asset_liab_ratio": [72.2918, -0.0903865729352391],
+          "basic_eps": [9.01, 0.20293724966622156],
+          "capital_reserve": [null, null],
+          "ctime": null,
+          "current_ratio": [1.0232, 0.14541587372663173],
+          "ed": "2026-09-26",
+          "gross_selling_rate": [48.7856, 0.04008937175409127],
+          "net_sales_rate": [27.6035, 0.0255767208741562],
+          "quick_ratio": [0.9376, 0.0917559385188635],
+          "report_annual": 2026,
+          "report_date": 1790352000000,
+          "report_name": "2026年FY",
+          "report_type_code": 596001,
+          "roe_avg": [142.2567, -0.1701393750175007],
+          "sd": "2025-09-28"
+        },
+        {
+          "asset_liab_ratio": [71.9464, -0.10225788137232267],
+          "basic_eps": [6.91, 0.2251773049645391],
+          "capital_reserve": [null, null],
+          "ctime": null,
+          "current_ratio": [1.0033, 0.15587557603686647],
+          "ed": "2026-06-27",
+          "gross_selling_rate": [49.0678, 0.04809446302775527],
+          "net_sales_rate": [27.8474, 0.03326036139660866],
+          "quick_ratio": [0.929, 0.12469733656174346],
+          "report_annual": 2026,
+          "report_date": 1782489600000,
+          "report_name": "2026年Q9",
+          "report_type_code": 596007,
+          "roe_avg": [111.9584, -0.18703536693577075],
+          "sd": "2025-09-28"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

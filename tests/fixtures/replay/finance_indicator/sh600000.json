@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "quote_name": "浦发银行",
+      "currency_name": "人民币",
+      "org_type": 2,
+      "last_report_name": "2026三季报",
+      "statuses": null,
+      "currency": "CNY",
+      "list": [
+        {
+          "asset_liab_ratio": [91.9057, 0.004434977524565593],
+          "avg_roe": [5.2, -0.08289241622574951],
+          "basic_eps": [1.17, -0.08593750000000007],
+          "ctime": 1793358014000,
+          "gross_selling_rate": [null, null],
+          "net_profit_atsopc": [40572000000.0, 0.04515829877122028],
+          "net_profit_atsopc_yoy": [4.5158, -0.557673470986953],
+          "net_selling_rate": [29.7749, 0.005494357055537832],
+          "operating_income_yoy": [4.4247, 1.3535638297872339],
+          "report_date": 1790697600000,
+          "report_name": "2026三季报"
+        },
+        {
+          "asset_liab_ratio": [91.9207, 0.0024811000161406955],
+          "avg_roe": [3.96, -0.08545034642032334],
+          "basic_eps": [0.89, -0.101010101010101],
+          "ctime": 1787829403000,
+          "gross_selling_rate": [null, null],
+          "net_profit_atsopc": [30951000000.0, 0.040824561993476144],
+          "net_profit_atsopc_yoy": [4.0825, -0.5992047908894561],
+          "net_selling_rate": [33.4346, 0.012847427333727233],
+          "operating_income_yoy": [3.5535, 0.35691919963342006],
+          "report_date": 1782748800000,
+          "report_name": "2026中报"
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}

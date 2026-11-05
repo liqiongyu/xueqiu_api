@@ -1,0 +1,45 @@
+{
+  "params": {
+    "symbol": "SH600000"
+  },
+  "body": {
+    "data": {
+      "quote_name": "浦发银行",
+      "currency_name": "人民币",
+      "org_type": 2,
+      "last_report_name": "2026三季报",
+      "statuses": null,
+      "currency": "CNY",
+      "list": [
+        {
+          "asset_liab_ratio": [0.9190565388936313, 0.0044340205775616455],
+          "ctime": null,
+          "goodwill": [5351000000.0, 0.0],
+          "report_date": 1790697600000,
+          "report_name": "2026三季报",
+          "shares": [33306000000.0, 0.06222293095200128],
+          "total_assets": [10451814000000.0, 0.05656974262788896],
+          "total_holders_equity": [846006000000.0, 0.00613906979178064],
+          "total_liab": [9605808000000.0, 0.06125459460833001],
+          "total_quity_atsopc": [839275000000.0, 0.00838887266863953],
+          "treasury_stock": [null, null]
+        },
+        {
+          "asset_liab_ratio": [0.9192065047276138, 0.002480042254669781],
+          "ctime": null,
+          "goodwill": [5351000000.0, 0.0],
+          "report_date": 1782748800000,
+          "report_name": "2026中报",
+          "shares": [33306000000.0, 0.10051546391752578],
+          "total_assets": [10405355000000.0, 0.07874564149275057],
+          "total_holders_equity": [840685000000.0, 0.04921422973047181],
+          "total_liab": [9564670000000.0, 0.08142097626569345],
+          "total_quity_atsopc": [833773000000.0, 0.0516084277705255],
+          "treasury_stock": [null, null]
+        }
+      ]
+    },
+    "error_code": 0,
+    "error_description": ""
+  }
+}
