@@ -76,6 +76,7 @@ WWW = "www.xueqiu.com"
 KLINE = "/v5/stock/chart/kline.json"
 BATCH = "/v5/stock/batch/quote.json"
 SUGGEST = "/query/v1/suggest_stock.json"
+QUOTEC = "/v5/stock/realtime/quotec.json"
 INCOME = "/v5/stock/finance/cn/income.json"
 F10 = "/v5/stock/f10/cn/company.json"
 TOKEN = "fake-token"
@@ -1041,15 +1042,14 @@ MATRIX = [
         "none",
         None,
     ),
-    # Search sends no cookies, so a token changes nothing.
     (
         "21101-token",
         WWW,
         SUGGEST,
         error_reply("21101", "用户id无效", 400),
         TOKEN,
-        "upstream_changed",
-        "none",
+        "auth_expired",
+        "reauth",
         None,
     ),
     (
@@ -1068,6 +1068,16 @@ MATRIX = [
         SUGGEST,
         error_reply("400016", "", 400),
         TOKEN,
+        "auth_expired",
+        "reauth",
+        None,
+    ),
+    (
+        "400016-query",
+        WWW,
+        SUGGEST,
+        json_reply({"code": 400016, "message": "", "success": False}),
+        None,
         "upstream_changed",
         "none",
         None,
@@ -1150,6 +1160,7 @@ TOOL_FOR_PATH = {
     KLINE: ("xq_kline", {"symbols": ["SH600000"]}),
     BATCH: ("xq_quote", {"symbols": ["SH600000", "AAPL"]}),
     SUGGEST: ("xq_search", {"query": "pfyh"}),
+    QUOTEC: ("xq_call", {"endpoint": "quotec", "params": {"symbols": ["SH600000"]}}),
 }
 
 
@@ -1188,14 +1199,14 @@ async def test_upstream_failures_become_error_results(
     ("path", "reply", "reauth"),
     [
         (KLINE, error_reply(60201, "用户id无效"), True),
-        (SUGGEST, error_reply("10022", "用户未登录", 400), False),
+        (QUOTEC, error_reply(60201, "用户id无效"), False),
     ],
     ids=["cookies", "no-cookies"],
 )
 async def test_login_codes_on_anonymous_calls_point_to_a_token_only_where_cookies_go(
     connect: Connect, upstream: FakeUpstream, path: str, reply: Reply, reauth: bool
 ) -> None:
-    upstream.route(STOCK if path == KLINE else WWW, path, reply)
+    upstream.route(STOCK, path, reply)
     tool, arguments = TOOL_FOR_PATH[path]
     async with connect(replay=False) as client:
         payload = await fail(client, tool, arguments)

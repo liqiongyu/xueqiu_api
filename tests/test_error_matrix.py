@@ -64,13 +64,22 @@ def test_60201_refreshes_the_anonymous_cookies_once_then_succeeds(h: Harness) ->
     assert "xq_a_token=fake-anon-token-0002" in retry.headers["cookie"]
 
 
-def test_60201_after_a_refresh_on_an_anonymous_endpoint_is_upstream_changed(h: Harness) -> None:
-    h.upstream.route(STOCK, KLINE, error_reply(60201, "用户id无效"))
+STOCK_LOGIN_ERRORS = [
+    ("60201", error_reply(60201, "用户id无效")),
+    ("400016", error_reply("400016", "遇到错误，请刷新页面或者重新登录帐号后再试", 400)),
+]
+
+
+@pytest.mark.parametrize(("code", "reply"), STOCK_LOGIN_ERRORS)
+def test_stock_login_codes_after_a_refresh_on_an_anonymous_endpoint_are_upstream_changed(
+    h: Harness, code: str, reply: Reply
+) -> None:
+    h.upstream.route(STOCK, KLINE, reply)
 
     with pytest.raises(UpstreamChanged) as caught:
         h.kline("SH600000")
 
-    assert caught.value.upstream_code == "60201"
+    assert caught.value.upstream_code == code
     assert caught.value.endpoint == "kline"
     assert "XUEQIU_TOKEN" in caught.value.hint
     assert paths(h) == [*BOOTSTRAP, f"{STOCK}{KLINE}", *BOOTSTRAP, f"{STOCK}{KLINE}"]
@@ -106,7 +115,7 @@ def test_www_login_codes_refresh_once_then_raise_login_required(
 @pytest.mark.parametrize(
     ("host", "path", "reply"),
     [
-        (STOCK, KLINE, error_reply(60201, "用户id无效")),
+        *[(STOCK, KLINE, reply) for _, reply in STOCK_LOGIN_ERRORS],
         (WWW, WEB_PATH, error_reply("10022", "用户未登录", 400)),
         (WWW, WEB_PATH, error_reply("21101", "用户id无效", 400)),
         (WWW, WEB_PATH, error_reply("400016", "", 400)),

@@ -43,7 +43,9 @@ SITES: Mapping[Host, Site] = MappingProxyType(
             headers=APP_HEADERS,
             cookies=True,
             min_interval_s=1.0,
-            login_codes=frozenset({"60201"}),
+            # 400016 answered kline and quote requests that carried a configured login
+            # cookie set on 2026-11-05; the cause is not confirmed.
+            login_codes=frozenset({"60201", "400016"}),
         ),
         # The apex xueqiu.com 301-redirects API paths here, so requests go to www directly.
         "www.xueqiu.com": Site(

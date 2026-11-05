@@ -58,9 +58,8 @@ ENDPOINT = Endpoint(
     auth="anonymous",
     freshness="static",
     envelope="query",
-    verified_on=date(2026, 11, 4),
-    # The survey got results with every cookie left out.
-    cookies=False,
+    # Without cookies www answers HTTP 200 {"code": 400016, "success": false} (2026-11-05).
+    verified_on=date(2026, 11, 5),
     agent=AgentInfo(
         title_zh="证券搜索",
         title_en="Security search",

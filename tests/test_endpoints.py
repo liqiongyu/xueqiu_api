@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from xueqiu_api import (
+    AuthExpired,
     Company,
     Financials,
     InvalidParams,
@@ -20,7 +21,7 @@ from xueqiu_api import (
     UpstreamChanged,
 )
 
-from .harness import Harness, error_reply, fixture_reply, json_reply, replay_body
+from .harness import Harness, Reply, error_reply, fixture_reply, json_reply, replay_body
 
 STOCK = "stock.xueqiu.com"
 WWW = "www.xueqiu.com"
@@ -149,15 +150,15 @@ def test_quote_detail_times_are_exchange_times(h: Harness) -> None:
     assert not {"time", "timestamp_ext", "issue_date"} & set(detail.model_extra)
 
 
-def test_suggest_stock_searches_www_with_browser_headers_and_no_cookies(h: Harness) -> None:
+def test_suggest_stock_searches_www_with_browser_headers_and_cookies(h: Harness) -> None:
     h.upstream.route(WWW, SUGGEST, fixture_reply("suggest_stock/pfyh"))
 
     results = h.run("suggest_stock", query=" pfyh ")
 
-    [sent] = h.upstream.sent
-    assert (sent.host, sent.path, sent.params) == (WWW, SUGGEST, {"q": "pfyh"})
+    [sent] = h.upstream.requests(WWW, SUGGEST)
+    assert sent.params == {"q": "pfyh"}
     assert sent.headers["user-agent"].startswith("Mozilla/5.0")
-    assert "cookie" not in sent.headers
+    assert "xq_a_token=fake-anon-token-0001" in sent.headers["cookie"]
     [first] = results
     assert isinstance(first, StockSuggestion)
     assert (first.symbol, first.name, first.stock_type) == ("SH600000", "浦发银行", 11)
@@ -210,34 +211,42 @@ def test_suggest_stock_31005_is_rate_limited_without_retry(h: Harness) -> None:
     error = caught.value
     assert (error.upstream_code, error.status, error.retry_after_s) == ("31005", 400, 10.0)
     assert (error.endpoint, error.params) == ("suggest_stock", {"query": "pfyh"})
-    assert paths(h) == [f"{WWW}{SUGGEST}"]
+    assert paths(h) == ["xueqiu.com/", f"{WWW}/", f"{WWW}{SUGGEST}"]
 
 
-@pytest.mark.parametrize("token", [None, TOKEN])
-def test_suggest_stock_login_codes_are_upstream_changed_without_a_refresh(
-    make: Callable[..., Harness], token: str | None
-) -> None:
-    h = make(token=token)
-    h.upstream.route(WWW, SUGGEST, error_reply("400016", "请刷新页面", 400))
+LOGIN_REPLIES = [
+    error_reply("400016", "请刷新页面", 400),
+    # The form www sent on 2026-11-05 to a search without cookies.
+    json_reply({"code": 400016, "message": "", "success": False}),
+]
+
+
+@pytest.mark.parametrize("reply", LOGIN_REPLIES, ids=["error_code", "query_envelope"])
+def test_suggest_stock_login_codes_refresh_the_cookies_once(h: Harness, reply: Reply) -> None:
+    h.upstream.route(WWW, SUGGEST, reply)
 
     with pytest.raises(UpstreamChanged) as caught:
         h.run("suggest_stock", query="pfyh")
 
     assert (caught.value.upstream_code, caught.value.endpoint) == ("400016", "suggest_stock")
-    # No cookies go with the search, so a token would not help.
-    assert "without cookies" in caught.value.hint and "XUEQIU_TOKEN" not in caught.value.hint
+    assert "XUEQIU_TOKEN" in caught.value.hint
+    home = ["xueqiu.com/", f"{WWW}/"]
+    assert paths(h) == [*home, f"{WWW}{SUGGEST}", *home, f"{WWW}{SUGGEST}"]
+
+
+@pytest.mark.parametrize("reply", LOGIN_REPLIES, ids=["error_code", "query_envelope"])
+def test_suggest_stock_login_codes_with_a_token_are_auth_expired(
+    make: Callable[..., Harness], reply: Reply
+) -> None:
+    h = make(token=TOKEN)
+    h.upstream.route(WWW, SUGGEST, reply)
+
+    with pytest.raises(AuthExpired) as caught:
+        h.run("suggest_stock", query="pfyh")
+
+    assert (caught.value.upstream_code, caught.value.recoverable) == ("400016", "reauth")
     assert paths(h) == [f"{WWW}{SUGGEST}"]
-    assert "cookie" not in h.upstream.sent[0].headers
-
-
-def test_suggest_stock_works_while_the_home_page_fails(h: Harness) -> None:
-    h.upstream.route(WWW, "/", json_reply({}, 503))
-    h.upstream.route(WWW, SUGGEST, fixture_reply("suggest_stock/pfyh"))
-
-    results = h.run("suggest_stock", query="pfyh")
-
-    assert [item.symbol for item in results] == ["SH600000"]
-    assert paths(h) == [f"{WWW}{SUGGEST}"]
+    assert h.upstream.sent[0].headers["cookie"] == TOKEN
 
 
 @pytest.mark.parametrize("statement", STATEMENTS)

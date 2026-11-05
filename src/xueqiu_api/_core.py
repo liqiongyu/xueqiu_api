@@ -166,7 +166,11 @@ def excerpt(content: bytes, secrets: Iterable[str], limit: int = 80) -> str:
 
 
 def upstream_error(body: Any) -> tuple[str, str] | None:
-    """Non-zero ``error_code`` (Xueqiu) or ``result_code`` (Danjuan) and its description."""
+    """Upstream error code and description of a body, or ``None``.
+
+    A non-zero ``error_code`` (Xueqiu) or ``result_code`` (Danjuan), or the ``code`` of a query
+    envelope with ``success`` false, such as ``{"code": 400016, "success": false}``.
+    """
     if not isinstance(body, dict):
         return None
     fields = cast(dict[str, Any], body)
@@ -175,6 +179,9 @@ def upstream_error(body: Any) -> tuple[str, str] | None:
         if code is not None and code not in (0, "0", ""):
             description = fields.get("error_description") or fields.get("message") or ""
             return str(code), str(description)
+    code = fields.get("code")
+    if fields.get("success") is False and code not in (None, ""):
+        return str(code), str(fields.get("message") or "")
     return None
 
 
