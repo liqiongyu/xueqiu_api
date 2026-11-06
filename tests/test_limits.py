@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import itertools
 import math
+import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
@@ -16,6 +18,8 @@ import pytest
 from xueqiu_api import AsyncClient, Blocked, Client, RateLimited, UpstreamUnavailable
 from xueqiu_api._async import AsyncRuntime
 from xueqiu_api._core import HostLimiter
+from xueqiu_api._shared import STATE_FILE, SharedState
+from xueqiu_api._sqlite import open_db
 from xueqiu_api._sync import SyncRuntime
 
 from .harness import FakeClock, FakeUpstream, Harness, fixture_reply, json_reply, text_reply
@@ -24,6 +28,7 @@ STOCK = "stock.xueqiu.com"
 WWW = "www.xueqiu.com"
 DANJUAN = "danjuanfunds.com"
 QUOTEC = "/v5/stock/realtime/quotec.json"
+KLINE = "/v5/stock/chart/kline.json"
 WEB_PATH = "/query/v1/suggest_stock.json"
 FUND_PATH = "/djapi/fund/008975"
 
@@ -35,6 +40,22 @@ def gaps(times: Sequence[float]) -> list[float]:
     return [later - earlier for earlier, later in itertools.pairwise(ordered)]
 
 
+@pytest.fixture(params=["memory", "shared"])
+def mode(request: pytest.FixtureRequest) -> str:
+    """Limits kept in process, or in the state file shared with other processes."""
+    return request.param
+
+
+@pytest.fixture
+def make(make: Callable[..., Harness], mode: str) -> Callable[..., Harness]:
+    return functools.partial(make, shared=mode == "shared")
+
+
+IN_MEMORY = pytest.mark.parametrize("mode", ["memory"])
+"""Concurrent callers keep separate FakeClock times, which the shared file reads as clock skew."""
+
+
+@IN_MEMORY
 def test_concurrent_calls_are_spaced_per_host(h: Harness) -> None:
     h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
     h.upstream.route(WWW, WEB_PATH, json_reply({"data": []}))
@@ -58,6 +79,7 @@ def test_concurrent_calls_are_spaced_per_host(h: Harness) -> None:
     assert min(stock) == min(home) == min(danjuan)
 
 
+@IN_MEMORY
 def test_longer_intervals_can_be_configured(make: Callable[..., Harness]) -> None:
     h = make(min_intervals={STOCK: 2.5})
     h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
@@ -77,6 +99,7 @@ def test_intervals_cannot_be_shortened(
         make(min_intervals=overrides)
 
 
+@IN_MEMORY
 def test_calls_that_cannot_start_before_the_deadline_fail_fast(h: Harness) -> None:
     quotes = fixture_reply("quotec/cn_hk_us")
     read_timeouts: list[float] = []
@@ -99,6 +122,7 @@ def test_calls_that_cannot_start_before_the_deadline_fail_fast(h: Harness) -> No
     assert min(read_timeouts) == pytest.approx(1.0)
 
 
+@IN_MEMORY
 def test_a_shorter_deadline_limits_queueing(make: Callable[..., Harness]) -> None:
     h = make(deadline=2.5)
     h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
@@ -174,6 +198,7 @@ def test_a_rate_limit_holds_the_host_until_retry_after(h: Harness) -> None:
 
 # Tasks only: threads do not interleave deterministically on the fake clock.
 @pytest.mark.parametrize("kind", ["async"])
+@IN_MEMORY
 def test_calls_queued_behind_a_rate_limited_one_are_held(h: Harness) -> None:
     quotes = fixture_reply("quotec/cn_hk_us")
     h.upstream.route(STOCK, QUOTEC, quotes, json_reply({}, 429), quotes)
@@ -185,6 +210,55 @@ def test_calls_queued_behind_a_rate_limited_one_are_held(h: Harness) -> None:
     assert [type(result) for result in results] == [RateLimited, RateLimited]
     assert "held" in str(results[1])
     assert len(h.upstream.sent) == 2
+
+
+def test_a_host_paused_while_a_call_sleeps_to_its_slot_holds_that_call(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
+    h.quotec("SH600000")
+    limiter = h.client._limiter  # pyright: ignore[reportPrivateUsage]
+    sleep = h.clock.async_sleep if h.kind == "async" else h.clock.sleep
+
+    def pause_meanwhile(seconds: float) -> Any:
+        # Another call or process got a rate limit while this one slept.
+        limiter.pause(STOCK, h.clock.now() + 60)
+        return sleep(seconds)
+
+    monkeypatch.setattr(h.client, "_sleep", pause_meanwhile)
+
+    with pytest.raises(RateLimited) as held:
+        h.quotec("SH600000")
+
+    assert "held" in held.value.message
+    assert len(h.upstream.requests(STOCK)) == 1
+
+
+@IN_MEMORY
+def test_a_call_held_past_its_slot_after_the_sleep_books_a_new_one(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
+    h.quotec("SH600000")
+    limiter = h.client._limiter  # pyright: ignore[reportPrivateUsage]
+    check = h.client._check_host  # pyright: ignore[reportPrivateUsage]
+    held: list[float] = []
+
+    def held_up(call: Any, now: float | None = None) -> None:
+        if now is None and not held:
+            # Waiting, for example, for the state file behind another thread of this process,
+            # which meanwhile books the slot after this call's own.
+            h.clock.advance(1.5)
+            held.append(h.clock.now())
+            limiter.reserve(STOCK, now=held[0], earliest=held[0], deadline=math.inf)
+        check(call, now)
+
+    monkeypatch.setattr(h.client, "_check_host", held_up)
+
+    h.quotec("SH600000")
+
+    first, second = h.upstream.requests(STOCK)
+    assert second.at - first.at == pytest.approx(3.5)
 
 
 def test_the_async_deadline_bounds_a_response_still_arriving(tmp_path: Path) -> None:
@@ -311,3 +385,107 @@ def test_limiter_books_slots_and_never_books_past_the_deadline() -> None:
     assert limiter.reserve(STOCK, now=0.0, earliest=5.0, deadline=30.0) == (True, 5.0)
     assert limiter.reserve(STOCK, now=0.0, earliest=0.0, deadline=5.5) == (False, 6.0)
     assert limiter.reserve(STOCK, now=0.0, earliest=0.0, deadline=6.0) == (True, 6.0)
+
+
+@pytest.mark.parametrize("mode", ["shared"])
+def test_clients_on_one_state_file_share_pauses_and_open_breakers(
+    make: Callable[..., Harness],
+) -> None:
+    first, second = make(), make()
+    first.upstream.route(STOCK, QUOTEC, json_reply({}, 429, {"Retry-After": "60"}))
+    first.upstream.route(DANJUAN, FUND_PATH, text_reply("teapot", 418))
+    with pytest.raises(RateLimited):
+        first.quotec("SH600000")
+    with pytest.raises(Blocked):
+        first.request(host=DANJUAN, path=FUND_PATH)
+    sent = len(first.upstream.sent)
+
+    with pytest.raises(RateLimited) as paused:
+        second.quotec("SH600000")
+    with pytest.raises(Blocked) as open_breaker:
+        second.request(host=DANJUAN, path=FUND_PATH)
+
+    assert len(first.upstream.sent) == sent == 2
+    assert paused.value.retry_after_s == 60.0
+    assert open_breaker.value.retry_after_s == 300.0
+
+
+@pytest.mark.parametrize("kind", ["async"])
+def test_only_the_shared_state_sends_async_work_to_threads(
+    h: Harness, mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: set[str] = set()
+    to_thread = asyncio.to_thread
+
+    async def spy(fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Any:
+        started.add(fn.__name__)
+        return await to_thread(fn, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", spy)
+    h.upstream.route(
+        STOCK, KLINE, json_reply({"error_code": 60201}), fixture_reply("kline/sh600000_day")
+    )
+
+    # A bootstrap, a failure, a refresh that waits for its www.xueqiu.com slot, and the status.
+    assert len(h.kline("SH600000")) == 3
+    h.run("status")
+
+    shared = {
+        "_book",
+        "_check_host",
+        "_note_failure",
+        "_status",
+        "adopt_saved",
+        "lease_home",
+        "release_home",
+        "set_anonymous",
+    }
+    assert started == (shared if mode == "shared" else set())
+
+
+def test_a_booking_that_waits_for_the_state_file_leaves_the_event_loop_free(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "state" / STATE_FILE
+    first = SharedState(path, clock=time.monotonic, wall=time.time)
+    assert first.book(STOCK, 1.0, 0.0, math.inf) is not None
+    first.close()
+    holder = open_db(path, busy_timeout_s=1)
+    release = threading.Timer(0.5, holder.execute, ("ROLLBACK",))
+    upstream = FakeUpstream(FakeClock())
+    upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
+    runtime = AsyncRuntime(transport=upstream.transport, state_path=path)
+
+    async def main() -> tuple[float, float]:
+        lags: list[float] = []
+
+        async def heartbeat() -> None:
+            while True:
+                start = time.monotonic()
+                await asyncio.sleep(0.01)
+                lags.append(time.monotonic() - start - 0.01)
+
+        async with AsyncClient(session_path=tmp_path / "session.json", _runtime=runtime) as client:
+            beat = asyncio.create_task(heartbeat())
+            while not lags:
+                await asyncio.sleep(0.01)
+            holder.execute("BEGIN IMMEDIATE")
+            release.start()
+            start = time.monotonic()
+            await client.quotec("SH600000")
+            took = time.monotonic() - start
+            beat.cancel()
+        return took, max(lags)
+
+    try:
+        took, lag = asyncio.run(main())
+    finally:
+        release.cancel()
+        if release.is_alive():
+            release.join()
+        holder.close()
+
+    # The booking waited for the lock, and the loop went on meanwhile.
+    assert took >= 0.4
+    assert lag < 0.1
+    assert len(upstream.sent) == 1

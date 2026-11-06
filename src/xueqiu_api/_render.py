@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from ._finance import FinanceParams, Financials, LineItem, ReportPeriod
 from ._pages import Page
+from ._result import FetchInfo, info_of
 from .endpoints.kline import (
     DEFAULT_COUNT,
     MAX_COUNT,
@@ -103,6 +104,7 @@ _CUT_BARS = (
     "only those. An end before the first bar reaches older ones."
 )
 _MISSING = "check the market prefix (indexes need SH or SZ, such as SH000001)."
+STALE_NOTE = "the upstream failed, so this is an older cached result: age_s in # meta says how old."
 _TAG = re.compile(r"<[^>]*>")
 
 
@@ -181,6 +183,7 @@ def render(
     fetched_at: datetime,
     next_call: NextCall | None,
     offset: int = 0,
+    now: datetime | None = None,
 ) -> str:
     """Render one endpoint result; raise ``InvalidParams`` for fields the result does not have.
 
@@ -190,6 +193,9 @@ def render(
     A ``Kline`` and a result for several codes have a ``# next:`` of their own, and ``Financials``
     and a single record come whole from one call, so none of them takes an offset. A line item of
     a financial statement renders as two columns, ``<item>`` and ``<item>.yoy``.
+
+    ``now`` is the time of rendering. With it, a result from the cache ends the ``# meta`` line
+    with ``cache_facts``, and a stale one also gets a note; pass its own ``fetched_at`` then.
     """
     agent = spec.agent
     dump = params.model_dump(mode="json", exclude_none=True)
@@ -297,10 +303,13 @@ def render(
     else:
         tables = [_Table("", 0, len(rows), tuple(wanted))]
     zone = _zone(params)
+    facts = cache_facts(cast(object, result), now)
     head.append(
         f"# meta: fetched_at={fetched_at.astimezone(zone).isoformat(timespec='seconds')} "
-        f"freshness={spec.freshness} rows={len(rows)}"
+        f"freshness={spec.freshness} rows={len(rows)}{facts}"
     )
+    if facts.endswith(" stale=true"):
+        notes.append(STALE_NOTE)
     head += missing_fields
     if not rows and not left_out:
         notes.append(_empty_note(agent, dump, cast(object, result)))
@@ -366,6 +375,23 @@ def render(
     )
 
 
+def cache_facts(result: object, now: datetime | None) -> str:
+    """`` from_cache=true age_s=N`` for a result from the cache, N whole seconds since its
+    fetch at ``now``, plus `` stale=true`` when it is stale; nothing for a fresh result or
+    without ``now``."""
+    info = info_of(result)
+    if now is None or info is None or not info.from_cache:
+        return ""
+    return _cache_text([info], now)
+
+
+def _cache_text(infos: Sequence[FetchInfo], now: datetime) -> str:
+    """The facts of results from the cache: the largest age, stale when any is."""
+    age = max(int((now - info.fetched_at).total_seconds()) for info in infos)
+    text = f" from_cache=true age_s={max(age, 0)}"
+    return text + " stale=true" if any(info.stale for info in infos) else text
+
+
 def refuses_offset(spec: Endpoint[Any, Any]) -> bool:
     """Whether the declaration of ``spec`` alone tells that its results take no offset, so no
     request is needed to find out: bars, statements, one record, or one row per code."""
@@ -393,12 +419,14 @@ def render_bar_stats(
     klines: Sequence[Kline],
     *,
     max_chars: int,
-    fetched_at: datetime,
+    now: datetime,
 ) -> str:
     """One stats row per symbol, for comparing klines of several symbols; no bar rows.
 
     A param whose value differs between the symbols, such as a ``begin`` taken from today in
-    each exchange's timezone, is shown as an object by symbol.
+    each exchange's timezone, is shown as an object by symbol. ``now`` is the time of rendering
+    and the fetch time of klines fetched anew. When any came from the cache, ``# meta`` shows
+    the earliest fetch time and the largest age, and stale when any is, with a note.
     """
     dumps = [one.model_dump(mode="json", exclude_none=True) for one in params]
     shared: dict[str, Any] = {}
@@ -408,10 +436,13 @@ def render_bar_stats(
             shared[key] = values[0]
         else:
             shared[key] = {one.symbol: value for one, value in zip(params, values, strict=True)}
+    cached = [info for info in map(info_of, klines) if info is not None and info.from_cache]
+    fetched_at = min((info.fetched_at for info in cached), default=now)
+    facts = _cache_text(cached, now) if cached else ""
     head = [
         f"# {spec.name} {compact_json({'symbols': [p.symbol for p in params], **shared})}",
         f"# meta: fetched_at={fetched_at.astimezone(DEFAULT_ZONE).isoformat(timespec='seconds')} "
-        f"freshness={spec.freshness} rows={len(klines)}",
+        f"freshness={spec.freshness} rows={len(klines)}{facts}",
     ]
     if any(len(kline) == 0 for kline in klines):
         head.append(f"# note: {_EMPTY_BARS}")
@@ -423,6 +454,8 @@ def render_bar_stats(
     cut = [one.symbol for one, kline in zip(params, klines, strict=True) if _cut_off(one, kline)]
     if cut:
         head.append(f"# note: the bars of {', '.join(cut)} start after begin: {_CUT_BARS}")
+    if any(info.stale for info in cached):
+        head.append(f"# note: {STALE_NOTE}")
     head.append(csv_line(["symbol", *STATS_COLUMNS]))
     lines: list[str] = []
     for one, kline in zip(params, klines, strict=True):

@@ -6,6 +6,7 @@ from collections.abc import Hashable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Generic, TypeVar
 
+from ._result import Fetched
 from .errors import InvalidParams, UpstreamChanged
 from .registry import Endpoint, Pagination
 
@@ -17,7 +18,7 @@ RUNAWAY_PAGES = 1000
 
 
 @dataclass(frozen=True, slots=True)
-class Page(Generic[T]):
+class Page(Fetched, Generic[T]):
     """One upstream page; iterating it gives its rows.
 
     ``next_params`` holds the params of the next page, is safe to store as JSON and is the only

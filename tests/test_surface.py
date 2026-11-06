@@ -217,13 +217,16 @@ def test_page_methods_take_the_params_of_the_method_and_two_limits(name: str) ->
     single = inspect.signature(getattr(Client, name)).parameters
     walk = inspect.signature(getattr(Client, f"{name}_pages")).parameters
     async_method = getattr(AsyncClient, f"{name}_pages")
+    # Every page is fetched anew, so a walk takes no cache params.
+    own = [key for key in single if key not in ("cache", "max_age")]
 
     assert inspect.signature(async_method).parameters == walk
     assert not inspect.iscoroutinefunction(async_method)
-    assert list(walk) == [*single, "max_pages", "max_items"]
-    for key, param in single.items():
+    assert list(single)[-2:] == ["cache", "max_age"]
+    assert list(walk) == [*own, "max_pages", "max_items"]
+    for key in own:
         if key != "page_size":
-            assert walk[key] == param
+            assert walk[key] == single[key]
     for key in ("page_size", "max_pages", "max_items"):
         if key in walk:
             assert walk[key].kind is inspect.Parameter.KEYWORD_ONLY

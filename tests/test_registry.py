@@ -20,6 +20,7 @@ from xueqiu_api import REGISTRY, AsyncClient, Client
 from xueqiu_api import endpoints as endpoint_package
 from xueqiu_api._model import USER_KEY, UpstreamModel
 from xueqiu_api._replay import ReplayTransport
+from xueqiu_api._result import FetchFacts
 from xueqiu_api.registry import CATEGORY_TITLES, Auth, Category, Endpoint, Freshness, Pagination
 from xueqiu_api.sites import SITES
 from xueqiu_api.symbols import SymbolParams
@@ -35,6 +36,7 @@ NOT_A_SECURITY = {"ind_code"}
 """Names that match ``CODE_LIKE`` but select something else: an industry."""
 UNPREFIXED = {"kline", "quotec", "batch_quote", "suggest_stock"}
 """Names from before the rule that a name starts with its category."""
+KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
 SHORT_PAGE_ENDS = {"capital_block_trades"}
 """Endpoints with a measured page size cap, so that a short page ends them: full pages 1 and 2
 at size=100 for capital_block_trades, measured 2026-11-05."""
@@ -389,6 +391,9 @@ def test_every_endpoint_example_is_reachable_through_call(
 
     # Lists, Kline and Financials are empty when nothing came back; records are models.
     assert result
+    assert isinstance(result, FetchFacts)
+    assert result.fetched_at is not None
+    assert (result.from_cache, result.stale) == (False, False)
 
 
 @pytest.mark.parametrize("name", ENDPOINTS)
@@ -400,15 +405,17 @@ def test_every_endpoint_has_matching_client_methods(name: str) -> None:
     assert inspect.iscoroutinefunction(async_method)
     assert not inspect.iscoroutinefunction(sync_method)
     assert inspect.signature(async_method) == signature
-    params = list(signature.parameters.values())[1:]
+    *params, cache, max_age = list(signature.parameters.values())[1:]
     fields = REGISTRY[name].params.model_fields
     assert [param.name for param in params] == list(fields)
+    assert (cache.name, cache.kind, cache.default) == ("cache", KEYWORD_ONLY, True)
+    assert (max_age.name, max_age.kind, max_age.default) == ("max_age", KEYWORD_ONLY, None)
     for index, param in enumerate(params):
         field = fields[param.name]
         if index == 0 and param.name in CODE_PARAMS:
             assert param.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
         else:
-            assert param.kind is inspect.Parameter.KEYWORD_ONLY, param.name
+            assert param.kind is KEYWORD_ONLY, param.name
         if field.is_required():
             assert param.default is inspect.Parameter.empty, param.name
         else:
@@ -427,6 +434,7 @@ def test_endpoint_methods_are_exactly_the_registry() -> None:
         "call",
         "request",
         "close",
+        "status",
         "kline_history",
         "security_snapshot",
         "trading_calendar",

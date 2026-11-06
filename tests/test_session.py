@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import stat
+import subprocess
 import sys
-from collections.abc import Callable
+import threading
+import time
+from collections.abc import Callable, Mapping
+from contextlib import closing
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
+from typing import Any, Self
 
 import httpx2
 import pytest
@@ -22,10 +29,17 @@ from xueqiu_api import (
     UpstreamChanged,
     UpstreamError,
 )
+from xueqiu_api._async import AsyncClient, AsyncRuntime
+from xueqiu_api._paths import cache_dir, data_dir
 from xueqiu_api._session import default_session_path, parse_credentials
+from xueqiu_api._shared import LEASE_POLL_S, STATE_FILE, SharedState, default_state_path
+from xueqiu_api._sqlite import open_db
+from xueqiu_api._sync import SyncRuntime
 
 from .harness import (
     ANON_COOKIES,
+    FakeClock,
+    FakeUpstream,
     Harness,
     Register,
     error_reply,
@@ -45,6 +59,20 @@ SUGGEST = "/query/v1/suggest_stock.json"
 LOGIN_TOKEN = "fake-login-token-9f3a"
 LOGIN_U = "fake-login-u-77812"
 TOKEN = f"xq_a_token={LOGIN_TOKEN}; u={LOGIN_U}"
+SAVED_AT = 1_790_000_000.0
+STALE = {"xq_a_token": "fake-stale-token-0001", "u": "fake-stale-u-0001"}
+OTHER = {"xq_a_token": "fake-other-token-0001", "u": "fake-other-u-0001"}
+
+
+def save_session(path: Path, cookies: Mapping[str, str], saved_at: float) -> None:
+    """Write the session file as another process would."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"version": 1, "saved_at": saved_at, "cookies": dict(cookies)}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def header(cookies: Mapping[str, str]) -> str:
+    return "; ".join(f"{name}={value}" for name, value in cookies.items())
 
 
 def test_bootstrap_follows_the_apex_redirect_and_caches_the_cookies(
@@ -382,12 +410,75 @@ def test_default_session_path_follows_platform_conventions(
     assert default_session_path() == tmp_path / "xueqiu-api" / "session.json"
     monkeypatch.setenv("XDG_CACHE_HOME", "relative/path")
     assert default_session_path() == Path.home() / ".cache" / "xueqiu-api" / "session.json"
+    monkeypatch.delenv("XDG_CACHE_HOME")
+    assert default_session_path() == Path.home() / ".cache" / "xueqiu-api" / "session.json"
     monkeypatch.setattr(sys, "platform", "darwin")
     expected = Path.home() / "Library" / "Caches" / "xueqiu-api" / "session.json"
     assert default_session_path() == expected
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     assert default_session_path() == tmp_path / "xueqiu-api" / "Cache" / "session.json"
+    monkeypatch.delenv("LOCALAPPDATA")
+    local = Path.home() / "AppData" / "Local"
+    assert default_session_path() == local / "xueqiu-api" / "Cache" / "session.json"
+    assert default_session_path() == cache_dir() / "session.json"
+
+
+def test_data_dir_follows_platform_conventions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert data_dir() == tmp_path / "xueqiu-api"
+    monkeypatch.setenv("XDG_DATA_HOME", "relative/path")
+    assert data_dir() == Path.home() / ".local" / "share" / "xueqiu-api"
+    monkeypatch.delenv("XDG_DATA_HOME")
+    assert data_dir() == Path.home() / ".local" / "share" / "xueqiu-api"
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert data_dir() == Path.home() / "Library" / "Application Support" / "xueqiu-api"
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert data_dir() == tmp_path / "xueqiu-api" / "Data"
+    monkeypatch.delenv("LOCALAPPDATA")
+    assert data_dir() == Path.home() / "AppData" / "Local" / "xueqiu-api" / "Data"
+
+
+def test_offline_tests_and_their_subprocesses_use_private_user_directories(
+    tmp_path: Path,
+) -> None:
+    code = (
+        "from xueqiu_api._paths import cache_dir, data_dir\nprint(cache_dir())\nprint(data_dir())\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    for path in (Path.home(), cache_dir(), data_dir(), *map(Path, done.stdout.splitlines())):
+        assert path.is_relative_to(tmp_path)
+    assert os.environ["PYTHON_KEYRING_BACKEND"] == "keyring.backends.null.Keyring"
+
+
+@pytest.mark.parametrize("module", ["_sync", "_async"])
+def test_the_default_wall_clock_reads_the_patched_module_datetime(
+    monkeypatch: pytest.MonkeyPatch, module: str
+) -> None:
+    moment = datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> Self:
+            return cls.fromtimestamp(moment.timestamp(), tz)
+
+    monkeypatch.setattr(f"xueqiu_api.{module}.datetime", Frozen)
+    runtime = SyncRuntime() if module == "_sync" else AsyncRuntime()
+    assert runtime.wall() == moment.timestamp()
+
+
+def test_the_harness_replaces_the_wall_clock_only_when_given(
+    make: Callable[..., Harness],
+) -> None:
+    given = make(wall=lambda: 1234.5).client
+    default = make().client
+    assert given._wall() == 1234.5  # pyright: ignore[reportPrivateUsage]
+    runtime = SyncRuntime() if isinstance(default, Client) else AsyncRuntime()
+    assert default._wall is runtime.wall  # pyright: ignore[reportPrivateUsage]
 
 
 def test_home_page_without_a_needed_cookie_fails_only_the_endpoints_that_need_it(
@@ -544,3 +635,202 @@ def test_a_cookie_value_starting_with_another_leaves_no_tail_in_errors(
 
     assert "SECRETTAIL" not in caught.value.message
     assert "abcdefgh" not in caught.value.message
+
+
+@pytest.mark.parametrize(
+    ("offset", "adopted"),
+    [(1.0, True), (0.0, False), (-1.0, False)],
+    ids=["newer", "equal", "older"],
+)
+def test_a_refresh_adopts_only_a_set_saved_after_the_one_it_holds(
+    make: Callable[..., Harness], session_path: Path, offset: float, adopted: bool
+) -> None:
+    save_session(session_path, STALE, SAVED_AT)
+    h = make()
+    save_session(session_path, OTHER, SAVED_AT + offset)
+    h.upstream.route(
+        STOCK,
+        KLINE,
+        error_reply(60201, "synthetic login error"),
+        fixture_reply("kline/sh600000_day"),
+    )
+
+    assert len(h.kline("SH600000")) == 3
+
+    first, retry = h.upstream.requests(STOCK, KLINE)
+    assert first.headers["cookie"] == header(STALE)
+    assert retry.headers["cookie"] == header(OTHER if adopted else ANON_COOKIES)
+    assert len(h.upstream.requests("xueqiu.com", "/")) == (0 if adopted else 1)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="needs POSIX permissions that apply to the user",
+)
+def test_a_session_that_cannot_save_never_adopts_the_stale_set_again(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    save_session(session_path, STALE, SAVED_AT)
+    session_path.parent.chmod(0o500)
+    fresh = {"xq_a_token": "fake-anon-token-0002", "u": "fake-anon-u-0002"}
+    try:
+        h = make()
+        h.upstream.route(WWW, "/", home_page(), home_page(fresh))
+        rejected = error_reply(60201, "synthetic login error")
+        bars = fixture_reply("kline/sh600000_day")
+        h.upstream.route(STOCK, KLINE, rejected, bars, rejected, bars)
+
+        # Each call spends its one refresh on a home page fetch, though the file keeps STALE.
+        assert len(h.kline("SH600000")) == 3
+        assert len(h.kline("SH600000")) == 3
+
+        assert json.loads(session_path.read_text(encoding="utf-8"))["cookies"] == STALE
+    finally:
+        session_path.parent.chmod(0o700)
+    sent = [request.headers["cookie"] for request in h.upstream.requests(STOCK, KLINE)]
+    refetched = {"acw_tc": ANON_COOKIES["acw_tc"], **fresh}
+    assert sent == [header(STALE), header(ANON_COOKIES), header(ANON_COOKIES), header(refetched)]
+    assert len(h.upstream.requests("xueqiu.com", "/")) == 2
+
+
+def test_a_set_fetched_after_the_wall_clock_went_back_replaces_the_one_held_elsewhere(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    """The held set was saved an hour ahead of the wall clock now, as before a step back."""
+    ahead = time.time() + 3600
+    save_session(session_path, STALE, ahead)
+    writer, reader = make(), make()
+    rejected = error_reply(60201, "synthetic login error")
+    bars = fixture_reply("kline/sh600000_day")
+    writer.upstream.route(STOCK, KLINE, rejected, bars, rejected, bars)
+
+    assert len(writer.kline("SH600000")) == 3
+    assert len(reader.kline("SH600000")) == 3
+
+    assert len(writer.upstream.requests("xueqiu.com", "/")) == 1
+    retry = writer.upstream.requests(STOCK, KLINE)[-1]
+    assert retry.headers["cookie"] == header(ANON_COOKIES)
+    assert json.loads(session_path.read_text(encoding="utf-8"))["saved_at"] > ahead
+
+
+def test_a_fetched_set_is_stamped_with_the_wall_clock_of_the_client(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    h = make(wall=lambda: SAVED_AT)
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    h.kline("SH600000")
+
+    assert json.loads(session_path.read_text(encoding="utf-8"))["saved_at"] == SAVED_AT
+
+
+def test_a_set_saved_before_the_home_lease_was_taken_is_adopted_without_a_fetch(
+    make: Callable[..., Harness], session_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h = make()
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    def lease_home(deadline: float) -> float | None:
+        # The holder before this call saved its set and gave the lease back meanwhile.
+        save_session(session_path, OTHER, SAVED_AT)
+        return 0.0
+
+    monkeypatch.setattr(h.client._limiter, "lease_home", lease_home)  # pyright: ignore[reportPrivateUsage]
+
+    assert len(h.kline("SH600000")) == 3
+
+    assert h.upstream.requests("xueqiu.com", "/") == []
+    assert h.upstream.requests(STOCK, KLINE)[0].headers["cookie"] == header(OTHER)
+
+
+def test_a_call_waiting_on_the_home_lease_adopts_the_set_its_holder_saves(
+    make: Callable[..., Harness],
+    clock: FakeClock,
+    session_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleep = clock.sleep
+
+    def holder_saves(seconds: float) -> None:
+        sleep(seconds)
+        save_session(session_path, OTHER, SAVED_AT)
+
+    monkeypatch.setattr(clock, "sleep", holder_saves)
+    with closing(SharedState(default_state_path(), clock=clock.now, wall=clock.now)) as other:
+        assert other.lease("home", clock.now() + 10) == 0.0
+        h = make(shared=True)
+        h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+        assert len(h.kline("SH600000")) == 3
+
+    assert h.upstream.requests("xueqiu.com", "/") == []
+    assert h.upstream.requests(STOCK, KLINE)[0].headers["cookie"] == header(OTHER)
+    assert clock.sleeps == [LEASE_POLL_S]
+
+
+def test_a_call_takes_over_a_home_lease_that_expires_while_it_waits(
+    make: Callable[..., Harness], clock: FakeClock
+) -> None:
+    with closing(SharedState(default_state_path(), clock=clock.now, wall=clock.now)) as other:
+        assert other.lease("home", clock.now() + 2 * LEASE_POLL_S) == 0.0
+        h = make(shared=True)
+        h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+        assert len(h.kline("SH600000")) == 3
+
+        assert clock.sleeps == [LEASE_POLL_S, LEASE_POLL_S]
+        assert len(h.upstream.requests("xueqiu.com", "/")) == 1
+        # The fetch gave the lease back.
+        assert other.lease("home", clock.now() + 10) == 0.0
+
+
+def test_a_failed_home_fetch_gives_the_home_lease_back(
+    make: Callable[..., Harness], clock: FakeClock
+) -> None:
+    h = make(shared=True)
+    h.upstream.route(WWW, "/", waf_reply())
+
+    with pytest.raises(Blocked):
+        h.kline("SH600000")
+
+    with closing(SharedState(default_state_path(), clock=clock.now, wall=clock.now)) as other:
+        assert other.lease("home", clock.now() + 10) == 0.0
+
+
+def test_a_bootstrap_cancelled_while_taking_the_home_lease_gives_it_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "state" / STATE_FILE
+    upstream = FakeUpstream(FakeClock())
+    runtime = AsyncRuntime(transport=upstream.transport, state_path=path)
+    entered, go = threading.Event(), threading.Event()
+
+    async def main() -> None:
+        async with AsyncClient(session_path=tmp_path / "session.json", _runtime=runtime) as client:
+            limiter = client._limiter  # pyright: ignore[reportPrivateUsage]
+            lease_home = limiter.lease_home
+
+            def held(deadline: float) -> float | None:
+                entered.set()
+                go.wait(10)
+                return lease_home(deadline)
+
+            monkeypatch.setattr(limiter, "lease_home", held)
+            task = asyncio.create_task(client.kline("SH600000"))
+            assert await asyncio.to_thread(entered.wait, 10)
+            task.cancel()
+            go.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(main())
+
+    conn = open_db(path, busy_timeout_s=1, readonly=True)
+    try:
+        leases: list[Any] = conn.execute("SELECT * FROM leases").fetchall()
+    finally:
+        conn.close()
+    assert leases == []
+    with closing(SharedState(path, clock=time.monotonic, wall=time.time)) as other:
+        assert other.lease("home", time.monotonic() + 10) == 0.0
+    assert upstream.sent == []

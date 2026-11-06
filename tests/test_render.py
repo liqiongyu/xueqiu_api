@@ -22,6 +22,8 @@ from xueqiu_api._render import (
     FENCE_END,
     FREE_TEXT_CHARS,
     LABEL_CHARS,
+    STALE_NOTE,
+    cache_facts,
     cell,
     clean_text,
     compact_json,
@@ -31,7 +33,10 @@ from xueqiu_api._render import (
     kline_stats,
     number,
     render,
+    render_bar_stats,
 )
+from xueqiu_api._result import FetchInfo, stamp
+from xueqiu_api.endpoints.kline import KlineParams
 from xueqiu_api.models import Kline
 from xueqiu_api.registry import Endpoint, Pagination, RowOrder
 from xueqiu_api.symbols import SymbolParams
@@ -353,6 +358,8 @@ def text_of(
     limit: int = 50,
     max_chars: int = 20_000,
     offset: int = 0,
+    fetched_at: datetime = MOMENT,
+    now: datetime | None = None,
 ) -> str:
     return render(
         spec,
@@ -361,9 +368,10 @@ def text_of(
         fields=fields,
         limit=limit,
         max_chars=max_chars,
-        fetched_at=MOMENT,
+        fetched_at=fetched_at,
         next_call=next_of,
         offset=offset,
+        now=now,
     )
 
 
@@ -983,3 +991,102 @@ def test_a_row_over_the_budget_at_the_end_of_a_page_moves_to_the_next_page() -> 
     text = text_of(spec, page, max_chars=4000, offset=1)
 
     assert next_step(text) == ({"page": 2, "page_size": 2}, 0)
+
+
+# Results from the cache
+
+
+def from_cache(age_s: float, *, stale: bool = False) -> FetchInfo:
+    """Facts of a result served from the cache at ``MOMENT``, fetched ``age_s`` seconds before."""
+    return FetchInfo(MOMENT - timedelta(seconds=age_s), from_cache=True, stale=stale)
+
+
+def test_a_result_from_the_cache_ends_the_meta_line_with_its_age() -> None:
+    spec = spec_of("id")
+    fresh = text_of(spec, list(rows_of(3))).splitlines()
+    info = from_cache(300)
+
+    text = text_of(spec, stamp(list(rows_of(3)), info), fetched_at=info.fetched_at, now=MOMENT)
+
+    meta = "# meta: fetched_at=2026-11-05T10:00:00+08:00 freshness=daily rows=3"
+    cached = "# meta: fetched_at=2026-11-05T09:55:00+08:00 freshness=daily rows=3"
+    assert meta in fresh
+    assert text.splitlines() == [
+        f"{cached} from_cache=true age_s=300" if line == meta else line for line in fresh
+    ]
+
+
+def test_a_stale_result_says_so_in_the_meta_line_and_a_note() -> None:
+    spec = spec_of("id")
+    fresh = text_of(spec, list(rows_of(3))).splitlines()
+    info = from_cache(7200, stale=True)
+
+    text = text_of(spec, stamp(list(rows_of(3)), info), fetched_at=info.fetched_at, now=MOMENT)
+
+    lines = text.splitlines()
+    stale_meta = "# meta: fetched_at=2026-11-05T08:00:00+08:00 freshness=daily rows=3"
+    assert f"{stale_meta} from_cache=true age_s=7200 stale=true" in lines
+    assert lines[lines.index(f"{stale_meta} from_cache=true age_s=7200 stale=true") + 1] == (
+        f"# note: {STALE_NOTE}"
+    )
+    assert [line for line in lines if not line.startswith(("# meta: ", "# note: "))] == [
+        line for line in fresh if not line.startswith("# meta: ")
+    ]
+
+
+def test_a_fresh_result_keeps_the_meta_line_it_had_before_the_cache() -> None:
+    spec = spec_of("id")
+    before = text_of(spec, list(rows_of(3)))
+    fetched = stamp(list(rows_of(3)), FetchInfo(MOMENT))
+
+    assert text_of(spec, fetched, now=MOMENT) == before
+    assert text_of(spec, list(rows_of(3)), now=MOMENT) == before
+    # Without the time of rendering there is no age to show.
+    assert text_of(spec, stamp(list(rows_of(3)), from_cache(300))) == before
+
+
+def test_the_age_is_in_whole_seconds_and_never_negative() -> None:
+    def facts(info: FetchInfo) -> str:
+        return cache_facts(stamp(list(rows_of(1)), info), MOMENT)
+
+    assert facts(from_cache(299.9)) == " from_cache=true age_s=299"
+    # A wall clock set back since the fetch.
+    assert facts(from_cache(-5)) == " from_cache=true age_s=0"
+    assert facts(from_cache(60, stale=True)) == " from_cache=true age_s=60 stale=true"
+    assert facts(FetchInfo(MOMENT - timedelta(hours=1))) == ""
+    assert cache_facts(list(rows_of(1)), MOMENT) == ""
+
+
+def test_a_comparison_shows_the_earliest_fetch_and_the_largest_age() -> None:
+    spec = REGISTRY["kline"]
+    symbols = ("SH600000", "SZ000858", "SH600519")
+    params = [KlineParams(symbol=symbol, count=1) for symbol in symbols]
+
+    def bars(symbol: str) -> Kline:
+        moment = datetime(2026, 11, 4, tzinfo=SHANGHAI)
+        return Kline(
+            symbol=symbol,
+            period="day",
+            adjust="before",
+            timestamps=(moment,),
+            columns={"close": (10.0,)},
+        )
+
+    def text(*infos: FetchInfo) -> list[str]:
+        klines = [stamp(bars(symbol), info) for symbol, info in zip(symbols, infos, strict=True)]
+        return render_bar_stats(spec, params, klines, max_chars=20_000, now=MOMENT).splitlines()
+
+    fresh = text(*[FetchInfo(MOMENT)] * 3)
+    meta = "# meta: fetched_at=2026-11-05T10:00:00+08:00 freshness=intraday rows=3"
+    assert fresh[1] == meta
+    mixed = text(FetchInfo(MOMENT), from_cache(300), from_cache(30))
+    assert mixed == [
+        *fresh[:1],
+        "# meta: fetched_at=2026-11-05T09:55:00+08:00 freshness=intraday rows=3 "
+        "from_cache=true age_s=300",
+        *fresh[2:],
+    ]
+    stale = text(from_cache(30, stale=True), from_cache(300), FetchInfo(MOMENT))
+    assert stale[1].endswith(" from_cache=true age_s=300 stale=true")
+    assert f"# note: {STALE_NOTE}" in stale
+    assert f"# note: {STALE_NOTE}" not in mixed

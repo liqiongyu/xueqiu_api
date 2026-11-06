@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from collections.abc import Callable
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -11,13 +12,24 @@ import pytest
 
 from xueqiu_api import (
     InvalidParams,
+    RateLimited,
     SymbolNotFound,
     UnknownEndpoint,
     UpstreamError,
 )
+from xueqiu_api._shared import default_state_path
+from xueqiu_api._status import AuthError, ClientStatus
 from xueqiu_api.models import Kline, Quote
 
-from .harness import Harness, error_reply, fixture_reply, json_reply
+from .harness import (
+    ANON_COOKIES,
+    FAKE_LOGIN,
+    FakeClock,
+    Harness,
+    error_reply,
+    fixture_reply,
+    json_reply,
+)
 
 STOCK = "stock.xueqiu.com"
 QUOTEC = "/v5/stock/realtime/quotec.json"
@@ -251,3 +263,47 @@ def test_errors_from_the_upstream_keep_their_code(h: Harness) -> None:
     error = caught.value
     assert (error.code, error.upstream_code, error.status) == ("upstream_error", "100002", 400)
     assert "Required parameter missing" in error.message
+
+
+@pytest.mark.parametrize("shared", [False, True], ids=["memory", "shared"])
+def test_status_reads_local_state_without_a_request_or_a_cookie_value(
+    make: Callable[..., Harness], clock: FakeClock, shared: bool
+) -> None:
+    epoch = 1_790_000_000.0
+    h = make(token=FAKE_LOGIN, shared=shared, wall=lambda: epoch + clock.now())
+    h.upstream.route(
+        STOCK,
+        KLINE,
+        error_reply(60201, "synthetic login error"),
+        fixture_reply("kline/sh600000_day"),
+    )
+    h.upstream.route(STOCK, QUOTEC, json_reply({}, 429, {"Retry-After": "60"}))
+    h.kline("SH600000")
+    with pytest.raises(RateLimited):
+        h.quotec("SH600000")
+    sent = len(h.upstream.sent)
+    rejected = h.upstream.requests(STOCK, KLINE)[0]
+
+    status: ClientStatus = h.run("status")
+
+    assert len(h.upstream.sent) == sent
+    assert status.credentials == "token"
+    assert status.last_auth_error == AuthError(
+        "60201", datetime.fromtimestamp(epoch + rejected.at, UTC)
+    )
+    hosts = {host.host: host for host in status.hosts}
+    assert set(hosts) == {"stock.xueqiu.com", "www.xueqiu.com", "danjuanfunds.com"}
+    stock = hosts[STOCK]
+    assert (stock.interval_s, stock.open_s) == (1.0, 0.0)
+    assert stock.paused_s == pytest.approx(60.0)
+    assert stock.wait_s == pytest.approx(1.0)
+    if shared:
+        assert status.shared is not None
+        assert (status.shared.path, status.shared.available) == (str(default_state_path()), True)
+    else:
+        assert status.shared is None
+    text = repr(status)
+    for value in [*ANON_COOKIES.values(), "fake-login-token-0001", "fake-login-u-0001"]:
+        assert value not in text
+    # Reading the status books no slot.
+    assert h.run("status").hosts == status.hosts

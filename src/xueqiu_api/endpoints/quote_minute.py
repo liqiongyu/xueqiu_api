@@ -8,6 +8,7 @@ from datetime import date, datetime
 from typing import Any, Literal, cast
 
 from .._model import UpstreamModel
+from .._result import Fetched
 from .._time import from_ms
 from .._values import Number, number
 from ..registry import AgentInfo, Endpoint
@@ -23,7 +24,7 @@ class QuoteMinuteParams(SymbolParams):
 
 
 @dataclass(frozen=True, slots=True)
-class MinuteChart:
+class MinuteChart(Fetched):
     """Intraday points of one symbol in columns, oldest first.
 
     ``columns`` holds every upstream value that was not null anywhere, under its upstream name, a

@@ -13,31 +13,43 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from types import MappingProxyType
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from .endpoints.kline import Kline
 from .endpoints.quote_detail import QuoteDetail
 from .errors import InvalidParams, UpstreamChanged
-from .symbols import Market, normalize_symbol
+from .symbols import TIMEZONES, Market, normalize_symbol
 
 __all__ = [
     "CALENDAR_SOURCES",
+    "SESSION_HOURS",
     "CalendarSource",
     "MarketState",
     "Phase",
     "TradingCalendar",
     "calendar_from_kline",
+    "in_session",
     "market_state_from_quote",
+    "session_over",
 ]
 
 Phase = Literal["trading", "closed", "pre_open", "unknown"]
 
 _ONE_DAY = timedelta(days=1)
 _PHASES: Mapping[int, Phase] = MappingProxyType({1: "pre_open", 5: "trading", 7: "closed"})
-_DAY_OVER: Mapping[Market, time] = MappingProxyType(
-    {"CN": time(15, 30), "HK": time(16, 30), "US": time(16, 30)}
+SESSION_HOURS: Mapping[Market, tuple[time, time]] = MappingProxyType(
+    {
+        "CN": (time(9, 15), time(15, 30)),
+        "HK": (time(9, 0), time(16, 30)),
+        "US": (time(9, 30), time(16, 30)),
+    }
 )
-"""Local time by which a session's quote has arrived: the CN extended quote stamps 15:30 and the
-HK quote 16:08 (measured 2026-11-04)."""
+"""Open and close of each market's day, in the exchange's local time (``symbols.TIMEZONES``).
+
+The opens follow the exchange rules; the CN and HK ones include the opening auctions. A close
+is the local time by which the session's quote has arrived: the CN extended quote stamps 15:30
+and the HK quote 16:08 (measured 2026-11-04). There is no holiday table.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,11 +187,7 @@ def market_state_from_quote(quote: QuoteDetail, *, now: datetime) -> MarketState
     traded_today: bool | None = None
     if phase == "trading" or quote_day == today.date():
         traded_today = True
-    elif (
-        quote_day is not None
-        and quote_day < today.date()
-        and today.time() > _DAY_OVER[symbol.market]
-    ):
+    elif quote_day is not None and quote_day < today.date() and session_over(symbol.market, now):
         traded_today = False
     return MarketState(
         market=symbol.market,
@@ -188,3 +196,18 @@ def market_state_from_quote(quote: QuoteDetail, *, now: datetime) -> MarketState
         quote_time=quote.timestamp,
         traded_today=traded_today,
     )
+
+
+def in_session(market: Market, at: datetime) -> bool:
+    """Whether ``at``, an aware datetime, is Monday to Friday within ``SESSION_HOURS`` of
+    ``market``, both ends included. Holidays count as sessions."""
+    local = at.astimezone(ZoneInfo(TIMEZONES[market]))
+    opens, closes = SESSION_HOURS[market]
+    return local.weekday() < 5 and opens <= local.time() <= closes
+
+
+def session_over(market: Market, at: datetime) -> bool:
+    """Whether ``at``, an aware datetime, is later than the close of ``market`` on its local
+    date, on any day of the week."""
+    local = at.astimezone(ZoneInfo(TIMEZONES[market]))
+    return local.time() > SESSION_HOURS[market][1]

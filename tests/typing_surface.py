@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
-from typing import assert_type
+from datetime import datetime
+from typing import Any, assert_type
 
 from xueqiu_api import AsyncClient, Client, Page
 from xueqiu_api.adjust import AdjustFactors
@@ -24,6 +25,7 @@ from xueqiu_api.models import (
     Quote,
     QuoteDetail,
     RevenueBreakdown,
+    Rows,
     ScreenerQuote,
     StockHit,
     StockSuggestion,
@@ -34,9 +36,9 @@ from xueqiu_api.universe import SecuritySnapshot
 
 
 def sync_surface(c: Client) -> None:
-    assert_type(c.quotec("SH600000"), list[Quote])
-    assert_type(c.batch_quote("SH600000,00700"), list[QuoteDetail])
-    assert_type(c.batch_quote(["SH600000"]), list[QuoteDetail])
+    assert_type(c.quotec("SH600000"), Rows[Quote])
+    assert_type(c.batch_quote("SH600000,00700"), Rows[QuoteDetail])
+    assert_type(c.batch_quote(["SH600000"]), Rows[QuoteDetail])
     assert_type(c.quote_detail("SH600000"), QuoteDetail)
     assert_type(c.kline("SH600000", period="week", adjust="after"), Kline)
     assert_type(c.kline_history("SH600000"), Kline)
@@ -44,7 +46,7 @@ def sync_surface(c: Client) -> None:
     assert_type(c.trading_calendar("HK"), TradingCalendar)
     assert_type(c.market_state("US"), MarketState)
     assert_type(c.adjust_factors("SH600000"), AdjustFactors)
-    assert_type(c.suggest_stock(query="pfyh"), list[StockSuggestion])
+    assert_type(c.suggest_stock(query="pfyh"), Rows[StockSuggestion])
     assert_type(c.f10_company("SH600000"), Company)
     assert_type(c.finance_income("SH600000", report_type="annual"), Financials)
     assert_type(c.capital_block_trades("SH600000"), Page[BlockTrade])
@@ -58,14 +60,22 @@ def sync_surface(c: Client) -> None:
     assert_type(c.f10_bonus_pages("SH600000"), Iterator[BonusPage])
     assert_type(c.finance_business("SH600000"), RevenueBreakdown)
     assert_type(c.screener_quote_list(board="kcb"), Page[ScreenerQuote])
-    assert_type(c.market_hot_stocks(region="hk"), list[HotStock])
-    assert_type(c.search_stock(query="浦发银行"), list[StockHit])
+    assert_type(c.market_hot_stocks(region="hk"), Rows[HotStock])
+    assert_type(c.search_stock(query="浦发银行"), Rows[StockHit])
     assert_type(c.index_valuation("SH000300"), IndexValuation)
     assert_type(c.fund_info("008975"), FundInfo)
-    assert_type(c.cube_quote(["ZH2567925"]), list[CubeQuote])
-    assert_type(c.watchlist_stocks(category="stock"), list[WatchlistItem])
+    assert_type(c.cube_quote(["ZH2567925"]), Rows[CubeQuote])
+    assert_type(c.watchlist_stocks(category="stock"), Rows[WatchlistItem])
     for row in c.fund_nav_history("008975"):
         assert_type(row, FundNav)
+    assert_type(c.kline("SH600000", cache=False, max_age=60), Kline)
+    assert_type(c.kline_history("SH600000", max_age=0), Kline)
+    assert_type(c.call("kline", symbol="SH600000", max_age=60.5), Any)
+    assert_type(c.quotec("SH600000").fetched_at, datetime | None)
+    assert_type(c.f10_company("SH600000", cache=False).from_cache, bool)
+    assert_type(c.fund_nav_history("008975").stale, bool)
+    c.kline("SH600000", max_age="60")  # pyright: ignore[reportArgumentType]
+    c.quotec("SH600000", False)  # pyright: ignore[reportCallIssue]
     c.kline("SH600000", period="daily")  # pyright: ignore[reportArgumentType]
     c.trading_calendar("JP")  # pyright: ignore[reportArgumentType]
     c.security_snapshot("CN", ["kcb"])  # pyright: ignore[reportCallIssue]
@@ -82,8 +92,8 @@ def sync_surface(c: Client) -> None:
 
 
 async def async_surface(c: AsyncClient) -> None:
-    assert_type(await c.quotec("SH600000"), list[Quote])
-    assert_type(await c.batch_quote(["SH600000"]), list[QuoteDetail])
+    assert_type(await c.quotec("SH600000"), Rows[Quote])
+    assert_type(await c.batch_quote(["SH600000"]), Rows[QuoteDetail])
     assert_type(await c.kline("SH600000", period="week"), Kline)
     assert_type(await c.kline_history("SH600000"), Kline)
     assert_type(await c.security_snapshot("CN", segments=["kcb"]), SecuritySnapshot)
@@ -101,12 +111,12 @@ async def async_surface(c: AsyncClient) -> None:
     assert_type(c.f10_bonus_pages("SH600000"), AsyncIterator[BonusPage])
     assert_type(await c.finance_business("SH600000"), RevenueBreakdown)
     assert_type(await c.screener_quote_list(board="kcb"), Page[ScreenerQuote])
-    assert_type(await c.market_hot_stocks(), list[HotStock])
-    assert_type(await c.search_stock(query="浦发银行"), list[StockHit])
+    assert_type(await c.market_hot_stocks(), Rows[HotStock])
+    assert_type(await c.search_stock(query="浦发银行"), Rows[StockHit])
     assert_type(await c.index_valuation("SH000300"), IndexValuation)
     assert_type(await c.fund_info("008975"), FundInfo)
-    assert_type(await c.cube_quote(["ZH2567925"]), list[CubeQuote])
-    assert_type(await c.watchlist_stocks(), list[WatchlistItem])
+    assert_type(await c.cube_quote(["ZH2567925"]), Rows[CubeQuote])
+    assert_type(await c.watchlist_stocks(), Rows[WatchlistItem])
     async for page in c.fund_nav_history_pages("008975", max_pages=2):
         assert_type(page, Page[FundNav])
     await c.kline("SH600000", period="daily")  # pyright: ignore[reportArgumentType]

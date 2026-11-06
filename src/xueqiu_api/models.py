@@ -6,6 +6,7 @@ from ._finance import Financials, LineItem, ReportPeriod, ReportType
 from ._fund import FundBondHolding, FundHolding
 from ._index import IndexValuation, ValuationHistory, ValuationWindow
 from ._pages import Page
+from ._result import Rows
 from .endpoints.capital_assort import CapitalAssort
 from .endpoints.capital_block_trades import BlockTrade
 from .endpoints.capital_distribution import CapitalDistribution
@@ -207,6 +208,7 @@ __all__ = [
     "RevenueBreakdown",
     "RevenueGroup",
     "RevenueSegment",
+    "Rows",
     "ScreenerIndustry",
     "ScreenerQuote",
     "ShareChange",

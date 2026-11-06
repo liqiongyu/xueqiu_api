@@ -7,7 +7,7 @@ import contextvars
 import json
 import threading
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +19,7 @@ from xueqiu_api import AsyncClient, AuthExpired, Client, LoginRequired, SymbolNo
 from xueqiu_api._async import AsyncRuntime
 from xueqiu_api._model import UpstreamModel
 from xueqiu_api._replay import ReplayTransport
+from xueqiu_api._shared import default_state_path
 from xueqiu_api._sync import SyncRuntime
 from xueqiu_api.registry import AgentInfo, Endpoint
 from xueqiu_api.sites import SITES, Host
@@ -207,18 +208,34 @@ class Harness:
         upstream: FakeUpstream,
         clock: FakeClock,
         transport: ReplayTransport | None = None,
+        wall: Callable[[], float] | None = None,
+        shared: bool = False,
         **options: Any,
     ) -> None:
-        """``transport`` replaces the fake upstream, for example with a replay transport."""
+        """``transport`` replaces the fake upstream, for example with a replay transport.
+
+        ``wall`` replaces the runtime's default wall clock only when given. ``shared`` gives
+        the client the state file other processes share, in the default cache directory, which
+        the offline tests point into ``tmp_path``; its wall clock is then ``clock.now`` unless
+        ``wall`` says otherwise.
+        """
         self.kind: Kind = kind
         self.upstream = upstream
         self.clock = clock
         self.client: Client | AsyncClient
         self._runner: asyncio.Runner | None = None
+        state_path = default_state_path() if shared else None
+        if shared and wall is None:
+            wall = clock.now
         if kind == "sync":
             runtime = SyncRuntime(
-                transport=transport or upstream.transport, clock=clock.now, sleep=clock.sleep
+                transport=transport or upstream.transport,
+                clock=clock.now,
+                sleep=clock.sleep,
+                state_path=state_path,
             )
+            if wall is not None:
+                runtime = replace(runtime, wall=wall)
             self.client = Client(_runtime=runtime, **options)
         else:
             self._runner = asyncio.Runner()
@@ -226,7 +243,10 @@ class Harness:
                 transport=transport or upstream.transport,
                 clock=clock.now,
                 sleep=clock.async_sleep,
+                state_path=state_path,
             )
+            if wall is not None:
+                async_runtime = replace(async_runtime, wall=wall)
             self.client = AsyncClient(_runtime=async_runtime, **options)
 
     def run(self, method: str, *args: Any, **kwargs: Any) -> Any:

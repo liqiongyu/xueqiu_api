@@ -10,6 +10,7 @@ import argparse
 import importlib
 import json
 import logging
+import math
 import os
 import platform
 import sys
@@ -21,6 +22,7 @@ from typing import Any, Literal, NoReturn, get_args
 from . import __version__
 from ._replay import ReplayTransport
 from ._session import TOKEN_ENV, default_session_path
+from ._shared import default_state_path
 from ._sync import Client, SyncRuntime
 from .endpoints import REGISTRY
 from .errors import (
@@ -161,6 +163,20 @@ def _parser() -> argparse.ArgumentParser:
         default=os.environ.get("XUEQIU_MCP_LOG_LEVEL") or McpOptions.log_level,
         help="lowest level logged to stderr (default: %(default)s; env: XUEQIU_MCP_LOG_LEVEL)",
     )
+    mcp.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="keep no response cache; by default results are cached in the user cache "
+        "directory, and not at all with --replay (env: XUEQIU_MCP_NO_CACHE, 1 or 0)",
+    )
+    mcp.add_argument(
+        "--stale-if-error",
+        type=_stale_if_error,
+        default=os.environ.get("XUEQIU_MCP_STALE_IF_ERROR") or None,
+        metavar="SECONDS",
+        help="when the upstream fails with a rate limit, a block or an outage, serve a cached "
+        "result up to SECONDS old, marked stale (default: off; env: XUEQIU_MCP_STALE_IF_ERROR)",
+    )
     return parser
 
 
@@ -200,6 +216,31 @@ def _replay_directory(value: str) -> Path:
     return Path(value)
 
 
+def _stale_if_error(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError:
+        seconds = math.nan
+    if not (math.isfinite(seconds) and seconds > 0):
+        raise argparse.ArgumentTypeError(
+            f"expected a positive number of seconds, got {value[:20]!r}"
+        )
+    return seconds
+
+
+def _env_flag(name: str) -> bool:
+    """A yes-or-no environment variable: 1, true, yes or on, and 0, false, no, off or unset."""
+    value = os.environ.get(name, "").strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("", "0", "false", "no", "off"):
+        return False
+    raise InvalidParams(
+        f"{name} must be 1 or 0, got {value[:20]!r}",
+        hint="Run 'xueqiu mcp --help' for the usage.",
+    )
+
+
 def _log_level(value: str) -> str:
     # argparse checks choices for flags but not for defaults read from the environment.
     if value not in get_args(LogLevel):
@@ -221,6 +262,8 @@ def _doctor(args: argparse.Namespace) -> int:
     credentials = "env" if os.environ.get(TOKEN_ENV) else "none"
     cache_exists = cache.exists()
     client = Client(session_path=cache, _runtime=runtime)
+    # Reading the status opens the shared state file, so its facts say whether it works.
+    shared = client.status().shared
     # Every JSON object carries the run's facts, so the output stays a flat list of objects.
     facts = {
         "package_version": __version__,
@@ -228,6 +271,8 @@ def _doctor(args: argparse.Namespace) -> int:
         "credentials": credentials,
         "session_cache": str(cache),
         "session_cache_exists": cache_exists,
+        "shared_state": None if shared is None else shared.path,
+        "shared_state_reason": "in-process only" if shared is None else shared.reason,
     }
     text = args.format == "text"
     width = max(len(name) for name in ["endpoint", *names])
@@ -235,6 +280,9 @@ def _doctor(args: argparse.Namespace) -> int:
         print(f"xueqiu-api {__version__}, Python {platform.python_version()}")
         print(f"credentials: {credentials}")
         print(f"session cache: {cache} ({'exists' if cache_exists else 'missing'})")
+        reason = facts["shared_state_reason"]
+        state = "none" if shared is None else shared.path
+        print(f"shared state: {state}" + ("" if reason is None else f" ({reason})"))
         print(_row(width, "endpoint", "status", "elapsed", "detail"), flush=True)
     rows: list[dict[str, Any]] = []
     failures: list[XueqiuError] = []
@@ -295,8 +343,9 @@ def _row(width: int, endpoint: str, status: str, elapsed: str, detail: str) -> s
 
 
 def _runtime() -> SyncRuntime:
-    """Transport, clock and sleep of the doctor's client; tests replace this."""
-    return SyncRuntime()
+    """Transport, clocks, sleep and shared state file of the doctor's client; tests replace
+    this."""
+    return SyncRuntime(state_path=default_state_path())
 
 
 def _mcp(args: argparse.Namespace) -> int:
@@ -305,6 +354,8 @@ def _mcp(args: argparse.Namespace) -> int:
         max_chars=args.max_chars,
         replay=args.replay,
         log_level=args.log_level,
+        no_cache=args.no_cache or _env_flag("XUEQIU_MCP_NO_CACHE"),
+        stale_if_error=args.stale_if_error,
     )
     try:
         server = importlib.import_module("xueqiu_api.mcp_server.server")

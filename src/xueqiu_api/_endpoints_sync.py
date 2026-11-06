@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ._finance import Financials, ReportType
 from ._index import IndexValuation, ValuationHistory, ValuationWindow
 from ._pages import Page, PageT
+from ._result import Rows
 from .endpoints.batch_quote import ENDPOINT as BATCH_QUOTE
 from .endpoints.capital_assort import ENDPOINT as CAPITAL_ASSORT
 from .endpoints.capital_assort import CapitalAssort
@@ -156,6 +157,7 @@ from .registry import Endpoint
 
 P = TypeVar("P", bound=BaseModel)
 R = TypeVar("R")
+T = TypeVar("T")
 
 
 class SyncEndpoints:
@@ -163,7 +165,23 @@ class SyncEndpoints:
 
     if TYPE_CHECKING:
 
-        def _call(self, spec: Endpoint[P, R], params: Mapping[str, Any]) -> R: ...
+        def _call(
+            self,
+            spec: Endpoint[P, R],
+            params: Mapping[str, Any],
+            *,
+            cache: bool = True,
+            max_age: float | None = None,
+        ) -> R: ...
+
+        def _rows(
+            self,
+            spec: Endpoint[P, list[T]],
+            params: Mapping[str, Any],
+            *,
+            cache: bool = True,
+            max_age: float | None = None,
+        ) -> Rows[T]: ...
 
         def _pages(
             self,
@@ -174,27 +192,45 @@ class SyncEndpoints:
             max_items: int | None = None,
         ) -> Iterator[PageT]: ...
 
-    def batch_quote(self, symbols: str | Sequence[str]) -> list[QuoteDetail]:
+    def batch_quote(
+        self,
+        symbols: str | Sequence[str],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[QuoteDetail]:
         """批量行情: Quotes of up to 20 symbols in one request, with names and market status.
 
         Args:
             symbols: Symbols, as a sequence or one comma-separated string.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(BATCH_QUOTE, {"symbols": symbols})
+        return self._rows(BATCH_QUOTE, {"symbols": symbols}, cache=cache, max_age=max_age)
 
-    def capital_assort(self, symbol: str) -> CapitalAssort:
+    def capital_assort(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CapitalAssort:
         """成交分布: Today's buy and sell turnover of one A-share by size class, with the totals per
         side.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(CAPITAL_ASSORT, {"symbol": symbol})
+        return self._call(CAPITAL_ASSORT, {"symbol": symbol}, cache=cache, max_age=max_age)
 
     def capital_block_trades(
         self,
@@ -202,6 +238,8 @@ class SyncEndpoints:
         *,
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[BlockTrade]:
         """大宗交易: Disclosed block trades of one A-share, latest first.
 
@@ -209,12 +247,17 @@ class SyncEndpoints:
             symbol: An A-share symbol.
             page: Page number, from 1; page 1 holds the latest rows.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             CAPITAL_BLOCK_TRADES,
             {"symbol": symbol, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
         )
 
     def capital_block_trades_pages(
@@ -245,51 +288,87 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def capital_distribution(self, symbol: str) -> CapitalDistribution:
+    def capital_distribution(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CapitalDistribution:
         """资金分布: Today's buy and sell turnover of one A-share by order size, and its main-force net.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(CAPITAL_DISTRIBUTION, {"symbol": symbol})
+        return self._call(CAPITAL_DISTRIBUTION, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def capital_flow(self, symbol: str) -> CapitalFlow:
+    def capital_flow(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CapitalFlow:
         """分时资金流向: Net inflow of one A-share or Hong Kong stock by the minute through one session.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(CAPITAL_FLOW, {"symbol": symbol})
+        return self._call(CAPITAL_FLOW, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def capital_history(self, symbol: str) -> CapitalHistory:
+    def capital_history(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CapitalHistory:
         """历史资金流向: Main-force net inflow of one A-share per day for 20 trading days, with running
         sums.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CAPITAL_HISTORY, {"symbol": symbol})
+        return self._call(CAPITAL_HISTORY, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def capital_history_detail(self, symbol: str) -> CapitalHistoryDetail:
+    def capital_history_detail(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CapitalHistoryDetail:
         """历史资金流向明细: Net inflow of one A-share per day for 20 trading days, broken down by order
         size.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CAPITAL_HISTORY_DETAIL, {"symbol": symbol})
+        return self._call(CAPITAL_HISTORY_DETAIL, {"symbol": symbol}, cache=cache, max_age=max_age)
 
     def capital_longhu(
         self,
@@ -297,6 +376,8 @@ class SyncEndpoints:
         *,
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[LonghuEntry]:
         """龙虎榜: Disclosures of one A-share on the top-traders list (longhu), latest first.
 
@@ -304,10 +385,18 @@ class SyncEndpoints:
             symbol: An A-share symbol.
             page: Page number, from 1; page 1 holds the latest rows.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CAPITAL_LONGHU, {"symbol": symbol, "page": page, "page_size": page_size})
+        return self._call(
+            CAPITAL_LONGHU,
+            {"symbol": symbol, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
+        )
 
     def capital_longhu_pages(
         self,
@@ -337,7 +426,14 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def capital_margin(self, symbol: str, *, count: int = 50) -> MarginHistory:
+    def capital_margin(
+        self,
+        symbol: str,
+        *,
+        count: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> MarginHistory:
         """融资融券: Margin trading and short selling of one A-share per day, latest first, up to 120
         days.
 
@@ -346,41 +442,86 @@ class SyncEndpoints:
         Args:
             symbol: An A-share symbol.
             count: Trading days to fetch, latest first.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CAPITAL_MARGIN, {"symbol": symbol, "count": count})
+        return self._call(
+            CAPITAL_MARGIN,
+            {"symbol": symbol, "count": count},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def cube_holdings(self, cube_symbol: str) -> CubeHoldings:
+    def cube_holdings(
+        self,
+        cube_symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CubeHoldings:
         """组合持仓: What one portfolio holds, with weights and cash; needs a login, structure
         unverified.
 
         Args:
             cube_symbol: Portfolio code, such as ZH2567925.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth required; freshness intraday.
         """
-        return self._call(CUBE_HOLDINGS, {"cube_symbol": cube_symbol})
+        return self._call(CUBE_HOLDINGS, {"cube_symbol": cube_symbol}, cache=cache, max_age=max_age)
 
-    def cube_max_drawdown(self, cube_symbol: str) -> CubeMaxDrawdown:
+    def cube_max_drawdown(
+        self,
+        cube_symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CubeMaxDrawdown:
         """组合最大回撤: The largest drawdown of one portfolio since inception, with its dates.
 
         Args:
             cube_symbol: Portfolio code, such as ZH2567925.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CUBE_MAX_DRAWDOWN, {"cube_symbol": cube_symbol})
+        return self._call(
+            CUBE_MAX_DRAWDOWN,
+            {"cube_symbol": cube_symbol},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def cube_monthly_returns(self, cube_symbol: str) -> list[CubeMonthlyReturn]:
+    def cube_monthly_returns(
+        self,
+        cube_symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[CubeMonthlyReturn]:
         """组合月度收益: Calendar-month gains of one portfolio and its benchmark, latest first.
 
         Args:
             cube_symbol: Portfolio code, such as ZH2567925.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CUBE_MONTHLY_RETURNS, {"cube_symbol": cube_symbol})
+        return self._rows(
+            CUBE_MONTHLY_RETURNS,
+            {"cube_symbol": cube_symbol},
+            cache=cache,
+            max_age=max_age,
+        )
 
     def cube_nav_daily(
         self,
@@ -388,6 +529,8 @@ class SyncEndpoints:
         *,
         begin: date | None = None,
         end: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> CubeNav:
         """组合净值走势: Daily net value of one portfolio and its benchmark, oldest first.
 
@@ -397,12 +540,26 @@ class SyncEndpoints:
             cube_symbol: Portfolio code, such as ZH2567925.
             begin: First date, inclusive.
             end: Last date, inclusive.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CUBE_NAV_DAILY, {"cube_symbol": cube_symbol, "begin": begin, "end": end})
+        return self._call(
+            CUBE_NAV_DAILY,
+            {"cube_symbol": cube_symbol, "begin": begin, "end": end},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def cube_quote(self, cube_symbols: str | Sequence[str]) -> list[CubeQuote]:
+    def cube_quote(
+        self,
+        cube_symbols: str | Sequence[str],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[CubeQuote]:
         """组合行情: Latest net value and gains of up to 10 portfolios, in the order requested.
 
         A code the upstream does not know raises ``SymbolNotFound`` when requested alone, measured
@@ -410,12 +567,21 @@ class SyncEndpoints:
 
         Args:
             cube_symbols: Portfolio codes, as a sequence or one comma-separated string.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(CUBE_QUOTE, {"cube_symbols": cube_symbols})
+        return self._rows(CUBE_QUOTE, {"cube_symbols": cube_symbols}, cache=cache, max_age=max_age)
 
-    def cube_rank_list(self, *, page: int = 1) -> Page[CubeSummary]:
+    def cube_rank_list(
+        self,
+        *,
+        page: int = 1,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Page[CubeSummary]:
         """组合排行榜: One page of the portfolio leaderboard, with each portfolio's net value and gains.
 
         Upstream category 14, the only one measured, which held 100 portfolios in 5 pages on
@@ -423,10 +589,13 @@ class SyncEndpoints:
 
         Args:
             page: Page number, from 1 to 5.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CUBE_RANK_LIST, {"page": page})
+        return self._call(CUBE_RANK_LIST, {"page": page}, cache=cache, max_age=max_age)
 
     def cube_rank_list_pages(
         self,
@@ -456,6 +625,8 @@ class SyncEndpoints:
         *,
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> RebalancingPage:
         """组合调仓记录: One page of a portfolio's rebalancings; needs a login, structure unverified.
 
@@ -463,12 +634,17 @@ class SyncEndpoints:
             cube_symbol: Portfolio code, such as ZH2567925.
             page: Page number, from 1.
             page_size: Rebalancings per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth required; freshness daily.
         """
         return self._call(
             CUBE_REBALANCING_HISTORY,
             {"cube_symbol": cube_symbol, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
         )
 
     def cube_rebalancing_history_pages(
@@ -499,17 +675,34 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def cube_score(self, cube_symbol: str) -> CubeScore:
+    def cube_score(
+        self,
+        cube_symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> CubeScore:
         """组合评分: The score card of one portfolio: total score, tier and sub-scores.
 
         Args:
             cube_symbol: Portfolio code, such as ZH2567925.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(CUBE_SCORE, {"cube_symbol": cube_symbol})
+        return self._call(CUBE_SCORE, {"cube_symbol": cube_symbol}, cache=cache, max_age=max_age)
 
-    def f10_bonus(self, symbol: str, *, page: int = 1, page_size: int = 50) -> BonusPage:
+    def f10_bonus(
+        self,
+        symbol: str,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> BonusPage:
         """分红送配: Dividends of one listed company, latest first; A-shares add issues and allotments.
 
         Args:
@@ -517,10 +710,18 @@ class SyncEndpoints:
                 a stock, so an index needs its prefix, as SH000001 does.
             page: Page number, from 1; page 1 holds the latest dividends.
             page_size: Dividends per page; a small one also cuts the share issues of page 1.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_BONUS, {"symbol": symbol, "page": page, "page_size": page_size})
+        return self._call(
+            F10_BONUS,
+            {"symbol": symbol, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
+        )
 
     def f10_bonus_pages(
         self,
@@ -551,113 +752,196 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def f10_business_analysis(self, symbol: str) -> list[BusinessAnalysis]:
+    def f10_business_analysis(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[BusinessAnalysis]:
         """经营分析: Management's discussion in the periodic reports of one A-share, latest first.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_BUSINESS_ANALYSIS, {"symbol": symbol})
+        return self._rows(F10_BUSINESS_ANALYSIS, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_company(self, symbol: str) -> Company:
+    def f10_company(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Company:
         """公司资料: Company profile of one listed company.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness static.
         """
-        return self._call(F10_COMPANY, {"symbol": symbol})
+        return self._call(F10_COMPANY, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_executive_trades(self, symbol: str) -> list[ExecutiveTrade]:
+    def f10_executive_trades(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[ExecutiveTrade]:
         """高管增减持: Share changes of the directors, supervisors and executives of one A-share, latest
         first.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_EXECUTIVE_TRADES, {"symbol": symbol})
+        return self._rows(F10_EXECUTIVE_TRADES, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_executives(self, symbol: str) -> list[Executive]:
+    def f10_executives(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[Executive]:
         """公司高管: Directors, supervisors and executives of one A-share, in the upstream's order.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_EXECUTIVES, {"symbol": symbol})
+        return self._rows(F10_EXECUTIVES, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_holders(self, symbol: str) -> Holders:
+    def f10_holders(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Holders:
         """股东与股本: Holder counts of an A-share; major holders, capital and splits of HK and US stocks.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_HOLDERS, {"symbol": symbol})
+        return self._call(F10_HOLDERS, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_indicator(self, symbol: str) -> list[MainIndicator]:
+    def f10_indicator(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[MainIndicator]:
         """主要指标: Key figures of the latest report of one A-share, valued at the latest price.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(F10_INDICATOR, {"symbol": symbol})
+        return self._rows(F10_INDICATOR, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_industry(self, symbol: str) -> IndustryInfo:
+    def f10_industry(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> IndustryInfo:
         """所属行业和概念: Industry and concept boards of one listed company, with the classification
         standard.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness static.
         """
-        return self._call(F10_INDUSTRY, {"symbol": symbol})
+        return self._call(F10_INDUSTRY, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_industry_compare(self, symbol: str) -> IndustryCompare:
+    def f10_industry_compare(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> IndustryCompare:
         """行业对比: One A-share against the average, minimum and maximum of its industry.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(F10_INDUSTRY_COMPARE, {"symbol": symbol})
+        return self._call(F10_INDUSTRY_COMPARE, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def f10_org_holding_change(self, symbol: str) -> OrgHoldingChange:
+    def f10_org_holding_change(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> OrgHoldingChange:
         """机构持仓变动: Institutional ownership of one stock, by report period for A-shares and by day for
         US.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_ORG_HOLDING_CHANGE, {"symbol": symbol})
+        return self._call(F10_ORG_HOLDING_CHANGE, {"symbol": symbol}, cache=cache, max_age=max_age)
 
     def f10_org_holding_detail(
         self,
         symbol: str,
         *,
         report_date: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> OrgHoldingDetail:
         """持股基金名单: The funds holding one A-share at one report period, with their total.
 
@@ -666,33 +950,65 @@ class SyncEndpoints:
                 a stock, so an index needs its prefix, as SH000001 does.
             report_date: Period end to list, one of ``report_periods``, such as 2026-06-30; by
                 default the latest.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_ORG_HOLDING_DETAIL, {"symbol": symbol, "report_date": report_date})
+        return self._call(
+            F10_ORG_HOLDING_DETAIL,
+            {"symbol": symbol, "report_date": report_date},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def f10_share_changes(self, symbol: str, *, count: int = 50) -> list[ShareChange]:
+    def f10_share_changes(
+        self,
+        symbol: str,
+        *,
+        count: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[ShareChange]:
         """股本变动: Share capital changes of one A-share, latest first.
 
         Args:
             symbol: An A-share symbol.
             count: Latest changes to fetch.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_SHARE_CHANGES, {"symbol": symbol, "count": count})
+        return self._rows(
+            F10_SHARE_CHANGES,
+            {"symbol": symbol, "count": count},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def f10_top_holders(self, symbol: str) -> TopHolders:
+    def f10_top_holders(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> TopHolders:
         """十大股东: Ten largest shareholders of one A-share in the latest report period; the denominator
         of held_ratio is unverified.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(F10_TOP_HOLDERS, {"symbol": symbol})
+        return self._call(F10_TOP_HOLDERS, {"symbol": symbol}, cache=cache, max_age=max_age)
 
     def finance_balance(
         self,
@@ -701,6 +1017,8 @@ class SyncEndpoints:
         report_type: ReportType = "all",
         is_detail: bool = True,
         count: int = 5,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Financials:
         """资产负债表: Balance sheet, latest report period first.
 
@@ -711,25 +1029,45 @@ class SyncEndpoints:
             is_detail: Every line item, or only the upstream's short list (8 items for A-share
                 indicators).
             count: Report periods to fetch, latest first.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             FINANCE_BALANCE,
             {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
+            cache=cache,
+            max_age=max_age,
         )
 
-    def finance_business(self, symbol: str, *, count: int = 2) -> RevenueBreakdown:
+    def finance_business(
+        self,
+        symbol: str,
+        *,
+        count: int = 2,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> RevenueBreakdown:
         """主营构成: Revenue by business, product or region of one A-share or US company, latest period
         first.
 
         Args:
             symbol: An A-share or US stock; the request goes to the region of its market.
             count: Report periods to fetch, latest first.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FINANCE_BUSINESS, {"symbol": symbol, "count": count})
+        return self._call(
+            FINANCE_BUSINESS,
+            {"symbol": symbol, "count": count},
+            cache=cache,
+            max_age=max_age,
+        )
 
     def finance_cash_flow(
         self,
@@ -738,6 +1076,8 @@ class SyncEndpoints:
         report_type: ReportType = "all",
         is_detail: bool = True,
         count: int = 5,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Financials:
         """现金流量表: Cash flow statement, latest report period first.
 
@@ -748,12 +1088,17 @@ class SyncEndpoints:
             is_detail: Every line item, or only the upstream's short list (8 items for A-share
                 indicators).
             count: Report periods to fetch, latest first.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             FINANCE_CASH_FLOW,
             {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
+            cache=cache,
+            max_age=max_age,
         )
 
     def finance_income(
@@ -763,6 +1108,8 @@ class SyncEndpoints:
         report_type: ReportType = "all",
         is_detail: bool = True,
         count: int = 5,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Financials:
         """利润表: Income statement, latest report period first.
 
@@ -773,12 +1120,17 @@ class SyncEndpoints:
             is_detail: Every line item, or only the upstream's short list (8 items for A-share
                 indicators).
             count: Report periods to fetch, latest first.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             FINANCE_INCOME,
             {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
+            cache=cache,
+            max_age=max_age,
         )
 
     def finance_indicator(
@@ -788,6 +1140,8 @@ class SyncEndpoints:
         report_type: ReportType = "all",
         is_detail: bool = True,
         count: int = 5,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Financials:
         """财务指标: Key financial indicators, latest report period first.
 
@@ -798,67 +1152,129 @@ class SyncEndpoints:
             is_detail: Every line item, or only the upstream's short list (8 items for A-share
                 indicators).
             count: Report periods to fetch, latest first.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             FINANCE_INDICATOR,
             {"symbol": symbol, "report_type": report_type, "is_detail": is_detail, "count": count},
+            cache=cache,
+            max_age=max_age,
         )
 
-    def fund_achievement(self, fund_code: str) -> list[FundPeriodPerformance]:
+    def fund_achievement(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[FundPeriodPerformance]:
         """基金阶段业绩: Returns, largest drawdowns and peer ranks of one fund by year and by recent
         period.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_ACHIEVEMENT, {"fund_code": fund_code})
+        return self._rows(FUND_ACHIEVEMENT, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
-    def fund_asset(self, fund_code: str) -> FundAsset:
+    def fund_asset(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundAsset:
         """基金持仓和资产配置: Asset allocation and top holdings of one fund's latest report, on net assets.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_ASSET, {"fund_code": fund_code})
+        return self._call(FUND_ASSET, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
-    def fund_auto_invest_return(self, fund_code: str) -> FundAutoInvestReturn:
+    def fund_auto_invest_return(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundAutoInvestReturn:
         """基金定投收益: Returns of the upstream's default auto-invest plan in one fund, by window.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_AUTO_INVEST_RETURN, {"fund_code": fund_code})
+        return self._call(
+            FUND_AUTO_INVEST_RETURN,
+            {"fund_code": fund_code},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def fund_derived(self, fund_code: str) -> FundDerived:
+    def fund_derived(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundDerived:
         """基金收益和排名: Latest net value, period returns, peer ranks and auto-invest returns of one fund.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_DERIVED, {"fund_code": fund_code})
+        return self._call(FUND_DERIVED, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
-    def fund_detail(self, fund_code: str) -> FundDetail:
+    def fund_detail(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundDetail:
         """基金费率和详情: Fees, settlement days, latest report on total assets and the managers of one
         fund.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_DETAIL, {"fund_code": fund_code})
+        return self._call(FUND_DETAIL, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
-    def fund_growth(self, fund_code: str, *, period: FundGrowthPeriod = "ty") -> FundGrowth:
+    def fund_growth(
+        self,
+        fund_code: str,
+        *,
+        period: FundGrowthPeriod = "ty",
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundGrowth:
         """基金业绩走势: Net value and cumulative return of one fund against its index and benchmark,
         oldest first; long windows are sampled, so do not compute a drawdown or extremes from
         them.
@@ -867,30 +1283,56 @@ class SyncEndpoints:
             fund_code: Six digits, such as 008975.
             period: Window: ty 今年以来, 1m 近1月, 3m 近3月, 6m 近6月, 1y 近1年, 3y 近3年, 5y 近5年, all 成立以来.
                 Long windows come back as sampled points.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_GROWTH, {"fund_code": fund_code, "period": period})
+        return self._call(
+            FUND_GROWTH,
+            {"fund_code": fund_code, "period": period},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def fund_info(self, fund_code: str) -> FundInfo:
+    def fund_info(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundInfo:
         """基金资料: Profile, status and latest net value of one fund.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_INFO, {"fund_code": fund_code})
+        return self._call(FUND_INFO, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
-    def fund_manager(self, fund_code: str) -> list[FundManager]:
+    def fund_manager(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[FundManager]:
         """基金经理: Current managers of one fund, with tenure, returns and assets managed.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(FUND_MANAGER, {"fund_code": fund_code})
+        return self._rows(FUND_MANAGER, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
     def fund_nav_history(
         self,
@@ -898,6 +1340,8 @@ class SyncEndpoints:
         *,
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[FundNav]:
         """基金历史净值: Net asset value history of one fund, latest first.
 
@@ -905,12 +1349,17 @@ class SyncEndpoints:
             fund_code: Six digits, such as 008975.
             page: Page number, from 1; page 1 holds the latest rows.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             FUND_NAV_HISTORY,
             {"fund_code": fund_code, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
         )
 
     def fund_nav_history_pages(
@@ -948,6 +1397,8 @@ class SyncEndpoints:
         order_by: FundRankOrder = "1m",
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[FundRankItem]:
         """基金排行: Funds of one type ranked by return over a window, best first, at most 1000 rows per
         type.
@@ -959,12 +1410,17 @@ class SyncEndpoints:
                 base 成立以来.
             page: Page number, from 1.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             FUND_RANK,
             {"fund_type": fund_type, "order_by": order_by, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
         )
 
     def fund_rank_pages(
@@ -999,34 +1455,62 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def fund_rank_options(self) -> FundRankOptions:
+    def fund_rank_options(
+        self,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundRankOptions:
         """基金排行选项: The fund types and return windows that fund_rank takes, as the upstream lists
         them.
 
+        Args:
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
+
         Auth anonymous; freshness static.
         """
-        return self._call(FUND_RANK_OPTIONS, {})
+        return self._call(FUND_RANK_OPTIONS, {}, cache=cache, max_age=max_age)
 
-    def fund_search(self, *, query: str) -> list[FundSearchResult]:
+    def fund_search(
+        self,
+        *,
+        query: str,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[FundSearchResult]:
         """基金搜索: Funds and advisory portfolios matching a fund code, a fund name or a keyword.
 
         Args:
             query: Fund code, fund name or keyword, such as 008975, 富国中证消费50 or 消费.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness static.
         """
-        return self._call(FUND_SEARCH, {"query": query})
+        return self._rows(FUND_SEARCH, {"query": query}, cache=cache, max_age=max_age)
 
-    def fund_trade_date(self, fund_code: str) -> FundTradeDate:
+    def fund_trade_date(
+        self,
+        fund_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> FundTradeDate:
         """基金交易日期: Settlement dates of an order for one fund placed now, as month-day text with no
         year.
 
         Args:
             fund_code: Six digits, such as 008975.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(FUND_TRADE_DATE, {"fund_code": fund_code})
+        return self._call(FUND_TRADE_DATE, {"fund_code": fund_code}, cache=cache, max_age=max_age)
 
     def index_pb_history(
         self,
@@ -1035,6 +1519,8 @@ class SyncEndpoints:
         period: ValuationWindow = "all",
         begin: date | None = None,
         end: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> ValuationHistory:
         """指数PB历史: PB of one index over time with Danjuan's reference lines, oldest first.
 
@@ -1046,12 +1532,17 @@ class SyncEndpoints:
             period: Window: all, 3y or 5y. all starts about 10 years back.
             begin: First date, inclusive.
             end: Last date, inclusive.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             INDEX_PB_HISTORY,
             {"index_code": index_code, "period": period, "begin": begin, "end": end},
+            cache=cache,
+            max_age=max_age,
         )
 
     def index_pe_history(
@@ -1061,6 +1552,8 @@ class SyncEndpoints:
         period: ValuationWindow = "all",
         begin: date | None = None,
         end: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> ValuationHistory:
         """指数PE历史: PE of one index over time with Danjuan's reference lines, oldest first.
 
@@ -1072,12 +1565,17 @@ class SyncEndpoints:
             period: Window: all, 3y or 5y. all starts about 10 years back.
             begin: First date, inclusive.
             end: Last date, inclusive.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
         return self._call(
             INDEX_PE_HISTORY,
             {"index_code": index_code, "period": period, "begin": begin, "end": end},
+            cache=cache,
+            max_age=max_age,
         )
 
     def index_stock_bond_percentile(
@@ -1085,6 +1583,8 @@ class SyncEndpoints:
         *,
         begin: date | None = None,
         end: date | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> StockBondPercentile:
         """股债性价比: Danjuan's stock-bond percentile over about 5 years, oldest first.
 
@@ -1093,28 +1593,55 @@ class SyncEndpoints:
         Args:
             begin: First date, inclusive.
             end: Last date, inclusive.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(INDEX_STOCK_BOND_PERCENTILE, {"begin": begin, "end": end})
+        return self._call(
+            INDEX_STOCK_BOND_PERCENTILE,
+            {"begin": begin, "end": end},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def index_valuation(self, index_code: str) -> IndexValuation:
+    def index_valuation(
+        self,
+        index_code: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> IndexValuation:
         """单个指数估值: The current valuation of one index.
 
         Args:
             index_code: An index from index_valuation_list, such as SH000300 or CSIH30269. Case-
                 insensitive.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(INDEX_VALUATION, {"index_code": index_code})
+        return self._call(INDEX_VALUATION, {"index_code": index_code}, cache=cache, max_age=max_age)
 
-    def index_valuation_list(self) -> list[IndexValuation]:
+    def index_valuation_list(
+        self,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[IndexValuation]:
         """指数估值表: Danjuan's valuation table, one row per index.
 
+        Args:
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
+
         Auth anonymous; freshness daily.
         """
-        return self._call(INDEX_VALUATION_LIST, {})
+        return self._rows(INDEX_VALUATION_LIST, {}, cache=cache, max_age=max_age)
 
     def kline(
         self,
@@ -1126,6 +1653,8 @@ class SyncEndpoints:
         end: date | None = None,
         before: datetime | None = None,
         count: int | None = None,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Kline:
         """K线: Bars of one symbol in one request.
 
@@ -1150,6 +1679,9 @@ class SyncEndpoints:
             before: End of the range, exclusive, as an ISO time with offset; instead of ``end``.
             count: Most bars to fetch: by default 100 back from ``end``, or the dates' bars, 10000
                 at most.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
@@ -1164,14 +1696,26 @@ class SyncEndpoints:
                 "before": before,
                 "count": count,
             },
+            cache=cache,
+            max_age=max_age,
         )
 
-    def market_bj_indexes(self) -> list[BoardIndexQuote]:
+    def market_bj_indexes(
+        self,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[BoardIndexQuote]:
         """北交所栏目指数: Quotes of the BSE 50 and its two comparison indexes, SSE 50 and SZSE 100.
+
+        Args:
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(MARKET_BJ_INDEXES, {})
+        return self._rows(MARKET_BJ_INDEXES, {}, cache=cache, max_age=max_age)
 
     def market_hot_stocks(
         self,
@@ -1179,7 +1723,9 @@ class SyncEndpoints:
         region: HotStockRegion = "cn",
         window: HotStockWindow = "hour",
         count: int = 10,
-    ) -> list[HotStock]:
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[HotStock]:
         """热股榜: The most popular stocks on Xueqiu by region and window, hottest first, with their
         quotes.
 
@@ -1188,46 +1734,94 @@ class SyncEndpoints:
                 measured 2026-11-05, once during Shanghai trading.
             window: hour or day.
             count: How many rows from the top to fetch.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(MARKET_HOT_STOCKS, {"region": region, "window": window, "count": count})
+        return self._rows(
+            MARKET_HOT_STOCKS,
+            {"region": region, "window": window, "count": count},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def market_industry_stocks(self, symbol: str, *, count: int = 10) -> IndustryStocks:
+    def market_industry_stocks(
+        self,
+        symbol: str,
+        *,
+        count: int = 10,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> IndustryStocks:
         """板块下股票: Stocks the upstream lists under the board of one A-share, with their quotes and
         size.
 
         Args:
             symbol: An A-share, such as SH600000.
             count: How many rows from the top to fetch.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(MARKET_INDUSTRY_STOCKS, {"symbol": symbol, "count": count})
+        return self._call(
+            MARKET_INDUSTRY_STOCKS,
+            {"symbol": symbol, "count": count},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def quote_detail(self, symbol: str) -> QuoteDetail:
+    def quote_detail(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> QuoteDetail:
         """行情详情: Full quote of one symbol, with its name, valuation fields and market status.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(QUOTE_DETAIL, {"symbol": symbol})
+        return self._call(QUOTE_DETAIL, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def quote_heat(self, symbol: str) -> StockHeat:
+    def quote_heat(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> StockHeat:
         """个股热度: Popularity rank of one stock on Xueqiu, with its visitor and discussion counts.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(QUOTE_HEAT, {"symbol": symbol})
+        return self._call(QUOTE_HEAT, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def quote_minute(self, symbol: str, *, days: MinuteDays = 1) -> MinuteChart:
+    def quote_minute(
+        self,
+        symbol: str,
+        *,
+        days: MinuteDays = 1,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> MinuteChart:
         """分时: Intraday points of one symbol over the latest 1 or 5 sessions, oldest first; bars
         older than that are in ``kline``.
 
@@ -1236,55 +1830,105 @@ class SyncEndpoints:
                 a stock, so an index needs its prefix, as SH000001 does.
             days: 1: the latest session, a point a minute. 5: the latest 5, a point every 10
                 minutes.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(QUOTE_MINUTE, {"symbol": symbol, "days": days})
+        return self._call(
+            QUOTE_MINUTE,
+            {"symbol": symbol, "days": days},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def quote_order_book(self, symbol: str) -> OrderBook:
+    def quote_order_book(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> OrderBook:
         """盘口: Snapshot of the resting bids and asks of one A-share with their imbalance; executed
         trades are in ``quote_trades``.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(QUOTE_ORDER_BOOK, {"symbol": symbol})
+        return self._call(QUOTE_ORDER_BOOK, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def quote_relevant(self, symbol: str) -> list[RelatedStock]:
+    def quote_relevant(
+        self,
+        symbol: str,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[RelatedStock]:
         """相关股票: Other stocks the upstream relates to one A-share, with their last price and change.
 
         Args:
             symbol: Security or index code, such as SH600000, 00700 or AAPL. Bare 6 digits read as
                 a stock, so an index needs its prefix, as SH000001 does.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(QUOTE_RELEVANT, {"symbol": symbol})
+        return self._rows(QUOTE_RELEVANT, {"symbol": symbol}, cache=cache, max_age=max_age)
 
-    def quote_trades(self, symbol: str, *, count: int = 50) -> list[TradeTick]:
+    def quote_trades(
+        self,
+        symbol: str,
+        *,
+        count: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[TradeTick]:
         """成交明细: The most recent executed trades of one symbol, oldest first; resting orders are in
         ``quote_order_book``.
 
         Args:
             symbol: Stock code, such as SH600000.
             count: How many of the most recent trades to fetch; earlier ones are out of reach.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(QUOTE_TRADES, {"symbol": symbol, "count": count})
+        return self._rows(
+            QUOTE_TRADES,
+            {"symbol": symbol, "count": count},
+            cache=cache,
+            max_age=max_age,
+        )
 
-    def quotec(self, symbols: str | Sequence[str]) -> list[Quote]:
+    def quotec(
+        self,
+        symbols: str | Sequence[str],
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[Quote]:
         """实时行情: Realtime quotes of up to 50 symbols in one request; a string may be comma-separated.
 
         Args:
             symbols: Symbols, as a sequence or one comma-separated string.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness realtime.
         """
-        return self._call(QUOTEC, {"symbols": symbols})
+        return self._rows(QUOTEC, {"symbols": symbols}, cache=cache, max_age=max_age)
 
     def screener_events(
         self,
@@ -1292,6 +1936,8 @@ class SyncEndpoints:
         *,
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[StockEvent]:
         """个股事件: Notices about one A-share, such as block trades and reports, latest first.
 
@@ -1299,10 +1945,18 @@ class SyncEndpoints:
             symbol: An A-share symbol.
             page: Page number, from 1; page 1 holds the latest rows.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness daily.
         """
-        return self._call(SCREENER_EVENTS, {"symbol": symbol, "page": page, "page_size": page_size})
+        return self._call(
+            SCREENER_EVENTS,
+            {"symbol": symbol, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
+        )
 
     def screener_events_pages(
         self,
@@ -1332,12 +1986,22 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def screener_industries(self) -> list[ScreenerIndustry]:
+    def screener_industries(
+        self,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[ScreenerIndustry]:
         """行业列表: The A-share industries and the codes screener_quote_list filters by.
+
+        Args:
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness static.
         """
-        return self._call(SCREENER_INDUSTRIES, {})
+        return self._rows(SCREENER_INDUSTRIES, {}, cache=cache, max_age=max_age)
 
     def screener_popularity_rank(
         self,
@@ -1346,6 +2010,8 @@ class SyncEndpoints:
         order_by: RankOrder = "follow7d",
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[PopularStock]:
         """关注度排行: Every security of one market, most followed over 7 days first.
 
@@ -1355,12 +2021,17 @@ class SyncEndpoints:
                 across a walk of every page. Most rows have no follow7d, and those move between pages.
             page: Page number, from 1.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
         return self._call(
             SCREENER_POPULARITY_RANK,
             {"market": market, "order_by": order_by, "page": page, "page_size": page_size},
+            cache=cache,
+            max_age=max_age,
         )
 
     def screener_popularity_rank_pages(
@@ -1404,6 +2075,8 @@ class SyncEndpoints:
         order: Order = "asc",
         page: int = 1,
         page_size: int = 50,
+        cache: bool = True,
+        max_age: float | None = None,
     ) -> Page[ScreenerQuote]:
         """证券列表行情: Securities of one market, board or industry with their quotes and ratios.
 
@@ -1416,6 +2089,9 @@ class SyncEndpoints:
             order: Sort direction: asc or desc.
             page: Page number, from 1.
             page_size: Rows per page.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
@@ -1430,6 +2106,8 @@ class SyncEndpoints:
                 "page": page,
                 "page_size": page_size,
             },
+            cache=cache,
+            max_age=max_age,
         )
 
     def screener_quote_list_pages(
@@ -1477,39 +2155,69 @@ class SyncEndpoints:
             max_items=max_items,
         )
 
-    def search_stock(self, *, query: str) -> list[StockHit]:
+    def search_stock(
+        self,
+        *,
+        query: str,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[StockHit]:
         """证券检索: Securities matching a code or name, with their exchange, industry and last price.
 
         Args:
             query: Code or name, such as SH600000 or 浦发银行; the name form was measured 2026-11-05.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness intraday.
         """
-        return self._call(SEARCH_STOCK, {"query": query})
+        return self._rows(SEARCH_STOCK, {"query": query}, cache=cache, max_age=max_age)
 
-    def suggest_stock(self, *, query: str) -> list[StockSuggestion]:
+    def suggest_stock(
+        self,
+        *,
+        query: str,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[StockSuggestion]:
         """证券搜索: Securities matching a code, pinyin initials or name, such as ``pfyh`` or ``浦发银行``.
 
         Args:
             query: Code, pinyin initials or name, such as 600000, pfyh, 浦发银行 or AAPL.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth anonymous; freshness static.
         """
-        return self._call(SUGGEST_STOCK, {"query": query})
+        return self._rows(SUGGEST_STOCK, {"query": query}, cache=cache, max_age=max_age)
 
-    def watchlist_groups(self) -> list[WatchlistGroup]:
+    def watchlist_groups(
+        self,
+        *,
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[WatchlistGroup]:
         """自选分组: The watchlist groups of the logged-in account; structure unverified.
+
+        Args:
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth required; freshness intraday.
         """
-        return self._call(WATCHLIST_GROUPS, {})
+        return self._rows(WATCHLIST_GROUPS, {}, cache=cache, max_age=max_age)
 
     def watchlist_stocks(
         self,
         *,
         pid: int = -1,
         category: WatchlistCategory = "stock",
-    ) -> list[WatchlistItem]:
+        cache: bool = True,
+        max_age: float | None = None,
+    ) -> Rows[WatchlistItem]:
         """自选股: The members of one watchlist group of the logged-in account; structure unverified.
 
         One request with a page size of 1000, the most this method returns. No way to page is
@@ -1518,7 +2226,15 @@ class SyncEndpoints:
         Args:
             pid: Group id, the ``pid`` of ``watchlist_groups``; -1 means every stock.
             category: Kind of the group, the ``category`` of ``watchlist_groups``.
+            cache: False keeps this call away from the client's cache: nothing is read or stored.
+            max_age: Oldest cached result to accept, in seconds, in place of the default for the
+                endpoint's freshness; 0 fetches anew and stores the result.
 
         Auth required; freshness intraday.
         """
-        return self._call(WATCHLIST_STOCKS, {"pid": pid, "category": category})
+        return self._rows(
+            WATCHLIST_STOCKS,
+            {"pid": pid, "category": category},
+            cache=cache,
+            max_age=max_age,
+        )

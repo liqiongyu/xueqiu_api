@@ -10,6 +10,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .._model import UpstreamModel
+from .._result import Fetched
 from .._values import FractionPoints, Number, PercentPoints
 from ..registry import AgentInfo, Endpoint
 from ..symbols import FundCode
@@ -36,7 +37,7 @@ class FundGrowthParams(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class FundGrowth:
+class FundGrowth(Fetched):
     """Values of one fund in columns, oldest first.
 
     ``columns`` holds ``nav`` (net value per unit, in CNY), ``daily_pct`` (that day's change in

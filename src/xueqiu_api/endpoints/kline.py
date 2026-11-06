@@ -9,9 +9,10 @@ from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from .._result import Fetched
 from .._time import from_ms, to_ms
 from ..errors import SymbolNotFound, UpstreamChanged
-from ..registry import AgentInfo, Endpoint, Pagination
+from ..registry import AgentInfo, Endpoint, Freshness, Pagination
 from ..symbols import SymbolCode, normalize_symbol
 
 Period = Literal["1m", "5m", "15m", "30m", "60m", "120m", "day", "week", "month", "quarter", "year"]
@@ -83,7 +84,7 @@ class KlineParams(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class Kline:
+class Kline(Fetched):
     """Bars of one symbol in columns, oldest first.
 
     ``columns`` holds every upstream column except ``timestamp`` under its upstream name,
@@ -142,6 +143,16 @@ def _build_query(params: KlineParams, now: datetime) -> dict[str, str]:
         "count": str(count),
         "indicator": "kline",
     }
+
+
+def _freshness_of(params: KlineParams, fetched_at: datetime) -> Freshness:
+    """Daily for day and minute bars of a range that ended before the exchange date of the
+    fetch; longer bars can cover days after ``end``, so they stay intraday."""
+    tz = normalize_symbol(params.symbol).timezone
+    _, last = _window(params, tz)
+    closed = last is not None and last.astimezone(tz).date() < fetched_at.astimezone(tz).date()
+    minute_or_day = params.period == "day" or params.period.endswith("m")
+    return "daily" if closed and minute_or_day else "intraday"
 
 
 def _parse(payload: Any, params: KlineParams) -> Kline:
@@ -312,6 +323,7 @@ ENDPOINT = Endpoint(
     parse=_parse,
     auth="anonymous",
     freshness="intraday",
+    freshness_of=_freshness_of,
     envelope="xueqiu",
     verified_on=date(2026, 11, 4),
     pagination=Pagination(style="bars"),

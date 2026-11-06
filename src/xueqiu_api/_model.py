@@ -11,6 +11,7 @@ from typing import Any, ClassVar, Literal, cast
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from ._result import FetchFacts
 from ._values import Number
 
 USER_KEY = re.compile(
@@ -43,12 +44,14 @@ def without_keys(value: Any, drop: frozenset[str] = frozenset()) -> Any:
     return value
 
 
-class UpstreamModel(BaseModel):
+class UpstreamModel(FetchFacts, BaseModel):
     """A result model. Fields the model does not declare stay in ``model_extra``.
 
     Before validation, keys matching ``USER_KEY`` or listed in ``drop`` are removed at every depth.
+    A model a client returns carries fetch facts; see ``FetchFacts``.
     """
 
+    __slots__ = ("_fetch",)
     model_config = ConfigDict(extra="allow", frozen=True, use_attribute_docstrings=True)
 
     drop: ClassVar[frozenset[str]] = frozenset()

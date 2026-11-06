@@ -9,6 +9,7 @@ from typing import Any
 
 from .._capital import symbol_query
 from .._model import UpstreamModel
+from .._result import Fetched
 from .._time import from_ms
 from .._values import Number
 from ..registry import AgentInfo, Endpoint
@@ -16,7 +17,7 @@ from ..symbols import SymbolParams, normalize_symbol
 
 
 @dataclass(frozen=True, slots=True)
-class CapitalFlow:
+class CapitalFlow(Fetched):
     """One session of net inflow in columns, one point a minute, oldest first.
 
     ``columns`` holds ``net_inflow`` (upstream ``amount``, in the quote currency) and every other

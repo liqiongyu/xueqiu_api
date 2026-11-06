@@ -172,6 +172,9 @@ class Endpoint(Generic[P, R]):
     needs_cookies: tuple[str, ...] = ()
     """Cookies without which the upstream answers wrongly instead of with an error."""
     not_found: NotFound | None = None
+    freshness_of: Callable[[P, datetime], Freshness] | None = None
+    """The freshness of a result from its params and the moment it was fetched, for an endpoint
+    where they matter; None means ``freshness`` always holds."""
 
     def validate(self, params: Mapping[str, Any]) -> P:
         """Validate caller params; raise ``InvalidParams`` listing every problem."""
