@@ -2723,8 +2723,8 @@ async def test_xueqiu_mcp_serves_the_replay_fixtures_over_stdio() -> None:
     assert content.text.startswith('# batch_quote {"symbols":["SH600000","00700","AAPL"]}')
     assert "SH600000,浦发银行," in content.text
     assert content.text.splitlines()[-1] == "# next: none"
-    # Replay results are cached in memory, and nothing lands in the user cache directory.
-    assert re.search(r" from_cache=true age_s=\d+$", meta_of(company[1]))
+    # Replay keeps no cache, and nothing lands in the user cache directory.
+    assert "from_cache" not in meta_of(company[1])
     assert without_meta(company[1]) == without_meta(company[0])
     assert not cache_dir().exists()
 
@@ -3007,14 +3007,14 @@ async def test_with_a_cache_every_path_gives_the_same_text_but_for_the_meta_line
 @pytest.mark.parametrize(
     ("replay", "no_cache", "backend"),
     [
-        (True, False, "MemoryCache"),
+        (True, False, None),
         (False, False, "SqliteCache"),
         (False, True, None),
         (True, True, None),
     ],
     ids=["replay", "real", "real-no-cache", "replay-no-cache"],
 )
-async def test_the_server_caches_on_disk_or_under_replay_in_memory_and_not_with_no_cache(
+async def test_the_server_caches_on_disk_and_not_under_replay_or_with_no_cache(
     monkeypatch: pytest.MonkeyPatch, replay: bool, no_cache: bool, backend: str | None
 ) -> None:
     """The server of ``xueqiu mcp`` in process, with an in-memory connection for stdio. Outside
@@ -3053,6 +3053,14 @@ async def test_the_server_caches_on_disk_or_under_replay_in_memory_and_not_with_
     async def no_stdio() -> AsyncGenerator[tuple[None, None], None]:
         yield None, None
 
+    closed: list[Path] = []
+    close = SqliteCache.close
+
+    def recording_close(cache: SqliteCache) -> None:
+        closed.append(cache.path)
+        close(cache)
+
+    monkeypatch.setattr(SqliteCache, "close", recording_close)
     monkeypatch.setattr(httpx2.AsyncHTTPTransport, "handle_async_request", answer)
     monkeypatch.setattr(mcp_server, "build_server", build_in_memory)
     monkeypatch.setattr(mcp_server, "stdio_server", no_stdio)
@@ -3070,5 +3078,6 @@ async def test_the_server_caches_on_disk_or_under_replay_in_memory_and_not_with_
     if backend is not None:
         assert re.search(r" from_cache=true age_s=\d+$", meta_of(texts[1]))
     assert (cache_dir() / CACHE_FILE).exists() == (backend == "SqliteCache")
+    assert closed == ([cache_dir() / CACHE_FILE] if backend == "SqliteCache" else [])
     if replay:
         assert not cache_dir().exists()

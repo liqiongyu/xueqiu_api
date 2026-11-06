@@ -141,31 +141,34 @@ class SqliteCache:
     fetched more than 7 days before the entry being written are deleted on the first write
     and then hourly, both measured on the ``fetched_at`` of the writes. Reads never write.
 
-    When the file cannot be used, ``get`` misses, writes do nothing, ``stats`` counts
-    nothing and ``status()`` says why; the file is tried again after 30 seconds and never
-    deleted, except by ``remove_files``.
+    While the file cannot be used, a ``MemoryCache`` in this process stands in for it and
+    ``status()`` says why; the file is tried again after 30 seconds and never deleted, except
+    by ``remove_files``. ``close()`` releases the file; the next call opens it again.
     """
 
     def __init__(
         self, path: str | os.PathLike[str] | None = None, *, max_bytes: int = 128 * 2**20
     ) -> None:
-        self.path = cache_dir() / CACHE_FILE if path is None else Path(path)
+        self.path = cache_dir() / CACHE_FILE if path is None else Path(path).absolute()
         self.max_bytes = max_bytes
         self._db = self._new_db()
         self._purged_at: float | None = None
+        self._fallback = MemoryCache()
 
     def get(self, key: str) -> CacheEntry | None:
         query = "SELECT body, fetched_at, endpoint FROM responses WHERE key = ?"
-        row = self._db.run(lambda conn: conn.execute(query, (key,)).fetchone())
-        if row is None:
+        rows = self._db.run(lambda conn: conn.execute(query, (key,)).fetchall())
+        if rows is None:
+            return self._fallback.get(key)
+        if not rows:
             return None
-        body, fetched_at, endpoint = row
+        [(body, fetched_at, endpoint)] = rows
         return CacheEntry(zlib.decompress(body), fetched_at, endpoint)
 
     def put(self, key: str, entry: CacheEntry) -> None:
         body = zlib.compress(entry.body, 1)
 
-        def write(conn: sqlite3.Connection) -> None:
+        def write(conn: sqlite3.Connection) -> bool:
             conn.execute(
                 "INSERT OR REPLACE INTO responses VALUES (?, ?, ?, ?)",
                 (key, entry.endpoint, entry.fetched_at, body),
@@ -176,16 +179,19 @@ class SqliteCache:
                 self._purged_at = entry.fetched_at
             if _usage(conn) > self.max_bytes:
                 self._evict(conn)
+            return True
 
-        self._db.run(write)
+        if self._db.run(write) is None:
+            self._fallback.put(key, entry)
 
     def delete(self, key: str) -> None:
+        self._fallback.delete(key)
         self._db.run(lambda conn: conn.execute("DELETE FROM responses WHERE key = ?", (key,)))
 
     def clear(self, endpoint: str | None = None) -> int:
-        """Delete every entry, or those of ``endpoint``, and return how many; 0 when the file
-        cannot be used. Clearing everything ends with a ``VACUUM``, given up when another
-        connection keeps the file locked."""
+        """Delete every entry, or those of ``endpoint``, and return how many. Clearing
+        everything ends with a ``VACUUM``, given up when another connection keeps the file
+        locked."""
 
         def remove(conn: sqlite3.Connection) -> int:
             import sqlite3
@@ -199,17 +205,20 @@ class SqliteCache:
                 conn.execute("VACUUM")
             return removed
 
-        return self._db.run(remove) or 0
+        return (self._db.run(remove) or 0) + self._fallback.clear(endpoint)
 
     def stats(self) -> CacheStats:
         def count(conn: sqlite3.Connection) -> CacheStats:
             [(entries,)] = conn.execute("SELECT count(*) FROM responses").fetchall()
             return CacheStats(entries, _usage(conn))
 
-        return self._db.run(count) or CacheStats(0, 0)
+        return self._db.run(count) or self._fallback.stats()
 
     def status(self) -> StoreStatus:
         return self._db.status()
+
+    def close(self) -> None:
+        self._db.close()
 
     def remove_files(self) -> None:
         """Delete the file with its ``-wal`` and ``-shm``; the next write creates a new one.

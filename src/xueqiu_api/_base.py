@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import difflib
 import json
-import math
 import os
 import string
 import threading
@@ -38,7 +37,7 @@ from ._result import FetchFacts, FetchInfo, info_of, stamp
 from ._session import TOKEN_ENV, Session, SessionStore, default_session_path, parse_credentials
 from ._shared import SharedBreaker, SharedLimiter, SharedState
 from ._status import AuthError, CacheStatus, ClientStatus, HostStatus
-from .cache import CacheBackend, CacheEntry, CacheStats, MemoryCache, SqliteCache
+from .cache import RETENTION_S, CacheBackend, CacheEntry, CacheStats, MemoryCache, SqliteCache
 from .endpoints import REGISTRY
 from .endpoints.kline import ENDPOINT as KLINE
 from .errors import (
@@ -62,6 +61,10 @@ T = TypeVar("T")
 A = ParamSpec("A")
 
 DEFAULT_DEADLINE_S = 30.0
+LATE_WAKE_S = 0.25
+"""How late after its slot a call may still send; a call held up longer, for example behind
+another thread's wait for the state file, books a new slot, so that it does not send next to
+the slots after its own."""
 PRIVATE_CACHE_BYTES = 8 * 2**20
 """Size of the in-memory cache that holds the results of calls sent with login cookies."""
 
@@ -111,7 +114,7 @@ class ClientBase:
                 "string such as 'xq_a_token=...; u=...'.",
             ) from None
         path = default_session_path() if session_path is None else Path(session_path)
-        self._session = Session(credentials=credentials, store=SessionStore(path))
+        self._session = Session(credentials=credentials, store=SessionStore(path), wall=wall)
         self._intervals = _intervals(min_intervals)
         # SharedState opens its file on first use, so constructing a client creates nothing.
         self._state = (
@@ -235,7 +238,7 @@ class ClientBase:
         """How the call uses the cache; None without one or with ``cache=False``.
 
         Realtime results are never stored, only shared while in flight. ``max_age=0`` stores
-        a new result without reading or sharing.
+        a new result without reading, sharing or falling back to a stale one.
         """
         if max_age is not None and not max_age >= 0:
             raise InvalidParams(
@@ -268,8 +271,8 @@ class ClientBase:
         """The stored result of the call when it is young enough, else None.
 
         Young enough means within ``max_age``, by default the freshness of the params, or with
-        ``stale`` within ``stale_if_error``. An entry that no longer parses is deleted and
-        counts as a miss.
+        ``stale`` within ``stale_if_error``; for a ``SqliteCache`` also within the retention
+        it purges by. An entry that no longer parses is deleted and counts as a miss.
         """
         entry = self._cache_io(plan.backend.get, plan.key)
         found: R | None = None
@@ -282,6 +285,8 @@ class ClientBase:
                 limit = max_age
             else:
                 limit = ttl_s(spec, params, fetched_at, _utc(now))
+            if limit is not None and isinstance(plan.backend, SqliteCache):
+                limit = min(limit, RETENTION_S)
             if limit is not None and 0 <= now - entry.fetched_at <= limit:
                 try:
                     result = self._finish(spec, params, call, json.loads(entry.body))
@@ -299,8 +304,10 @@ class ClientBase:
         self, spec: Endpoint[P, R], params: P, call: Call, plan: CachePlan, error: XueqiuError
     ) -> R | None:
         """A stored result within ``stale_if_error`` for an error worth backing off from: a
-        rate limit, a block, an open breaker, a paused host or an outage."""
-        if self._stale_if_error is None or not plan.write or error.recoverable != "backoff":
+        rate limit, a block, an open breaker, a paused host or an outage. None for a call that
+        does not read the cache, such as a page of a walk, so that it is never joined to newer
+        ones."""
+        if self._stale_if_error is None or not plan.read or error.recoverable != "backoff":
             return None
         return self._from_entry(spec, params, call, plan, max_age=None, stale=True)
 
@@ -433,8 +440,7 @@ class ClientBase:
             HostStatus(
                 host=host,
                 interval_s=interval,
-                # A deadline no slot can meet books nothing and still gives the wait.
-                wait_s=self._limiter.reserve(host, now=now, earliest=now, deadline=-math.inf)[1],
+                wait_s=self._limiter.wait(host, now),
                 paused_s=self._limiter.paused(host, now),
                 open_s=self._breaker.remaining(host, now),
             )

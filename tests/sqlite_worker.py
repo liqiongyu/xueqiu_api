@@ -5,6 +5,8 @@
 with "ok" or the error for each round.
 
 ``fork PATH``: open a ``Db``, fork, write from the child and the parent, and print JSON.
+
+``fork-busy PATH``: fork while a thread is inside ``Db.run``; the child must write within 10 s.
 """
 
 from __future__ import annotations
@@ -12,7 +14,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
+import warnings
 from pathlib import Path
 
 from xueqiu_api._sqlite import Db, open_db
@@ -70,9 +74,50 @@ def fork(path: Path) -> dict[str, object]:
     }
 
 
+def fork_busy(path: Path) -> dict[str, object]:
+    db = Db(path, busy_timeout_s=5, setup=SETUP, label="test store")
+    insert = "INSERT INTO rows VALUES (?)"
+    entered, release = threading.Event(), threading.Event()
+
+    def busy(conn: object) -> None:
+        entered.set()
+        release.wait(30)
+
+    worker = threading.Thread(target=db.run, args=(busy,))
+    worker.start()
+    entered.wait(30)
+    with warnings.catch_warnings():
+        # Python 3.12 and later warn that a fork with threads running may deadlock the child.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        child = os.fork()
+    if child == 0:
+        code = 1
+        try:
+            written: list[int | None] = []
+            writer = threading.Thread(
+                target=lambda: written.append(
+                    db.run(lambda conn: conn.execute(insert, (os.getpid(),)).rowcount)
+                ),
+                daemon=True,
+            )
+            writer.start()
+            writer.join(10)
+            code = 0 if written == [1] else 3
+        finally:
+            os._exit(code)
+    release.set()
+    worker.join()
+    _, status = os.waitpid(child, 0)
+    wrote = db.run(lambda conn: conn.execute(insert, (os.getpid(),)).rowcount)
+    db.close()
+    return {"child_exit": os.waitstatus_to_exitcode(status), "parent_wrote": wrote}
+
+
 def main(argv: list[str]) -> None:
     if argv[0] == "open":
         result: object = open_rounds(Path(argv[1]), int(argv[2]), int(argv[3]))
+    elif argv[0] == "fork-busy":
+        result = fork_busy(Path(argv[1]))
     else:
         result = fork(Path(argv[1]))
     print(json.dumps(result))

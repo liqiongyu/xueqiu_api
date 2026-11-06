@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import sys
 import threading
 import time
+import weakref
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -56,6 +58,9 @@ Closing one in a fork child, or after another file took its name, can damage a d
 that is in use, so they are never closed.
 """
 
+_DBS: weakref.WeakSet[Db] = weakref.WeakSet()
+"""Every ``Db``, so that a fork child can give each one a new lock."""
+
 
 def open_db(
     path: str | os.PathLike[str],
@@ -66,10 +71,12 @@ def open_db(
 ) -> sqlite3.Connection:
     """Open ``path`` in autocommit mode, usable from any thread, and run ``setup`` on it.
 
-    Read-write opens create the directory with mode 0700, set the file to 0600 before the
-    first statement so that ``-wal`` and ``-shm`` inherit it, and switch to WAL with
-    ``synchronous=NORMAL``. Read-only opens neither create nor change anything; they go
-    through an encoded ``file:`` URI, so ``#``, ``?`` and ``%`` stay part of the path.
+    Read-write opens create the directory with mode 0700, take the group and other
+    permissions off the file before the first statement, so that a new file is 0600 and
+    ``-wal`` and ``-shm`` inherit that, and switch to WAL with ``synchronous=NORMAL``. A file
+    without write permission keeps it that way, so the open fails at its first write.
+    Read-only opens neither create nor change anything; they go through an encoded ``file:``
+    URI, so ``#``, ``?`` and ``%`` stay part of the path.
     """
     import sqlite3
 
@@ -90,7 +97,9 @@ def open_db(
     )
     try:
         if not readonly and os.name == "posix":
-            os.chmod(target, 0o600)
+            mode = stat.S_IMODE(os.stat(target).st_mode)
+            if mode & 0o077:
+                os.chmod(target, mode & ~0o077)
         deadline = time.monotonic() + busy_timeout_s
         for statement in (*pragmas, *setup):
             _execute(conn, statement, deadline)
@@ -171,8 +180,9 @@ class Db:
     file cannot be used: any ``sqlite3.Error`` or ``OSError``, a Python without ``sqlite3``,
     or a Linux network filesystem. A failure logs one warning and leaves the file alone for
     ``REPROBE_S`` seconds on ``clock``; the first run after that tries again and logs the
-    recovery. The connection is reopened after a fork and when the path names a different
-    file; the old one is kept open, never closed.
+    recovery. A relative path is made absolute when the ``Db`` is made. The connection is
+    reopened after a fork, with a new lock, and when the path names a different file; the old
+    one is kept open, never closed.
     """
 
     def __init__(
@@ -184,7 +194,7 @@ class Db:
         label: str,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        self.path = Path(path)
+        self.path = Path(path).absolute()
         self._busy_timeout_s = busy_timeout_s
         self._setup = tuple(setup)
         self._label = label
@@ -196,6 +206,7 @@ class Db:
         self._failed_at: float | None = None
         self._reason: str | None = None
         self._journal: str | None = None
+        _DBS.add(self)
 
     def run(self, fn: Callable[[sqlite3.Connection], T]) -> T | None:
         with self._lock:
@@ -208,9 +219,12 @@ class Db:
             try:
                 conn = self._current()
                 if conn is None:
-                    fstype = network_fs(self.path.resolve())
+                    # realpath, as Path.resolve raises RuntimeError on a symlink loop up to 3.12.
+                    fstype = network_fs(os.path.realpath(self.path))
                     if fstype is not None:
-                        return self._fail(f"{fstype} network filesystem; use a local disk")
+                        return self._fail(
+                            f"{fstype} network filesystem; point XDG_CACHE_HOME to a local disk"
+                        )
                     conn = self._open()
                 result = fn(conn)
             except (sqlite3.Error, OSError) as exc:
@@ -220,6 +234,13 @@ class Db:
                 log.warning("%s %s is available again", self._label, self.path)
                 self._failed_at = self._reason = None
             return result
+
+    @staticmethod
+    def renew_locks() -> None:
+        """Give every ``Db`` a new lock; runs in a fork child, where the parent's thread that
+        may have held the old one does not exist."""
+        for db in list(_DBS):
+            db._lock = threading.Lock()
 
     def status(self) -> StoreStatus:
         with self._lock:
@@ -267,6 +288,10 @@ class Db:
             )
         self._failed_at = self._clock()
         self._reason = reason
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=Db.renew_locks)
 
 
 def _ident(path: Path) -> tuple[int, int] | None:

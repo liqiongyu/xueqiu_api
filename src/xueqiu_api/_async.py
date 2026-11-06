@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ._base import (
     DEFAULT_DEADLINE_S,
+    LATE_WAKE_S,
     CachePlan,
     ClientBase,
     exchange_yesterday,
@@ -357,9 +358,12 @@ class AsyncClient(ClientBase, AsyncEndpoints):
                 thread, self._book, call, earliest=earliest, deadline=deadline, last=last
             )
             if wait > 0:
+                slot = self._clock() + wait
                 await self._sleep(wait)
                 # Another call or process may have paused the host or opened its breaker.
                 await self._offload(thread, self._check_host, call)
+                if self._clock() > slot + LATE_WAKE_S:
+                    continue
             outcome = await self._attempt(call, deadline)
             if isinstance(outcome, Ok):
                 return outcome.value

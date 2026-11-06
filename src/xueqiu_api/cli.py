@@ -167,7 +167,7 @@ def _parser() -> argparse.ArgumentParser:
         "--no-cache",
         action="store_true",
         help="keep no response cache; by default results are cached in the user cache "
-        "directory, and in memory with --replay (env: XUEQIU_MCP_NO_CACHE, 1 or 0)",
+        "directory, and not at all with --replay (env: XUEQIU_MCP_NO_CACHE, 1 or 0)",
     )
     mcp.add_argument(
         "--stale-if-error",

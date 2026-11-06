@@ -12,12 +12,13 @@ import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx2
 import pytest
 
 from xueqiu_api import (
+    AsyncClient,
     Blocked,
     InvalidParams,
     RateLimited,
@@ -26,11 +27,11 @@ from xueqiu_api import (
     UpstreamUnavailable,
     XueqiuError,
 )
-from xueqiu_api._freshness import cache_key
+from xueqiu_api._freshness import MAX_ENTRY_BYTES, cache_key, encode_body
 from xueqiu_api._model import UpstreamModel
 from xueqiu_api._status import CacheStatus
 from xueqiu_api._time import to_ms
-from xueqiu_api.cache import CacheBackend, CacheEntry, MemoryCache, SqliteCache
+from xueqiu_api.cache import RETENTION_S, CacheBackend, CacheEntry, MemoryCache, SqliteCache
 from xueqiu_api.endpoints.kline import ENDPOINT as KLINE
 from xueqiu_api.symbols import SymbolParams, normalize_symbol
 
@@ -287,6 +288,45 @@ def test_a_call_that_outlives_its_deadline_waiting_for_a_shared_request_is_rate_
     assert len(upstream.requests(STOCK, QUOTEC)) == 1
 
 
+@pytest.mark.parametrize("kind", ["async"])
+def test_cancelling_the_call_that_sent_a_shared_request_leaves_it_to_the_others(
+    cached: Cached,
+) -> None:
+    h = cached()
+    body = replay_body("quotec/cn_hk_us")
+    client = h.client
+    assert isinstance(client, AsyncClient)
+
+    async def scenario() -> tuple[Any, bool]:
+        sent, release = asyncio.Event(), asyncio.Event()
+
+        async def held(request: httpx2.Request) -> httpx2.Response:
+            sent.set()
+            await release.wait()
+            return httpx2.Response(200, json=body)
+
+        # The mock transport of the async client awaits the coroutine a reply returns.
+        h.upstream.route(STOCK, QUOTEC, cast(Reply, held))
+        leader = asyncio.ensure_future(client.quotec("SH600000"))
+        await sent.wait()
+        follower = asyncio.ensure_future(client.quotec("SH600000"))
+        await asyncio.sleep(0)
+        leader.cancel()
+        await asyncio.sleep(0)
+        release.set()
+        rows = await follower
+        await asyncio.wait([leader])
+        return rows, leader.cancelled()
+
+    runner = h._runner  # pyright: ignore[reportPrivateUsage]
+    assert runner is not None
+    rows, cancelled = runner.run(scenario())
+
+    assert cancelled
+    assert len(rows) == 4
+    assert len(h.upstream.requests(STOCK, QUOTEC)) == 1
+
+
 # ---- per-call control
 
 
@@ -478,7 +518,72 @@ def test_stale_if_error_does_not_cover_an_error_of_the_request(
     assert caught.value.recoverable == "none"
 
 
+@pytest.mark.parametrize("how", ["max_age", "stale_if_error"])
+def test_a_sqlite_cache_entry_past_its_retention_is_never_served(
+    cached: Cached, clock: FakeClock, tmp_path: Path, how: str
+) -> None:
+    month = 30 * 86400
+    h = cached(cache=SqliteCache(tmp_path / "responses.sqlite3"), stale_if_error=month)
+    later = json_reply({}, 503) if how == "stale_if_error" else fixture_reply("kline/sh600000_day")
+    kline_reply(h, fixture_reply("kline/sh600000_day"), later)
+    h.kline("SH600000")
+    clock.advance(RETENTION_S + 3600)
+
+    if how == "max_age":
+        assert h.kline("SH600000", max_age=month).from_cache is False
+    else:
+        with pytest.raises(UpstreamUnavailable):
+            h.kline("SH600000")
+
+
+def test_an_unusable_cache_file_leaves_the_cache_in_process(cached: Cached, tmp_path: Path) -> None:
+    path = tmp_path / "responses.sqlite3"
+    path.write_bytes(b"These bytes are not a SQLite database.\n" * 100)
+    h = cached(cache=SqliteCache(path))
+    kline_reply(h)
+
+    first = h.kline("SH600000")
+    second = h.kline("SH600000")
+
+    assert (first.from_cache, second.from_cache) == (False, True)
+    assert len(h.upstream.requests(STOCK, KLINE.path)) == 1
+    status = h.run("status").cache
+    assert status is not None and status.store is not None
+    assert (status.store.available, status.store.reason) == (False, "DatabaseError SQLITE_NOTADB")
+
+
+def test_an_entry_fetched_after_the_wall_clock_now_is_a_miss(
+    make: Callable[..., Harness], clock: FakeClock
+) -> None:
+    offset = [SESSION.timestamp() - clock.now()]
+    h = make(cache=MemoryCache(), wall=lambda: offset[0] + clock.now())
+    kline_reply(h)
+    h.kline("SH600000")
+
+    offset[0] -= 10
+
+    assert h.kline("SH600000").from_cache is False
+    assert len(h.upstream.requests(STOCK, KLINE.path)) == 2
+
+
 # ---- what is not stored
+
+
+@pytest.mark.parametrize(("extra", "stored"), [(0, 1), (1, 0)], ids=["at-the-cap", "over-it"])
+def test_a_body_over_the_size_cap_in_its_stored_form_is_not_stored(
+    cached: Cached, extra: int, stored: int
+) -> None:
+    cache = MemoryCache()
+    h = cached(cache=cache)
+    body = copy.deepcopy(replay_body("kline/sh600000_day"))
+    body["data"]["pad"] = ""
+    body["data"]["pad"] = "x" * (MAX_ENTRY_BYTES - len(encode_body(body)) + extra)
+    assert len(encode_body(body)) == MAX_ENTRY_BYTES + extra
+    kline_reply(h, json_reply(body))
+
+    h.kline("SH600000")
+
+    assert cache.stats().entries == stored
 
 
 def test_an_empty_result_is_not_stored(cached: Cached) -> None:
@@ -638,6 +743,58 @@ def test_kline_history_of_one_window_may_come_from_the_cache(
 
     assert len(h.upstream.requests(STOCK, KLINE.path)) == 1
     assert (bars.from_cache, bars.fetched_at, len(bars)) == (True, first.fetched_at, 1)
+
+
+@pytest.mark.parametrize(("reply", "error"), FAILURES)
+def test_kline_history_raises_when_a_stale_first_window_needs_more(
+    cached: Cached,
+    clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    reply: Reply,
+    error: type[XueqiuError],
+) -> None:
+    """A stale window is not joined to new ones, and the walk starts again only once."""
+    monkeypatch.setattr("xueqiu_api.endpoints.kline.MAX_COUNT", 3)
+    h = cached(stale_if_error=3600)
+    full = replay_body("kline/sh600000_day")
+    kline_reply(h, json_reply(full), json_reply(one_bar(full, OCT_30_MS)), reply)
+    assert len(h.run("kline_history", "SH600000")) == 4
+    clock.advance(600)
+    calls: list[float | None] = []
+    call = h.client._call  # pyright: ignore[reportPrivateUsage]
+
+    def counted(*args: Any, max_age: float | None = None, **kwargs: Any) -> Any:
+        calls.append(max_age)
+        assert len(calls) <= 4, "kline_history keeps starting again"
+        return call(*args, max_age=max_age, **kwargs)
+
+    monkeypatch.setattr(h.client, "_call", counted)
+
+    with pytest.raises(error):
+        h.run("kline_history", "SH600000")
+    assert calls == [None, 0]
+
+
+def test_a_page_walk_raises_rather_than_join_a_stored_page_to_new_ones(
+    cached: Cached, clock: FakeClock
+) -> None:
+    h = cached(stale_if_error=3600)
+    second_pages: list[int] = []
+
+    def nav(request: httpx2.Request) -> httpx2.Response:
+        page = request.url.params["page"]
+        if page == "2":
+            second_pages.append(1)
+            if len(second_pages) > 1:
+                return httpx2.Response(503, json={})
+        return httpx2.Response(200, json=replay_body(f"fund_nav_history/008975_p{page}"))
+
+    h.upstream.route(DANJUAN, FUND_NAV, nav)
+    assert [len(page) for page in h.pages("fund_nav_history_pages", "008975")] == [3, 2]
+    clock.advance(10)
+
+    with pytest.raises(UpstreamUnavailable):
+        h.pages("fund_nav_history_pages", "008975")
 
 
 def nav_page(request: httpx2.Request) -> httpx2.Response:

@@ -6,10 +6,11 @@
 with the state file and session file in DIR calls a mock upstream. SCENARIO is ``pace``
 (5 quotec calls, concurrent in the async client), ``418`` or ``429`` (3 quotec calls in turn,
 each answered with that status), or ``cold`` or ``stale`` (one quote_detail call, which needs
-the anonymous cookies; ``stale`` answers 60201 to ``STALE_TOKEN``). ``pace``, ``cold`` and
-``stale`` space stock.xueqiu.com requests by ``FAST_S``; the others keep the real intervals.
-Every send is stamped with ``time.monotonic()``, which the runtime also uses as its wall
-clock, so the slots in the file and the stamps share one clock across processes.
+the anonymous cookies; ``stale`` answers 60201 to ``STALE_TOKEN`` and holds the home page
+until every child has had its 60201, so that they all look for new cookies at once).
+``pace``, ``cold`` and ``stale`` space stock.xueqiu.com requests by ``FAST_S``; the others
+keep the real intervals. The clients keep their default clocks, so the file holds epoch
+times; every send is stamped with ``time.monotonic()``, which the clients wait on.
 
 Each child opens the state file, creates ``ready-INDEX``, waits for ``go``, does its work,
 closes the file and prints one JSON object.
@@ -53,14 +54,15 @@ def barrier(directory: Path, index: str) -> None:
 
 
 def book(directory: Path, index: str) -> dict[str, Any]:
-    """Each slot is the wall reading ``book`` takes inside the lock plus the wait it returns."""
+    """Each slot is the clock reading ``book`` takes inside the lock plus the wait it returns,
+    on the monotonic clock the waits run on."""
     reading = [0.0]
 
-    def wall() -> float:
-        reading[0] = time.time()
+    def clock() -> float:
+        reading[0] = time.monotonic()
         return reading[0]
 
-    state = SharedState(directory / STATE_FILE, clock=time.monotonic, wall=wall, busy_timeout_s=30)
+    state = SharedState(directory / STATE_FILE, clock=clock, wall=time.time, busy_timeout_s=30)
     state.holds(HOST)
     barrier(directory, index)
     slots: list[tuple[bool, float] | None] = []
@@ -74,8 +76,10 @@ def book(directory: Path, index: str) -> dict[str, Any]:
 class Upstream:
     """The mock hosts of one child, recording what it sends."""
 
-    def __init__(self, scenario: str) -> None:
+    def __init__(self, scenario: str, directory: Path, index: str) -> None:
         self.scenario = scenario
+        self.directory = directory
+        self.index = index
         self.cookies = scenario in ("cold", "stale")
         """Whether the calls need the anonymous cookies."""
         self.sent: list[float] = []
@@ -86,6 +90,8 @@ class Upstream:
         at = time.monotonic()
         if request.url.path == "/":
             self.home += 1
+            if self.scenario == "stale":
+                self.wait_for_rejections()
             cookie = "xq_a_token=fake-anon-token-0001; Domain=.xueqiu.com; Path=/"
             return httpx2.Response(200, headers=[("Set-Cookie", cookie)], text="<html></html>")
         self.sent.append(at)
@@ -94,8 +100,18 @@ class Upstream:
         if self.scenario == "429":
             return httpx2.Response(429, headers={"Retry-After": "7"}, text="slow down")
         if f"xq_a_token={STALE_TOKEN}" in request.headers.get("cookie", ""):
+            (self.directory / f"rejected-{self.index}").touch()
             return httpx2.Response(200, json=LOGIN_ERROR)
         return httpx2.Response(200, json=QUOTES if "quotec" in request.url.path else DETAIL)
+
+    def wait_for_rejections(self) -> None:
+        """Wait until every child has had its 60201, or for 30 s."""
+        children = len(list(self.directory.glob("ready-*")))
+        give_up = time.monotonic() + 30
+        while len(list(self.directory.glob("rejected-*"))) < children:
+            if time.monotonic() > give_up:
+                return
+            time.sleep(0.005)
 
     def note(self, exc: XueqiuError) -> None:
         self.errors.append(
@@ -121,9 +137,7 @@ class Upstream:
 
 def run_sync(directory: Path, index: str, upstream: Upstream) -> dict[str, Any]:
     runtime = SyncRuntime(
-        transport=httpx2.MockTransport(upstream.respond),
-        wall=time.monotonic,
-        state_path=directory / STATE_FILE,
+        transport=httpx2.MockTransport(upstream.respond), state_path=directory / STATE_FILE
     )
     with Client(token="", session_path=directory / "session.json", _runtime=runtime) as client:
         client.status()
@@ -141,9 +155,7 @@ def run_sync(directory: Path, index: str, upstream: Upstream) -> dict[str, Any]:
 
 async def run_async(directory: Path, index: str, upstream: Upstream) -> dict[str, Any]:
     runtime = AsyncRuntime(
-        transport=httpx2.MockTransport(upstream.respond),
-        wall=time.monotonic,
-        state_path=directory / STATE_FILE,
+        transport=httpx2.MockTransport(upstream.respond), state_path=directory / STATE_FILE
     )
     client = AsyncClient(token="", session_path=directory / "session.json", _runtime=runtime)
     async with client:
@@ -173,7 +185,7 @@ def main(argv: list[str]) -> None:
     if mode == "book":
         print(json.dumps(book(directory, index)))
         return
-    upstream = Upstream(argv[3])
+    upstream = Upstream(argv[3], directory, index)
     if upstream.scenario in ("pace", "cold", "stale"):
         intervals = {host: site.min_interval_s for host, site in SITES.items()} | {HOST: FAST_S}
         _base._intervals = lambda overrides: dict(intervals)  # pyright: ignore[reportPrivateUsage]

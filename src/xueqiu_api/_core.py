@@ -430,6 +430,11 @@ class HostLimiter:
         with self._lock:
             return max(0.0, self._paused_until.get(host, now) - now)
 
+    def wait(self, host: str, now: float) -> float:
+        """Seconds until the next free slot; books nothing."""
+        with self._lock:
+            return max(0.0, self._next.get(host, now) - now)
+
     def lease_home(self, deadline: float) -> float | None:
         """Take the lease on the home-page fetch: 0.0 when taken, else the seconds it stays held.
 

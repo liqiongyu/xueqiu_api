@@ -2,8 +2,10 @@
 
 One SQLite file in the cache directory holds a row per host and a table of leases. The file
 stores wall-clock seconds; callers pass and get times on their own clock, converted inside
-the write lock. A row written later than the current wall time means the wall clock went
-back, and the row's times move back with it, so queued slots stay queued. When the file
+the write lock. Each row also keeps the monotonic reading of its write, which processes of one
+boot share: when the wall clock moved more or less than that clock since, it was set forward
+or back, and the row's times move with it, so queued slots stay queued. Without a usable
+reading, a row written later than the current wall time still moves back. When the file
 cannot be used the methods return None, and the shared classes keep to their in-process state.
 """
 
@@ -14,7 +16,7 @@ import os
 from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NoReturn, cast
 from uuid import uuid4
 
 from ._core import CircuitBreaker, HostLimiter
@@ -35,8 +37,8 @@ HOME_LEASE_S = 15.0
 
 _SETUP = (
     "CREATE TABLE IF NOT EXISTS hosts (host TEXT PRIMARY KEY, next_at REAL NOT NULL, "
-    "paused_until REAL NOT NULL, open_until REAL NOT NULL, written_at REAL NOT NULL) "
-    "WITHOUT ROWID",
+    "paused_until REAL NOT NULL, open_until REAL NOT NULL, written_at REAL NOT NULL, "
+    "written_mono REAL NOT NULL) WITHOUT ROWID",
     "CREATE TABLE IF NOT EXISTS leases (name TEXT PRIMARY KEY, holder TEXT NOT NULL, "
     "until REAL NOT NULL) WITHOUT ROWID",
 )
@@ -49,9 +51,10 @@ def default_state_path() -> Path:
 class SharedState:
     """The shared state file, read and written with ``clock`` times.
 
-    ``wall`` is the wall clock the file stores. Every method returns None while the file
-    cannot be used. A lease belongs to this object in this process: another ``SharedState``,
-    even in the same process, is another holder.
+    ``wall`` is the wall clock the file stores; ``clock`` is also stored, to tell a step of
+    the wall clock from time passing. Every method returns None while the file cannot be used.
+    A lease belongs to this object in this process: another ``SharedState``, even in the same
+    process, is another holder.
     """
 
     def __init__(
@@ -79,22 +82,23 @@ class SharedState:
 
         def run(conn: sqlite3.Connection) -> tuple[bool, float]:
             with _immediate(conn):
-                now, next_at, paused, opened = _times(conn, host, self._wall)
-                offset = now - self.clock()
+                now, mono, next_at, paused, opened = self._times(conn, host)
+                offset = now - mono
                 slot = max(now, earliest + offset, next_at)
                 if slot > deadline + offset:
                     return False, slot - now
-                _put(conn, host, slot + interval_s, paused, opened, now)
+                _put(conn, host, slot + interval_s, paused, opened, now, mono)
                 return True, slot - now
 
         return self._db.run(run)
 
-    def holds(self, host: str) -> tuple[float, float] | None:
-        """Seconds the breaker of ``host`` stays open and seconds the host stays paused."""
+    def holds(self, host: str) -> tuple[float, float, float] | None:
+        """Seconds the breaker of ``host`` stays open, the host stays paused, and until its next
+        free slot; read without taking the write lock."""
 
-        def run(conn: sqlite3.Connection) -> tuple[float, float]:
-            now, _, paused, opened = _times(conn, host, self._wall)
-            return max(0.0, opened - now), max(0.0, paused - now)
+        def run(conn: sqlite3.Connection) -> tuple[float, float, float]:
+            now, _, next_at, paused, opened = self._times(conn, host)
+            return max(0.0, opened - now), max(0.0, paused - now), max(0.0, next_at - now)
 
         return self._db.run(run)
 
@@ -111,12 +115,12 @@ class SharedState:
 
         def run(conn: sqlite3.Connection) -> None:
             with _immediate(conn):
-                now, next_at, paused, opened = _times(conn, host, self._wall)
+                now, mono, next_at, paused, opened = self._times(conn, host)
                 if column == "paused_until":
                     paused = max(paused, now + seconds)
                 else:
                     opened = max(opened, now + seconds)
-                _put(conn, host, next_at, paused, opened, now)
+                _put(conn, host, next_at, paused, opened, now, mono)
 
         self._db.run(run)
 
@@ -130,12 +134,16 @@ class SharedState:
 
         def run(conn: sqlite3.Connection) -> float:
             with _immediate(conn):
-                row: tuple[str, float] | None = conn.execute(
+                row: tuple[object, object] | None = conn.execute(
                     "SELECT holder, until FROM leases WHERE name = ?", (name,)
                 ).fetchone()
                 now = self._wall()
-                if row is not None and row[0] != holder and row[1] > now and _alive(row[0]):
-                    return row[1] - now
+                if row is not None:
+                    held_by, held_until = row
+                    if not isinstance(held_by, str) or not isinstance(held_until, float):
+                        _corrupt(f"lease {name}")
+                    if held_by != holder and held_until > now and _alive(held_by):
+                        return held_until - now
                 conn.execute(
                     "INSERT OR REPLACE INTO leases VALUES (?, ?, ?)",
                     (name, holder, until + now - self.clock()),
@@ -164,6 +172,34 @@ class SharedState:
         """The pid is read at call time, so a fork child is a holder of its own."""
         return f"{os.getpid()}:{self._token}"
 
+    def _times(
+        self, conn: sqlite3.Connection, host: str
+    ) -> tuple[float, float, float, float, float]:
+        """The wall time and the clock now, then next_at, paused_until and open_until of
+        ``host``, moved by any step of the wall clock since the row was written.
+
+        The step is the wall time passed since the write less the clock time passed. When the
+        row's clock reading is ahead of the clock, as after a reboot, only a step back shows:
+        the time is read after the row, so a row written later than now means one.
+        """
+        row: tuple[object, ...] | None = conn.execute(
+            "SELECT next_at, paused_until, open_until, written_at, written_mono FROM hosts "
+            "WHERE host = ?",
+            (host,),
+        ).fetchone()
+        now = self._wall()
+        mono = self.clock()
+        if row is None:
+            return now, mono, now, now, now
+        if not all(isinstance(value, float) for value in row):
+            _corrupt(f"host {host}")
+        next_at, paused, opened, written_at, written_mono = cast(tuple[float, ...], row)
+        if mono >= written_mono:
+            step = (now - written_at) - (mono - written_mono)
+        else:
+            step = min(0.0, now - written_at)
+        return now, mono, next_at + step, paused + step, opened + step
+
 
 @contextmanager
 def _immediate(conn: sqlite3.Connection) -> Generator[None]:
@@ -176,24 +212,12 @@ def _immediate(conn: sqlite3.Connection) -> Generator[None]:
             conn.execute("ROLLBACK")
 
 
-def _times(
-    conn: sqlite3.Connection, host: str, wall: Callable[[], float]
-) -> tuple[float, float, float, float]:
-    """The wall time now, then next_at, paused_until and open_until of ``host``.
+def _corrupt(what: str) -> NoReturn:
+    """Raise for a row of the wrong types, which only another program can have written, so
+    that the file is reported and left alone like a damaged one."""
+    import sqlite3
 
-    Read after the row, so the row cannot be newer than now unless the wall clock went back;
-    then the three times move back by as much.
-    """
-    row: tuple[float, float, float, float] | None = conn.execute(
-        "SELECT next_at, paused_until, open_until, written_at FROM hosts WHERE host = ?",
-        (host,),
-    ).fetchone()
-    now = wall()
-    if row is None:
-        return now, now, now, now
-    next_at, paused, opened, written_at = row
-    back = max(0.0, written_at - now)
-    return now, next_at - back, paused - back, opened - back
+    raise sqlite3.DatabaseError(f"the row of {what} is not one this package writes")
 
 
 def _put(
@@ -203,11 +227,12 @@ def _put(
     paused: float,
     opened: float,
     now: float,
+    mono: float,
 ) -> None:
     """Write the row of ``host`` and commit."""
     conn.execute(
-        "INSERT OR REPLACE INTO hosts VALUES (?, ?, ?, ?, ?)",
-        (host, next_at, paused, opened, now),
+        "INSERT OR REPLACE INTO hosts VALUES (?, ?, ?, ?, ?, ?)",
+        (host, next_at, paused, opened, now, mono),
     )
     conn.execute("COMMIT")
 
@@ -215,7 +240,9 @@ def _put(
 def _alive(holder: str) -> bool:
     """Whether the process of a lease holder may still run.
 
-    Always true on Windows, where ``os.kill`` terminates the process instead of probing it.
+    Always true on Windows, where ``os.kill`` terminates the process instead of probing it,
+    and for a holder that names no pid, so that its lease runs until it expires. An exited
+    process that its parent has not reaped yet still counts, for at most ``HOME_LEASE_S``.
     """
     if os.name != "posix":
         return True
@@ -223,7 +250,7 @@ def _alive(holder: str) -> bool:
         os.kill(int(holder.split(":", 1)[0]), 0)
     except ProcessLookupError:
         return False
-    except PermissionError:
+    except (PermissionError, ValueError, OverflowError):
         pass
     return True
 
@@ -263,6 +290,11 @@ class SharedLimiter(HostLimiter):
         local = super().paused(host, now)
         held = self._state.holds(host)
         return local if held is None else max(local, held[1])
+
+    def wait(self, host: str, now: float) -> float:
+        local = super().wait(host, now)
+        held = self._state.holds(host)
+        return local if held is None else max(local, held[2])
 
     def lease_home(self, deadline: float) -> float | None:
         return self._state.lease("home", min(deadline, self._state.clock() + HOME_LEASE_S))

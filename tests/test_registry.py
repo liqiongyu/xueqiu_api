@@ -35,8 +35,8 @@ CODE_LIKE = re.compile(r"(^|_)(symbols?|codes?|tickers?)$|^(stocks?|funds?|cubes
 NOT_A_SECURITY = {"ind_code"}
 """Names that match ``CODE_LIKE`` but select something else: an industry."""
 UNPREFIXED = {"kline", "quotec", "batch_quote", "suggest_stock"}
-KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
 """Names from before the rule that a name starts with its category."""
+KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
 SHORT_PAGE_ENDS = {"capital_block_trades"}
 """Endpoints with a measured page size cap, so that a short page ends them: full pages 1 and 2
 at size=100 for capital_block_trades, measured 2026-11-05."""

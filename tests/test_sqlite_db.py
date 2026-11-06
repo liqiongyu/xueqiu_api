@@ -73,6 +73,35 @@ def test_the_store_and_its_wal_files_are_private_after_the_first_write(
     assert db.status() == StoreStatus(str(store / "test.sqlite3"), True, None, "wal")
 
 
+@POSIX
+@pytest.mark.skipif(os.name == "posix" and os.geteuid() == 0, reason="root writes any file")
+def test_a_file_without_write_permission_keeps_its_mode_and_stays_unusable(
+    tmp_path: Path, make_db: MakeDb
+) -> None:
+    clock = FakeClock()
+    path = tmp_path / "test.sqlite3"
+    open_db(path, busy_timeout_s=1, setup=SETUP).close()
+    path.chmod(0o400)
+    db = make_db(path, clock=clock.now)
+
+    assert db.run(insert(1)) is None
+    clock.advance(REPROBE_S)
+    assert db.run(insert(2)) is None
+
+    assert (db.status().reason or "").startswith("OperationalError SQLITE_READONLY")
+    assert mode(path) == 0o400
+    path.chmod(0o600)
+
+
+@POSIX
+def test_a_symlink_loop_in_the_path_gets_none(tmp_path: Path, make_db: MakeDb) -> None:
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    db = make_db(loop / "test.sqlite3")
+    assert db.run(insert(1)) is None
+    assert db.status().reason is not None
+
+
 def wait_for(paths: list[Path], children: list[subprocess.Popen[str]]) -> None:
     """Wait until every path exists; fail at once when a child has exited."""
     give_up = time.monotonic() + 120
@@ -203,6 +232,24 @@ def test_a_python_without_sqlite3_gets_none(
     assert not (tmp_path / "test.sqlite3").exists()
 
 
+def test_a_relative_path_names_the_file_of_the_directory_it_was_given_in(
+    tmp_path: Path, make_db: MakeDb, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    db = make_db(Path("test.sqlite3"))
+    assert db.run(insert(1)) == 1
+
+    monkeypatch.chdir(second)
+
+    assert db.run(insert(2)) == 1
+    assert db.run(values) == [1, 2]
+    assert db.path == first / "test.sqlite3"
+    assert list(second.iterdir()) == []
+
+
 def test_a_network_filesystem_gets_none_without_opening_the_file(
     tmp_path: Path, make_db: MakeDb, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -212,7 +259,7 @@ def test_a_network_filesystem_gets_none_without_opening_the_file(
     monkeypatch.setattr("xueqiu_api._sqlite.network_fs", nfs4)
     db = make_db(tmp_path / "store" / "test.sqlite3")
     assert db.run(insert(1)) is None
-    assert (db.status().reason or "").startswith("nfs4 network filesystem")
+    assert db.status().reason == "nfs4 network filesystem; point XDG_CACHE_HOME to a local disk"
     assert not (tmp_path / "store").exists()
 
 
@@ -234,6 +281,21 @@ def test_a_fork_child_reopens_an_inherited_db_and_the_parent_keeps_working(
     assert result["parent_kept_its_connection"] is True
     assert result["rows"] == [result["parent"], result["child"], result["parent"]]
     assert result["integrity"] == [["ok"]]
+
+
+@POSIX
+def test_a_fork_child_gets_a_new_lock_while_a_parent_thread_holds_the_old_one(
+    tmp_path: Path,
+) -> None:
+    done = subprocess.run(
+        [sys.executable, str(WORKER), "fork-busy", str(tmp_path / "test.sqlite3")],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {"child_exit": 0, "parent_wrote": 1}
 
 
 @POSIX

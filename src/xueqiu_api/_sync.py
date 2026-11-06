@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ._base import (
     DEFAULT_DEADLINE_S,
+    LATE_WAKE_S,
     CachePlan,
     ClientBase,
     exchange_yesterday,
@@ -118,7 +119,8 @@ class Client(ClientBase, SyncEndpoints):
             login cookies stay in a private in-memory cache of this client.
         stale_if_error: with a cache, when the upstream fails with an error worth backing off
             from (rate limited, blocked or unavailable), return a stored result up to this
-            many seconds old instead, marked ``stale``. Off by default.
+            many seconds old instead, marked ``stale``; not for a call with ``max_age=0``, nor
+            for the pages of a walk. Off by default.
     """
 
     def __init__(
@@ -371,9 +373,12 @@ class Client(ClientBase, SyncEndpoints):
             generation = self._session.generation
             wait = self._book(call, earliest=earliest, deadline=deadline, last=last)
             if wait > 0:
+                slot = self._clock() + wait
                 self._sleep(wait)
                 # Another call or process may have paused the host or opened its breaker.
                 self._check_host(call)
+                if self._clock() > slot + LATE_WAKE_S:
+                    continue
             outcome = self._attempt(call, deadline)
             if isinstance(outcome, Ok):
                 return outcome.value

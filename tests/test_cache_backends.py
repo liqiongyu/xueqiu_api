@@ -283,13 +283,16 @@ def test_a_file_that_is_not_a_database_is_left_alone_until_removed(
     path.parent.mkdir()
     path.write_bytes(NOT_A_DATABASE)
     cache = SqliteCache(path)
+    kept = entry(size=10)
 
     with caplog.at_level(logging.WARNING, logger="xueqiu_api"):
         assert cache.get("a") is None
-        cache.put("a", entry())
+        # Entries stay in this process meanwhile.
+        cache.put("a", kept)
+        assert cache.get("a") == kept
+        assert cache.stats() == CacheStats(1, 10)
+        assert cache.clear() == 1
         assert cache.get("a") is None
-        assert cache.stats() == CacheStats(0, 0)
-        assert cache.clear() == 0
     assert path.read_bytes() == NOT_A_DATABASE
     assert sorted(item.name for item in path.parent.iterdir()) == ["responses.sqlite3"]
     assert cache.status().reason == "DatabaseError SQLITE_NOTADB"
@@ -300,6 +303,38 @@ def test_a_file_that_is_not_a_database_is_left_alone_until_removed(
     cache.put("a", stored)
     assert cache.get("a") == stored
     assert cache.status() == StoreStatus(str(path), True, None, "wal")
+
+
+def test_close_releases_the_file_and_the_next_call_opens_it_again(tmp_path: Path) -> None:
+    cache = SqliteCache(tmp_path / "responses.sqlite3")
+    stored = entry()
+    cache.put("a", stored)
+    cache.close()
+    # The file is released: it can be replaced, which Windows refuses while it is open.
+    os.replace(cache.path, tmp_path / "moved.sqlite3")
+    os.replace(tmp_path / "moved.sqlite3", cache.path)
+
+    assert cache.get("a") == stored
+    cache.close()
+
+
+def test_a_relative_path_keeps_naming_the_first_file_after_a_chdir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    cache = SqliteCache("responses.sqlite3")
+    stored = entry()
+    cache.put("a", stored)
+
+    monkeypatch.chdir(second)
+
+    assert cache.get("a") == stored
+    assert cache.path == first / "responses.sqlite3"
+    assert list(second.iterdir()) == []
+    cache.close()
 
 
 @POSIX

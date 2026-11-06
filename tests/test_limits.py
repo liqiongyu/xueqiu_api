@@ -212,6 +212,55 @@ def test_calls_queued_behind_a_rate_limited_one_are_held(h: Harness) -> None:
     assert len(h.upstream.sent) == 2
 
 
+def test_a_host_paused_while_a_call_sleeps_to_its_slot_holds_that_call(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
+    h.quotec("SH600000")
+    limiter = h.client._limiter  # pyright: ignore[reportPrivateUsage]
+    sleep = h.clock.async_sleep if h.kind == "async" else h.clock.sleep
+
+    def pause_meanwhile(seconds: float) -> Any:
+        # Another call or process got a rate limit while this one slept.
+        limiter.pause(STOCK, h.clock.now() + 60)
+        return sleep(seconds)
+
+    monkeypatch.setattr(h.client, "_sleep", pause_meanwhile)
+
+    with pytest.raises(RateLimited) as held:
+        h.quotec("SH600000")
+
+    assert "held" in held.value.message
+    assert len(h.upstream.requests(STOCK)) == 1
+
+
+@IN_MEMORY
+def test_a_call_held_past_its_slot_after_the_sleep_books_a_new_one(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h.upstream.route(STOCK, QUOTEC, fixture_reply("quotec/cn_hk_us"))
+    h.quotec("SH600000")
+    limiter = h.client._limiter  # pyright: ignore[reportPrivateUsage]
+    check = h.client._check_host  # pyright: ignore[reportPrivateUsage]
+    held: list[float] = []
+
+    def held_up(call: Any, now: float | None = None) -> None:
+        if now is None and not held:
+            # Waiting, for example, for the state file behind another thread of this process,
+            # which meanwhile books the slot after this call's own.
+            h.clock.advance(1.5)
+            held.append(h.clock.now())
+            limiter.reserve(STOCK, now=held[0], earliest=held[0], deadline=math.inf)
+        check(call, now)
+
+    monkeypatch.setattr(h.client, "_check_host", held_up)
+
+    h.quotec("SH600000")
+
+    first, second = h.upstream.requests(STOCK)
+    assert second.at - first.at == pytest.approx(3.5)
+
+
 def test_the_async_deadline_bounds_a_response_still_arriving(tmp_path: Path) -> None:
     async def slow(request: httpx2.Request) -> httpx2.Response:
         await asyncio.sleep(5)

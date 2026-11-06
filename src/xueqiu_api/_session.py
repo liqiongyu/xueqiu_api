@@ -10,8 +10,7 @@ import math
 import os
 import secrets
 import tempfile
-import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -121,11 +120,19 @@ class Session:
     Two independent sets: the configured credentials, never written to disk, and the anonymous
     set, loaded from the store or fetched by the client's bootstrap and saved there. Each call
     says which one it uses. ``generation`` changes whenever the anonymous set is replaced.
+    ``wall`` stamps the sets this session saves.
     """
 
-    def __init__(self, *, credentials: dict[str, str] | None, store: SessionStore) -> None:
+    def __init__(
+        self,
+        *,
+        credentials: dict[str, str] | None,
+        store: SessionStore,
+        wall: Callable[[], float],
+    ) -> None:
         self._credentials = credentials
         self._store = store
+        self._wall = wall
         saved = store.load()
         self._anonymous = None if saved is None else saved.cookies
         self._saved_at = 0.0 if saved is None else saved.saved_at
@@ -177,8 +184,10 @@ class Session:
         return True
 
     def set_anonymous(self, cookies: Mapping[str, str]) -> None:
+        """Hold and save a new set, stamped after the one held, even when the wall clock went
+        back, so that the processes still holding that one take the new set."""
         self._anonymous = dict(cookies)
-        self._saved_at = time.time()
+        self._saved_at = max(self._wall(), math.nextafter(self._saved_at, math.inf))
         self.generation += 1
         try:
             self._store.save(cookies, self._saved_at)

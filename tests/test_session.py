@@ -693,6 +693,56 @@ def test_a_session_that_cannot_save_never_adopts_the_stale_set_again(
     assert len(h.upstream.requests("xueqiu.com", "/")) == 2
 
 
+def test_a_set_fetched_after_the_wall_clock_went_back_replaces_the_one_held_elsewhere(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    """The held set was saved an hour ahead of the wall clock now, as before a step back."""
+    ahead = time.time() + 3600
+    save_session(session_path, STALE, ahead)
+    writer, reader = make(), make()
+    rejected = error_reply(60201, "synthetic login error")
+    bars = fixture_reply("kline/sh600000_day")
+    writer.upstream.route(STOCK, KLINE, rejected, bars, rejected, bars)
+
+    assert len(writer.kline("SH600000")) == 3
+    assert len(reader.kline("SH600000")) == 3
+
+    assert len(writer.upstream.requests("xueqiu.com", "/")) == 1
+    retry = writer.upstream.requests(STOCK, KLINE)[-1]
+    assert retry.headers["cookie"] == header(ANON_COOKIES)
+    assert json.loads(session_path.read_text(encoding="utf-8"))["saved_at"] > ahead
+
+
+def test_a_fetched_set_is_stamped_with_the_wall_clock_of_the_client(
+    make: Callable[..., Harness], session_path: Path
+) -> None:
+    h = make(wall=lambda: SAVED_AT)
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    h.kline("SH600000")
+
+    assert json.loads(session_path.read_text(encoding="utf-8"))["saved_at"] == SAVED_AT
+
+
+def test_a_set_saved_before_the_home_lease_was_taken_is_adopted_without_a_fetch(
+    make: Callable[..., Harness], session_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h = make()
+    h.upstream.route(STOCK, KLINE, fixture_reply("kline/sh600000_day"))
+
+    def lease_home(deadline: float) -> float | None:
+        # The holder before this call saved its set and gave the lease back meanwhile.
+        save_session(session_path, OTHER, SAVED_AT)
+        return 0.0
+
+    monkeypatch.setattr(h.client._limiter, "lease_home", lease_home)  # pyright: ignore[reportPrivateUsage]
+
+    assert len(h.kline("SH600000")) == 3
+
+    assert h.upstream.requests("xueqiu.com", "/") == []
+    assert h.upstream.requests(STOCK, KLINE)[0].headers["cookie"] == header(OTHER)
+
+
 def test_a_call_waiting_on_the_home_lease_adopts_the_set_its_holder_saves(
     make: Callable[..., Harness],
     clock: FakeClock,

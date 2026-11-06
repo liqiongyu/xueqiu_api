@@ -86,6 +86,110 @@ def test_a_wall_clock_set_back_keeps_the_queued_slots(
 
 
 @WALLS
+def test_a_wall_clock_set_forward_keeps_the_queued_slots_of_other_processes(
+    clock: FakeClock, make_state: MakeState, offset: float
+) -> None:
+    wall = [offset]
+    first = make_state(wall=lambda: clock.now() + wall[0])
+    second = make_state(wall=lambda: clock.now() + wall[0])
+    now = clock.now()
+    for _ in range(10):
+        first.book(HOST, 1.0, now, now + 100)
+    clock.advance(0.5)
+    wall[0] += 3600
+
+    assert second.book(HOST, 1.0, now, now + 100) == (True, pytest.approx(9.5))
+    assert second.holds(HOST) == (0.0, 0.0, pytest.approx(10.5))
+
+
+def test_a_clock_reading_from_another_boot_moves_only_a_row_written_later_than_now(
+    clock: FakeClock, make_state: MakeState
+) -> None:
+    """A clock behind the row's reading, as after a reboot, cannot measure a step."""
+    first = make_state(clock=lambda: clock.now() + 1e6)
+    now = clock.now()
+    for _ in range(10):
+        first.book(HOST, 1.0, now + 1e6, now + 1e6 + 100)
+    wall = [0.0]
+    second = make_state(wall=lambda: clock.now() + wall[0])
+
+    assert second.holds(HOST) == (0.0, 0.0, pytest.approx(10.0))
+    wall[0] -= 3600
+    assert second.holds(HOST) == (0.0, 0.0, pytest.approx(10.0))
+    wall[0] += 7200
+    assert second.holds(HOST) == (0.0, 0.0, 0.0)
+
+
+@pytest.mark.parametrize(
+    ("table", "row"),
+    [
+        ("hosts", (HOST, "garbage", 0.0, 0.0, 0.0, 0.0)),
+        ("hosts", (HOST, 0.0, 0.0, 0.0, 0.0, b"\x00")),
+        ("leases", ("home", b"\x01", 1e12)),
+        ("leases", ("home", "1:token", "later")),
+    ],
+    ids=["text-time", "blob-time", "blob-holder", "text-until"],
+)
+def test_a_row_another_program_wrote_makes_the_file_unusable(
+    clock: FakeClock, make_state: MakeState, path: Path, table: str, row: tuple[Any, ...]
+) -> None:
+    state = make_state()
+    limiter = SharedLimiter({HOST: 1.0}, state)
+    now = clock.now()
+    assert state.lease("first", now) == 0.0
+    conn = open_db(path, busy_timeout_s=1)
+    try:
+        conn.execute(f"INSERT INTO {table} VALUES ({', '.join('?' * len(row))})", row)
+    finally:
+        conn.close()
+
+    if table == "hosts":
+        assert state.holds(HOST) is None
+        assert limiter.reserve(HOST, now=now, earliest=now, deadline=now + 100) == (True, 0.0)
+    else:
+        assert state.lease("home", now + 10) is None
+    assert state.status().reason == "DatabaseError"
+    assert row in rows(path, table)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows relies on lease expiry alone")
+@pytest.mark.parametrize("holder", ["garbage", f"{2**70}:token", "-:token"])
+def test_a_lease_whose_holder_names_no_pid_runs_until_it_expires(
+    clock: FakeClock, make_state: MakeState, path: Path, holder: str
+) -> None:
+    state = make_state()
+    now = clock.now()
+    assert state.lease("first", now) == 0.0
+    conn = open_db(path, busy_timeout_s=1)
+    try:
+        conn.execute("INSERT INTO leases VALUES (?, ?, ?)", ("home", holder, now + 5))
+    finally:
+        conn.close()
+
+    assert state.lease("home", now + 10) == 5.0
+    clock.advance(5)
+    assert state.lease("home", clock.now() + 10) == 0.0
+
+
+def test_the_wait_a_limiter_reports_takes_no_write_lock(
+    clock: FakeClock, make_state: MakeState, path: Path
+) -> None:
+    limiter = SharedLimiter({HOST: 1.0}, make_state(busy_timeout_s=0.1))
+    other = make_state()
+    now = clock.now()
+    assert other.book(HOST, 1.0, now + 4, now + 100) == (True, 4.0)
+    holder = open_db(path, busy_timeout_s=1)
+    holder.execute("BEGIN IMMEDIATE")
+    try:
+        assert limiter.wait(HOST, now) == 5.0
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+    assert limiter._state.status().available  # pyright: ignore[reportPrivateUsage]
+    assert HostLimiter({HOST: 1.0}).wait(HOST, now) == 0.0
+
+
+@WALLS
 def test_a_booking_past_its_deadline_writes_nothing(
     clock: FakeClock, make_state: MakeState, path: Path, offset: float
 ) -> None:
@@ -151,7 +255,7 @@ def test_a_long_pause_is_capped_in_the_file_but_not_in_the_process(
     limiter.pause(HOST, now + 7200)
 
     assert limiter.paused(HOST, now) == 7200
-    assert other.holds(HOST) == (0.0, MAX_PAUSE_S)
+    assert other.holds(HOST) == (0.0, MAX_PAUSE_S, 0.0)
 
 
 def test_pauses_and_open_breakers_report_the_larger_of_the_process_and_the_file(
@@ -172,9 +276,9 @@ def test_pauses_and_open_breakers_report_the_larger_of_the_process_and_the_file(
 
     assert limiter.paused(HOST, now) == 60
     assert breaker.remaining(HOST, now) == 300
-    assert first.holds(HOST) == second.holds(HOST) == (300, 60)
+    assert first.holds(HOST) == second.holds(HOST) == (300, 60, 0.0)
     limiter.pause(HOST, now + 1)
-    assert second.holds(HOST) == (300, 60)
+    assert second.holds(HOST) == (300, 60, 0.0)
 
 
 @pytest.mark.parametrize(
@@ -239,10 +343,12 @@ def test_an_unusable_file_leaves_the_limiter_in_process_until_the_reprobe(
     assert (host, next_at) == (HOST, now + 30)
 
 
+@WALLS
 def test_a_held_lease_gives_its_remaining_seconds_until_it_expires(
-    clock: FakeClock, make_state: MakeState
+    clock: FakeClock, make_state: MakeState, offset: float
 ) -> None:
-    first, second = make_state(), make_state()
+    first = make_state(wall=lambda: clock.now() + offset)
+    second = make_state(wall=lambda: clock.now() + offset)
     now = clock.now()
 
     assert first.lease("home", now + 10) == 0.0
@@ -295,11 +401,12 @@ def test_a_lease_of_an_exited_process_is_taken_at_once(
     assert state.lease("init", now + 10) == 100.0
 
 
+@WALLS
 def test_the_home_lease_ends_at_the_deadline_or_after_home_lease_s(
-    clock: FakeClock, make_state: MakeState
+    clock: FakeClock, make_state: MakeState, offset: float
 ) -> None:
-    limiter = SharedLimiter({HOST: 1.0}, make_state())
-    other = make_state()
+    limiter = SharedLimiter({HOST: 1.0}, make_state(wall=lambda: clock.now() + offset))
+    other = make_state(wall=lambda: clock.now() + offset)
     now = clock.now()
 
     assert limiter.lease_home(now + 30) == 0.0
