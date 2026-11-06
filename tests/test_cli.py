@@ -172,6 +172,12 @@ def test_severity_ranks_every_error_code() -> None:
         ["mcp", "--max-chars", "4e3"],
         ["mcp", "--replay", "no-such-replay-dir"],
         ["mcp", "--log-level", "trace"],
+        ["mcp", "--stale-if-error", "abc"],
+        ["mcp", "--stale-if-error", "0"],
+        ["mcp", "--stale-if-error", "-60"],
+        ["mcp", "--stale-if-error", "nan"],
+        ["mcp", "--stale-if-error", "inf"],
+        ["mcp", "--no-cache", "yes"],
     ],
 )
 def test_usage_errors_are_invalid_params_json_with_exit_code_2(
@@ -640,6 +646,7 @@ def test_mcp_hands_the_options_to_the_server(served: list[McpOptions], tmp_path:
                 "mcp",
                 *("--exclude", "kline", "--exclude", "xq_call", "--max-chars", "4000"),
                 *("--replay", str(tmp_path), "--log-level", "debug"),
+                *("--no-cache", "--stale-if-error", "3600"),
             ]
         )
         == 0
@@ -647,7 +654,12 @@ def test_mcp_hands_the_options_to_the_server(served: list[McpOptions], tmp_path:
     assert served == [
         McpOptions(),
         McpOptions(
-            exclude=("kline", "xq_call"), max_chars=4000, replay=tmp_path, log_level="debug"
+            exclude=("kline", "xq_call"),
+            max_chars=4000,
+            replay=tmp_path,
+            log_level="debug",
+            no_cache=True,
+            stale_if_error=3600.0,
         ),
     ]
 
@@ -659,20 +671,45 @@ def test_mcp_options_also_come_from_the_environment(
     monkeypatch.setenv("XUEQIU_MCP_MAX_CHARS", "5000")
     monkeypatch.setenv("XUEQIU_MCP_REPLAY", str(tmp_path))
     monkeypatch.setenv("XUEQIU_MCP_LOG_LEVEL", "info")
+    monkeypatch.setenv("XUEQIU_MCP_NO_CACHE", "1")
+    monkeypatch.setenv("XUEQIU_MCP_STALE_IF_ERROR", "600")
 
     assert cli.main(["mcp"]) == 0
     flags = ["--exclude", "quotec", "--max-chars", "6000", "--log-level", "error"]
-    assert cli.main(["mcp", *flags]) == 0
+    assert cli.main(["mcp", *flags, "--stale-if-error", "86400.5"]) == 0
     # Flags win over the variables, except that --exclude adds to XUEQIU_MCP_EXCLUDE.
     assert served == [
-        McpOptions(exclude=("kline", "xq_call"), max_chars=5000, replay=tmp_path, log_level="info"),
+        McpOptions(
+            exclude=("kline", "xq_call"),
+            max_chars=5000,
+            replay=tmp_path,
+            log_level="info",
+            no_cache=True,
+            stale_if_error=600.0,
+        ),
         McpOptions(
             exclude=("kline", "xq_call", "quotec"),
             max_chars=6000,
             replay=tmp_path,
             log_level="error",
+            no_cache=True,
+            stale_if_error=86400.5,
         ),
     ]
+
+
+@pytest.mark.parametrize(
+    ("value", "no_cache"),
+    [("true", True), ("ON", True), ("0", False), ("false", False), ("", False)],
+)
+def test_the_no_cache_variable_takes_the_usual_words_for_yes_and_no(
+    served: list[McpOptions], monkeypatch: pytest.MonkeyPatch, value: str, no_cache: bool
+) -> None:
+    monkeypatch.setenv("XUEQIU_MCP_NO_CACHE", value)
+
+    assert cli.main(["mcp"]) == 0
+    assert cli.main(["mcp", "--no-cache"]) == 0
+    assert served == [McpOptions(no_cache=no_cache), McpOptions(no_cache=True)]
 
 
 @pytest.mark.parametrize(
@@ -682,6 +719,9 @@ def test_mcp_options_also_come_from_the_environment(
         ("XUEQIU_MCP_MAX_CHARS", "100"),
         ("XUEQIU_MCP_LOG_LEVEL", "trace"),
         ("XUEQIU_MCP_REPLAY", "no-such-replay-dir"),
+        ("XUEQIU_MCP_NO_CACHE", "maybe"),
+        ("XUEQIU_MCP_STALE_IF_ERROR", "abc"),
+        ("XUEQIU_MCP_STALE_IF_ERROR", "0"),
     ],
 )
 def test_invalid_mcp_environment_values_are_usage_errors(

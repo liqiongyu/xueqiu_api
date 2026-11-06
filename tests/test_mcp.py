@@ -32,18 +32,23 @@ from zoneinfo import ZoneInfo
 
 import httpx2
 from mcp import Client, MCPError, StdioServerParameters
+from mcp.server import Server
 from mcp.types import INVALID_PARAMS, TextContent
 from pydantic import BaseModel, ConfigDict, Field
 
 from xueqiu_api import REGISTRY, LoginRequired
 from xueqiu_api._async import AsyncClient, AsyncRuntime
+from xueqiu_api._freshness import STATIC_S
 from xueqiu_api._model import UpstreamModel
 from xueqiu_api._pages import Page
-from xueqiu_api._render import STATS_COLUMNS, compact_json
+from xueqiu_api._paths import cache_dir
+from xueqiu_api._render import STALE_NOTE, STATS_COLUMNS, compact_json
 from xueqiu_api._replay import ReplayTransport
 from xueqiu_api._result import Fetched
 from xueqiu_api._search import EndpointIndex
+from xueqiu_api._status import ClientStatus
 from xueqiu_api._time import to_ms
+from xueqiu_api.cache import CACHE_FILE, CacheBackend, MemoryCache, SqliteCache
 from xueqiu_api.mcp_server import MIN_MAX_CHARS, McpOptions
 from xueqiu_api.mcp_server import server as mcp_server
 from xueqiu_api.mcp_server import tools as mcp_tools
@@ -91,6 +96,9 @@ QUOTEC = "/v5/stock/realtime/quotec.json"
 INCOME = "/v5/stock/finance/cn/income.json"
 F10 = "/v5/stock/f10/cn/company.json"
 TOKEN = "xq_a_token=fake-token; u=fake-u"
+F10_CALL = {"endpoint": "f10_company", "params": {"symbol": "SH600000"}}
+USER_DIRS = ("HOME", "USERPROFILE", "XDG_CACHE_HOME", "XDG_DATA_HOME", "LOCALAPPDATA")
+"""Where the user's files go; the offline tests point them into ``tmp_path``."""
 CJK = re.compile(r"[一-鿿]")
 BAR_COLUMNS = [
     "timestamp",
@@ -116,8 +124,10 @@ def anyio_backend() -> str:
 @pytest.fixture
 def connect(tmp_path: Path, upstream: FakeUpstream, clock: FakeClock) -> Connect:
     """Connect the SDK client to a server on the replay fixtures, or on ``upstream`` with
-    ``replay=False``. Other keywords go to McpOptions; ``token`` and ``min_intervals`` go to
-    the AsyncClient, which runs on the harness's virtual clock."""
+    ``replay=False``. Other keywords go to McpOptions; ``token``, ``min_intervals``, ``cache``
+    and ``stale_if_error`` go to the AsyncClient, which runs on the harness's virtual clock.
+    ``wall`` replaces the client's wall clock and the server's time of rendering, fixed at
+    NOW otherwise."""
 
     @asynccontextmanager
     async def factory(
@@ -125,18 +135,29 @@ def connect(tmp_path: Path, upstream: FakeUpstream, clock: FakeClock) -> Connect
         replay: bool = True,
         token: str | None = None,
         min_intervals: Mapping[str, float] | None = None,
+        cache: CacheBackend | None = None,
+        stale_if_error: float | None = None,
+        wall: Callable[[], float] | None = None,
         mode: str = "auto",
         **options: Any,
     ) -> AsyncGenerator[Client, None]:
         transport = ReplayTransport(REPLAY_DIR) if replay else upstream.transport
         runtime = AsyncRuntime(transport=transport, clock=clock.now, sleep=clock.async_sleep)
+        if wall is not None:
+            runtime = replace(runtime, wall=wall)
+
+        def now() -> datetime:
+            return NOW if wall is None else datetime.fromtimestamp(wall(), UTC)
+
         async with AsyncClient(
             token=token,
             session_path=tmp_path / "session.json",
             min_intervals=min_intervals,
+            cache=cache,
+            stale_if_error=stale_if_error,
             _runtime=runtime,
         ) as client:
-            server = build_server(McpOptions(**options), client=client, now=lambda: NOW)
+            server = build_server(McpOptions(**options), client=client, now=now)
             async with Client(server, raise_exceptions=mode == "auto", mode=mode) as session:
                 yield session
 
@@ -2686,10 +2707,15 @@ async def test_xueqiu_mcp_serves_the_replay_fixtures_over_stdio() -> None:
     command = shutil.which("xueqiu", path=str(Path(sys.executable).parent))
     if command is None:
         pytest.skip("the xueqiu console script is not installed next to this Python")
-    server = StdioServerParameters(command=command, args=["mcp", "--replay", str(REPLAY_DIR)])
+    # The SDK passes on only a few variables, so the child gets the user directories here.
+    env = {name: os.environ[name] for name in USER_DIRS}
+    server = StdioServerParameters(
+        command=command, args=["mcp", "--replay", str(REPLAY_DIR)], env=env
+    )
     async with Client(server) as client:
         names = [tool.name for tool in (await client.list_tools()).tools]
         result = await client.call_tool("xq_quote", {"symbols": ["SH600000", "00700", "AAPL"]})
+        company = [await call(client, "xq_call", F10_CALL) for _ in range(2)]
 
     [content] = result.content
     assert names == list(TOOLS)
@@ -2697,6 +2723,10 @@ async def test_xueqiu_mcp_serves_the_replay_fixtures_over_stdio() -> None:
     assert content.text.startswith('# batch_quote {"symbols":["SH600000","00700","AAPL"]}')
     assert "SH600000,浦发银行," in content.text
     assert content.text.splitlines()[-1] == "# next: none"
+    # Replay results are cached in memory, and nothing lands in the user cache directory.
+    assert re.search(r" from_cache=true age_s=\d+$", meta_of(company[1]))
+    assert without_meta(company[1]) == without_meta(company[0])
+    assert not cache_dir().exists()
 
 
 # A range that holds more bars than one request returns
@@ -2864,3 +2894,181 @@ async def test_block_trades_of_a_stock_without_any_do_not_blame_the_prefix(
         text = await call(client, "xq_call", arguments)
 
     assert "no block trade" in text and "market prefix" not in text
+
+
+# Response cache
+
+
+def meta_of(text: str) -> str:
+    [line] = [line for line in text.splitlines() if line.startswith("# meta: ")]
+    return line
+
+
+def without_meta(text: str) -> list[str]:
+    return [line for line in text.splitlines() if not line.startswith("# meta: ")]
+
+
+class Wall:
+    """A wall clock at NOW that moves only with ``advance``, so the virtual clock's waits in a
+    task do not set it apart from the other tasks."""
+
+    def __init__(self) -> None:
+        self.at = NOW.timestamp()
+
+    def __call__(self) -> float:
+        return self.at
+
+    def advance(self, seconds: float) -> None:
+        self.at += seconds
+
+
+@pytest.mark.anyio
+async def test_a_second_identical_call_comes_from_the_cache_and_says_how_old(
+    connect: Connect, upstream: FakeUpstream, tmp_path: Path
+) -> None:
+    upstream.route(STOCK, F10, json_reply(replay_body("f10_company/sh600000")))
+    cache = SqliteCache(tmp_path / "responses.sqlite3")
+    wall = Wall()
+    async with connect(replay=False, cache=cache, wall=wall) as client:
+        first = await call(client, "xq_call", F10_CALL)
+        wall.advance(300)
+        second = await call(client, "xq_call", F10_CALL)
+
+    meta = "# meta: fetched_at=2026-11-05T10:00:00+08:00 freshness=static rows=1"
+    assert meta_of(first) == meta
+    assert second.splitlines() == [
+        f"{meta} from_cache=true age_s=300" if line == meta else line for line in first.splitlines()
+    ]
+    assert len(upstream.requests(STOCK, F10)) == 1
+    assert cache.stats().entries == 1
+
+
+@pytest.mark.anyio
+async def test_a_stale_answer_says_so_and_why(connect: Connect, upstream: FakeUpstream) -> None:
+    body = replay_body("f10_company/sh600000")
+    upstream.route(STOCK, F10, json_reply(body), text_reply("busy", 503))
+    wall = Wall()
+    async with connect(
+        replay=False, cache=MemoryCache(), stale_if_error=7 * 86400, wall=wall
+    ) as client:
+        first = await call(client, "xq_call", F10_CALL)
+        wall.advance(STATIC_S + 60)
+        second = await call(client, "xq_call", F10_CALL)
+
+    stale = f" from_cache=true age_s={STATIC_S + 60} stale=true"
+    assert meta_of(second) == meta_of(first) + stale
+    note = f"# note: {STALE_NOTE}"
+    assert note in second.splitlines()
+    assert [line for line in without_meta(second) if line != note] == without_meta(first)
+    assert len(upstream.requests(STOCK, F10)) > 1
+
+
+@pytest.mark.anyio
+async def test_a_comparison_shows_the_earliest_fetch_and_the_largest_age(connect: Connect) -> None:
+    wall = Wall()
+    async with connect(cache=MemoryCache(), wall=wall) as client:
+        await call(client, "xq_kline", {"symbols": ["SH600000"], "limit": 0})
+        wall.advance(30)
+        text = await call(client, "xq_kline", {"symbols": ["SH600000", "SZ000858"], "limit": 0})
+
+    assert meta_of(text) == (
+        "# meta: fetched_at=2026-11-05T10:00:00+08:00 freshness=intraday rows=2 "
+        "from_cache=true age_s=30"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", list(REGISTRY))
+async def test_with_a_cache_every_path_gives_the_same_text_but_for_the_meta_line(
+    connect: Connect, name: str
+) -> None:
+    """The second call reads what the first stored: through the dedicated tool when the
+    endpoint has one, else through xq_call again."""
+    spec = REGISTRY[name]
+    tool = spec.agent.mcp_tool
+    example = dict(spec.agent.examples[0])
+    options = {"limit": example["count"]} if tool == "xq_kline" else {}
+    arguments = {"endpoint": name, "params": example, **options}
+    token = TOKEN if spec.auth == "required" else None
+    async with connect(token=token, cache=MemoryCache(), wall=Wall()) as client:
+        fresh = await call(client, "xq_call", arguments)
+        if tool is None:
+            again = await call(client, "xq_call", arguments)
+        else:
+            again = await call(client, tool, dedicated_arguments(tool, example))
+
+    assert "from_cache" not in meta_of(fresh)
+    # Realtime results are never stored.
+    assert meta_of(again).endswith(" from_cache=true age_s=0") == (spec.freshness != "realtime")
+    assert without_meta(again) == without_meta(fresh)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("replay", "no_cache", "backend"),
+    [
+        (True, False, "MemoryCache"),
+        (False, False, "SqliteCache"),
+        (False, True, None),
+        (True, True, None),
+    ],
+    ids=["replay", "real", "real-no-cache", "replay-no-cache"],
+)
+async def test_the_server_caches_on_disk_or_under_replay_in_memory_and_not_with_no_cache(
+    monkeypatch: pytest.MonkeyPatch, replay: bool, no_cache: bool, backend: str | None
+) -> None:
+    """The server of ``xueqiu mcp`` in process, with an in-memory connection for stdio. Outside
+    replay, the real HTTP transport answers from the replay fixtures, so nothing is sent."""
+    fixtures = ReplayTransport(REPLAY_DIR)
+
+    async def answer(
+        transport: httpx2.AsyncHTTPTransport, request: httpx2.Request
+    ) -> httpx2.Response:
+        return await fixtures.handle_async_request(request)
+
+    texts: list[str] = []
+    seen: list[tuple[ClientStatus, float | None]] = []
+    build = mcp_server.build_server
+
+    class InMemory:
+        def __init__(self, server: Server[Any], client: AsyncClient) -> None:
+            self._server = server
+            self._client = client
+
+        def create_initialization_options(self) -> None:
+            return None
+
+        async def run(self, *streams: object) -> None:
+            async with Client(self._server) as session:
+                # Without a cache, the second call would wait a second for the host's slot.
+                for _ in range(1 if backend is None else 2):
+                    texts.append(await call(session, "xq_call", F10_CALL))
+            stale_if_error = self._client._stale_if_error  # pyright: ignore[reportPrivateUsage]
+            seen.append((await self._client.status(), stale_if_error))
+
+    def build_in_memory(options: McpOptions, *, client: AsyncClient) -> InMemory:
+        return InMemory(build(options, client=client), client)
+
+    @asynccontextmanager
+    async def no_stdio() -> AsyncGenerator[tuple[None, None], None]:
+        yield None, None
+
+    monkeypatch.setattr(httpx2.AsyncHTTPTransport, "handle_async_request", answer)
+    monkeypatch.setattr(mcp_server, "build_server", build_in_memory)
+    monkeypatch.setattr(mcp_server, "stdio_server", no_stdio)
+    options = McpOptions(
+        replay=REPLAY_DIR if replay else None, no_cache=no_cache, stale_if_error=600
+    )
+    await mcp_server._serve(options)  # pyright: ignore[reportPrivateUsage]
+
+    [(status, stale_if_error)] = seen
+    assert (None if status.cache is None else status.cache.backend) == backend
+    assert stale_if_error == 600
+    # Outside replay, limits and cookies are shared with other processes through the file.
+    assert (status.shared is None) == replay
+    assert all("from_cache" not in meta_of(text) for text in texts[:1])
+    if backend is not None:
+        assert re.search(r" from_cache=true age_s=\d+$", meta_of(texts[1]))
+    assert (cache_dir() / CACHE_FILE).exists() == (backend == "SqliteCache")
+    if replay:
+        assert not cache_dir().exists()

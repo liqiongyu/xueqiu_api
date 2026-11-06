@@ -32,3 +32,9 @@ class McpOptions:
     """Serve requests from this replay directory instead of the upstream."""
     log_level: LogLevel = "warning"
     """Lowest level of the log records written to stderr; stdout carries only JSON-RPC."""
+    no_cache: bool = False
+    """Keep no response cache. Otherwise results are kept in the user cache directory, or in
+    memory with ``replay``."""
+    stale_if_error: float | None = None
+    """When the upstream fails with an error worth backing off from, serve a cached result up
+    to this many seconds old, marked stale; None serves none."""

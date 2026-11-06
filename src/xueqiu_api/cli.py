@@ -10,6 +10,7 @@ import argparse
 import importlib
 import json
 import logging
+import math
 import os
 import platform
 import sys
@@ -162,6 +163,20 @@ def _parser() -> argparse.ArgumentParser:
         default=os.environ.get("XUEQIU_MCP_LOG_LEVEL") or McpOptions.log_level,
         help="lowest level logged to stderr (default: %(default)s; env: XUEQIU_MCP_LOG_LEVEL)",
     )
+    mcp.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="keep no response cache; by default results are cached in the user cache "
+        "directory, and in memory with --replay (env: XUEQIU_MCP_NO_CACHE, 1 or 0)",
+    )
+    mcp.add_argument(
+        "--stale-if-error",
+        type=_stale_if_error,
+        default=os.environ.get("XUEQIU_MCP_STALE_IF_ERROR") or None,
+        metavar="SECONDS",
+        help="when the upstream fails with a rate limit, a block or an outage, serve a cached "
+        "result up to SECONDS old, marked stale (default: off; env: XUEQIU_MCP_STALE_IF_ERROR)",
+    )
     return parser
 
 
@@ -199,6 +214,31 @@ def _replay_directory(value: str) -> Path:
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"{value!r} is not a replay directory: {exc}") from None
     return Path(value)
+
+
+def _stale_if_error(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError:
+        seconds = math.nan
+    if not (math.isfinite(seconds) and seconds > 0):
+        raise argparse.ArgumentTypeError(
+            f"expected a positive number of seconds, got {value[:20]!r}"
+        )
+    return seconds
+
+
+def _env_flag(name: str) -> bool:
+    """A yes-or-no environment variable: 1, true, yes or on, and 0, false, no, off or unset."""
+    value = os.environ.get(name, "").strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("", "0", "false", "no", "off"):
+        return False
+    raise InvalidParams(
+        f"{name} must be 1 or 0, got {value[:20]!r}",
+        hint="Run 'xueqiu mcp --help' for the usage.",
+    )
 
 
 def _log_level(value: str) -> str:
@@ -314,6 +354,8 @@ def _mcp(args: argparse.Namespace) -> int:
         max_chars=args.max_chars,
         replay=args.replay,
         log_level=args.log_level,
+        no_cache=args.no_cache or _env_flag("XUEQIU_MCP_NO_CACHE"),
+        stale_if_error=args.stale_if_error,
     )
     try:
         server = importlib.import_module("xueqiu_api.mcp_server.server")

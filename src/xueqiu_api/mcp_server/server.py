@@ -29,6 +29,7 @@ from mcp.types import (
 from .. import __version__
 from .._async import AsyncClient, AsyncRuntime
 from .._replay import ReplayTransport
+from ..cache import CacheBackend, MemoryCache, SqliteCache
 from . import McpOptions
 from .tools import Toolbox
 
@@ -106,10 +107,18 @@ async def _serve(options: McpOptions) -> None:
     with ExitStack() as stack:
         runtime, session_path = None, None
         if options.replay is not None:
-            # Replay sessions are synthetic, so they never touch the user's session cache.
+            # Replay sessions are synthetic, so they never touch the user's cache directory.
             runtime = AsyncRuntime(transport=ReplayTransport(options.replay))
             session_path = Path(stack.enter_context(tempfile.TemporaryDirectory())) / "session.json"
-        async with AsyncClient(session_path=session_path, _runtime=runtime) as client:
+        cache: CacheBackend | None = None
+        if not options.no_cache:
+            cache = SqliteCache() if options.replay is None else MemoryCache()
+        async with AsyncClient(
+            session_path=session_path,
+            cache=cache,
+            stale_if_error=options.stale_if_error,
+            _runtime=runtime,
+        ) as client:
             server = build_server(options, client=client)
             async with stdio_server() as (read_stream, write_stream):
                 await server.run(read_stream, write_stream, server.create_initialization_options())
